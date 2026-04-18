@@ -1,0 +1,9 @@
+node_modules/
+.env
+.env.local
+.DS_Store
+scripts/migration/export/
+scripts/migration/transformed/
+dist/
+build/
+.svelte-kit/
