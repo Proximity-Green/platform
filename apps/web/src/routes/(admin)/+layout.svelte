@@ -13,7 +13,7 @@
 
     supabase.auth.onAuthStateChange((_event, s) => {
       session = s
-      if (!s) window.location.href = '/login'
+      if (!s) window.location.href = '/'
     })
   })
 
@@ -41,6 +41,6 @@
 {:else}
   <div style="text-align: center; padding: 4rem; font-family: system-ui;">
     <p>You need to sign in.</p>
-    <a href="/login" style="color: #2d6a35;">Go to Login</a>
+    <a href="/" style="color: #2d6a35;">Sign In</a>
   </div>
 {/if}
