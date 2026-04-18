@@ -49,7 +49,7 @@
   <div style="font-family: system-ui, sans-serif;">
     {#if impersonating}
       <div class="impersonation-banner">
-        Viewing as <strong>{impersonating.targetName}</strong> ({impersonating.targetEmail})
+        You ({session.user.email}) are viewing as <strong>{impersonating.targetName}</strong> ({impersonating.targetEmail})
         <button onclick={stopImpersonating}>Exit Impersonation</button>
       </div>
     {/if}
