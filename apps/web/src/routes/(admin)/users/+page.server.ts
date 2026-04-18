@@ -28,7 +28,9 @@ export const actions = {
     const data = await request.formData()
     const email = data.get('email') as string
 
-    const { error } = await supabase.auth.admin.inviteUserByEmail(email)
+    const { error } = await supabase.auth.admin.inviteUserByEmail(email, {
+      redirectTo: 'https://poc.proximity.green/auth/confirm'
+    })
     if (error) return fail(400, { error: error.message })
     return { success: true, message: `Invitation sent to ${email}` }
   },
@@ -60,7 +62,9 @@ export const actions = {
     const data = await request.formData()
     const email = data.get('email') as string
 
-    const { error } = await supabase.auth.admin.inviteUserByEmail(email)
+    const { error } = await supabase.auth.admin.inviteUserByEmail(email, {
+      redirectTo: 'https://poc.proximity.green/auth/confirm'
+    })
     if (error) return fail(400, { error: error.message })
     return { success: true, message: `Invitation resent to ${email}` }
   },
