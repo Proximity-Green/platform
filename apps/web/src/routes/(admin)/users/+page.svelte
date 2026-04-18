@@ -96,9 +96,15 @@
             {#if !user.email_confirmed_at}
               <form method="POST" action="?/resend" style="display:inline">
                 <input type="hidden" name="email" value={user.email} />
-                <button type="submit" class="resend">Resend</button>
+                <button type="submit" class="resend">Resend Invite</button>
               </form>
-            {:else if isBanned}
+            {:else if primaryProvider === 'email' && !isBanned}
+              <form method="POST" action="?/resetPassword" style="display:inline">
+                <input type="hidden" name="email" value={user.email} />
+                <button type="submit" class="resend">Reset Password</button>
+              </form>
+            {/if}
+            {#if isBanned}
               <form method="POST" action="?/restore" style="display:inline">
                 <input type="hidden" name="user_id" value={user.id} />
                 <button type="submit" class="restore">Restore</button>

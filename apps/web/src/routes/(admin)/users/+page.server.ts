@@ -69,6 +69,20 @@ export const actions = {
     return { success: true, message: `Invitation resent to ${email}` }
   },
 
+  resetPassword: async ({ request }) => {
+    const data = await request.formData()
+    const email = data.get('email') as string
+
+    // Generate a password reset link
+    const { error } = await supabase.auth.admin.generateLink({
+      type: 'recovery',
+      email,
+      options: { redirectTo: 'https://poc.proximity.green/auth/confirm' }
+    })
+    if (error) return fail(400, { error: error.message })
+    return { success: true, message: `Password reset sent to ${email}` }
+  },
+
   delete: async ({ request }) => {
     const data = await request.formData()
     const userId = data.get('user_id') as string
