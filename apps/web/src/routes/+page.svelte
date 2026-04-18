@@ -1,21 +1,58 @@
 <script lang="ts">
+  import { supabase } from '$lib/supabase'
+  import { onMount } from 'svelte'
+
   let { data } = $props()
+  let session = $state(data.session)
+  let checking = $state(true)
+
+  onMount(async () => {
+    const { data: { session: s } } = await supabase.auth.getSession()
+    session = s
+    checking = false
+
+    if (s) {
+      window.location.href = '/people'
+      return
+    }
+
+    supabase.auth.onAuthStateChange((event, s) => {
+      if (event === 'SIGNED_IN' && s) {
+        window.location.href = '/people'
+      }
+    })
+  })
+
+  async function signInWithGoogle() {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin
+      }
+    })
+    if (error) console.error('Login error:', error.message)
+  }
 </script>
 
-{#if data.session}
-  <div style="max-width: 600px; margin: 4rem auto; padding: 2rem; font-family: system-ui, sans-serif; text-align: center;">
-    <h1 style="color: #2d6a35; font-size: 2rem;">Proximity Green</h1>
-    <p style="color: #5a7060; margin: 0.5rem 0;">Signed in as {data.session.user.email}</p>
-    <p style="color: #5a7060; margin: 0 0 2rem;">Last sign in: {new Date(data.session.user.last_sign_in_at ?? '').toLocaleString()}</p>
-    <nav style="display: flex; flex-direction: column; gap: 0.75rem;">
-      <a href="/people" style="padding: 0.75rem; background: #2d6a35; color: white; border-radius: 6px; text-decoration: none;">People</a>
-      <a href="/organisations" style="padding: 0.75rem; background: #2d6a35; color: white; border-radius: 6px; text-decoration: none;">Organisations</a>
-    </nav>
-  </div>
+{#if checking}
+  <div class="container"><p>Loading...</p></div>
+{:else if session}
+  <div class="container"><p>Redirecting...</p></div>
 {:else}
-  <div style="max-width: 600px; margin: 4rem auto; padding: 2rem; font-family: system-ui, sans-serif; text-align: center;">
-    <h1 style="color: #2d6a35; font-size: 2rem;">Proximity Green</h1>
-    <p style="color: #5a7060; margin: 1rem 0 2rem;">Workspace Management Platform</p>
-    <a href="/login" style="padding: 0.75rem 2rem; background: #2d6a35; color: white; border-radius: 6px; text-decoration: none;">Sign In</a>
+  <div class="container">
+    <div class="card">
+      <h1>Proximity Green</h1>
+      <p>Workspace Management Platform</p>
+      <button onclick={signInWithGoogle} class="google-btn">Sign in with Google</button>
+    </div>
   </div>
 {/if}
+
+<style>
+  .container { display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f7f4ee; font-family: system-ui, sans-serif; }
+  .card { background: white; border: 1px solid #c8deca; border-radius: 12px; padding: 3rem; text-align: center; max-width: 400px; width: 100%; }
+  h1 { color: #2d6a35; font-size: 1.8rem; margin-bottom: 0.5rem; }
+  p { color: #5a7060; margin-bottom: 2rem; }
+  .google-btn { width: 100%; padding: 0.75rem; background: #2d6a35; color: white; border: none; border-radius: 6px; font-size: 1rem; cursor: pointer; }
+  .google-btn:hover { background: #1e4d25; }
+</style>
