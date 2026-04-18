@@ -1,11 +1,27 @@
 <script lang="ts">
   import { supabase } from '$lib/supabase'
+  import { onMount } from 'svelte'
+
+  onMount(async () => {
+    // Check if we already have a session from the hash fragment
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session) {
+      window.location.href = '/people'
+    }
+
+    // Listen for auth state changes (handles the hash fragment)
+    supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        window.location.href = '/people'
+      }
+    })
+  })
 
   async function signInWithGoogle() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`
+        redirectTo: `${window.location.origin}/login`
       }
     })
     if (error) console.error('Login error:', error.message)
