@@ -58,13 +58,23 @@ export const POST = async ({ request, cookies }) => {
 
     if (error) return json({ error: error.message }, { status: 400 })
 
+    // Get target user's role
+    const { data: targetRole } = await supabase
+      .from('user_roles')
+      .select('roles(name)')
+      .eq('user_id', targetUserId)
+      .single()
+
+    const targetRoleName = (targetRole as any)?.roles?.name ?? 'no role'
+
     // Set impersonation cookie
     cookies.set('impersonating', JSON.stringify({
       sessionId: session.id,
       adminUserId,
       targetUserId,
       targetEmail: targetUser?.email,
-      targetName: targetUser?.user_metadata?.full_name || targetUser?.email
+      targetName: targetUser?.user_metadata?.full_name || targetUser?.email,
+      targetRole: targetRoleName
     }), { path: '/', httpOnly: false, secure: true, sameSite: 'lax', maxAge: 3600 })
 
     return json({ success: true, session })

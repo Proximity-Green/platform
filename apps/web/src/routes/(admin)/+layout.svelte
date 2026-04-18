@@ -21,12 +21,13 @@
       } catch {}
     }
 
-    // Load permissions
+    // Load permissions — use target user's permissions when impersonating
     if (s) {
+      const permUserId = impersonating ? impersonating.targetUserId : s.user.id
       const res = await fetch('/api/permissions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: s.user.id })
+        body: JSON.stringify({ userId: permUserId })
       })
       userPerms = await res.json()
     }
@@ -68,7 +69,7 @@
   <div style="font-family: system-ui, sans-serif;">
     {#if impersonating}
       <div class="impersonation-banner">
-        You ({session.user.email}) are viewing as <strong>{impersonating.targetName}</strong> ({impersonating.targetEmail})
+        You ({session.user.email}) are viewing as <strong>{impersonating.targetName}</strong> ({impersonating.targetEmail}) — Role: <strong>{impersonating.targetRole ?? 'no role'}</strong>
         <button onclick={stopImpersonating}>Exit Impersonation</button>
       </div>
     {/if}
