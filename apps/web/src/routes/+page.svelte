@@ -8,7 +8,7 @@
   let email = $state('')
   let password = $state('')
   let loginError = $state('')
-  let showPassword = $state(false)
+  let accessDenied = $state(false)
 
   onMount(async () => {
     const { data: { session: s } } = await supabase.auth.getSession()
@@ -16,18 +16,39 @@
     checking = false
 
     if (s) {
-      window.location.href = '/people'
+      await checkAccess(s)
       return
     }
 
-    supabase.auth.onAuthStateChange((event, s) => {
+    supabase.auth.onAuthStateChange(async (event, s) => {
       if (event === 'SIGNED_IN' && s) {
-        window.location.href = '/people'
+        session = s
+        await checkAccess(s)
       }
     })
   })
 
+  async function checkAccess(s: any) {
+    // Check if user was invited (has invited_at) or has an approved domain
+    const res = await fetch('/api/check-access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: s.user.id, email: s.user.email })
+    })
+    const result = await res.json()
+
+    if (result.allowed) {
+      window.location.href = '/people'
+    } else {
+      accessDenied = true
+      await supabase.auth.signOut()
+      session = null
+    }
+  }
+
   async function signInWithGoogle() {
+    loginError = ''
+    accessDenied = false
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -39,24 +60,27 @@
 
   async function signInWithPassword() {
     loginError = ''
+    accessDenied = false
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
       loginError = error.message
-    } else {
-      window.location.href = '/people'
     }
   }
 </script>
 
 {#if checking}
   <div class="container"><p style="color: #5a7060;">Loading...</p></div>
-{:else if session}
-  <div class="container"><p style="color: #5a7060;">Redirecting...</p></div>
+{:else if session && !accessDenied}
+  <div class="container"><p style="color: #5a7060;">Checking access...</p></div>
 {:else}
   <div class="container">
     <div class="card">
       <h1>Proximity Green</h1>
       <p>Workspace Management Platform</p>
+
+      {#if accessDenied}
+        <div class="error">Access denied. You must be invited or use an approved email domain to sign in.</div>
+      {/if}
 
       {#if loginError}
         <div class="error">{loginError}</div>

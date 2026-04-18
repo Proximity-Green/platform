@@ -7,19 +7,14 @@ const supabase = createClient(
 )
 
 export const load = async () => {
-  // Get all auth users via admin API
   const { data: { users }, error } = await supabase.auth.admin.listUsers()
-
-  // Get all roles
   const { data: roles } = await supabase.from('roles').select('*')
-
-  // Get persons with their role info
-  const { data: persons } = await supabase.from('persons').select('*')
+  const { data: userRoles } = await supabase.from('user_roles').select('user_id, role_id, roles(name)')
 
   return {
     users: users ?? [],
     roles: roles ?? [],
-    persons: persons ?? []
+    userRoles: userRoles ?? []
   }
 }
 
@@ -35,13 +30,39 @@ export const actions = {
     return { success: true, message: `Invitation sent to ${email}` }
   },
 
+  resend: async ({ request }) => {
+    const data = await request.formData()
+    const email = data.get('email') as string
+
+    const { error } = await supabase.auth.admin.inviteUserByEmail(email, {
+      redirectTo: 'https://poc.proximity.green/auth/confirm'
+    })
+    if (error) return fail(400, { error: error.message })
+    return { success: true, message: `Invitation resent to ${email}` }
+  },
+
+  setRole: async ({ request }) => {
+    const data = await request.formData()
+    const userId = data.get('user_id') as string
+    const roleId = data.get('role_id') as string
+
+    // Remove existing roles
+    await supabase.from('user_roles').delete().eq('user_id', userId)
+
+    // Assign new role
+    if (roleId) {
+      const { error } = await supabase.from('user_roles').insert({ user_id: userId, role_id: roleId })
+      if (error) return fail(400, { error: error.message })
+    }
+    return { success: true, message: 'Role updated' }
+  },
+
   revoke: async ({ request }) => {
     const data = await request.formData()
     const userId = data.get('user_id') as string
 
-    // Ban the user (soft disable)
     const { error } = await supabase.auth.admin.updateUserById(userId, {
-      ban_duration: '876600h' // ~100 years
+      ban_duration: '876600h'
     })
     if (error) return fail(400, { error: error.message })
     return { success: true, message: 'User access revoked' }
@@ -58,22 +79,10 @@ export const actions = {
     return { success: true, message: 'User access restored' }
   },
 
-  resend: async ({ request }) => {
-    const data = await request.formData()
-    const email = data.get('email') as string
-
-    const { error } = await supabase.auth.admin.inviteUserByEmail(email, {
-      redirectTo: 'https://poc.proximity.green/auth/confirm'
-    })
-    if (error) return fail(400, { error: error.message })
-    return { success: true, message: `Invitation resent to ${email}` }
-  },
-
   resetPassword: async ({ request }) => {
     const data = await request.formData()
     const email = data.get('email') as string
 
-    // Generate a password reset link
     const { error } = await supabase.auth.admin.generateLink({
       type: 'recovery',
       email,

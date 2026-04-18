@@ -1,6 +1,15 @@
 <script lang="ts">
   let { data, form } = $props()
   let showInvite = $state(false)
+
+  function getUserRole(userId: string) {
+    const ur = data.userRoles.find((r: any) => r.user_id === userId)
+    return ur?.roles?.name ?? null
+  }
+
+  function getRoleId(roleName: string) {
+    return data.roles.find((r: any) => r.name === roleName)?.id ?? ''
+  }
 </script>
 
 <div class="container">
@@ -34,6 +43,7 @@
       <tr>
         <th>User</th>
         <th>Auth Method</th>
+        <th>Role</th>
         <th>Status</th>
         <th>Joined</th>
         <th>Last Sign In</th>
@@ -45,6 +55,7 @@
         {@const isBanned = user.banned_until && new Date(user.banned_until) > new Date()}
         {@const providers = user.app_metadata?.providers ?? []}
         {@const primaryProvider = user.app_metadata?.provider ?? 'email'}
+        {@const currentRole = getUserRole(user.id)}
         <tr class:banned={isBanned}>
           <td>
             <div class="user-email">{user.email}</div>
@@ -61,9 +72,17 @@
                 <span class="provider email">{primaryProvider}</span>
               {/if}
             </div>
-            {#if user.user_metadata?.iss}
-              <div class="auth-detail">via {user.user_metadata.iss.includes('google') ? 'Google Workspace' : user.user_metadata.iss}</div>
-            {/if}
+          </td>
+          <td>
+            <form method="POST" action="?/setRole" class="role-form">
+              <input type="hidden" name="user_id" value={user.id} />
+              <select name="role_id" onchange={(e) => e.currentTarget.form?.requestSubmit()}>
+                <option value="">No role</option>
+                {#each data.roles as role}
+                  <option value={role.id} selected={currentRole === role.name}>{role.name.replace('_', ' ')}</option>
+                {/each}
+              </select>
+            </form>
           </td>
           <td>
             {#if isBanned}
@@ -96,12 +115,12 @@
             {#if !user.email_confirmed_at}
               <form method="POST" action="?/resend" style="display:inline">
                 <input type="hidden" name="email" value={user.email} />
-                <button type="submit" class="resend">Resend Invite</button>
+                <button type="submit" class="resend">Resend</button>
               </form>
             {:else if primaryProvider === 'email' && !isBanned}
               <form method="POST" action="?/resetPassword" style="display:inline">
                 <input type="hidden" name="email" value={user.email} />
-                <button type="submit" class="resend">Reset Password</button>
+                <button type="submit" class="resend">Reset PW</button>
               </form>
             {/if}
             {#if isBanned}
@@ -128,14 +147,14 @@
           </td>
         </tr>
       {:else}
-        <tr><td colspan="6" class="empty">No users yet.</td></tr>
+        <tr><td colspan="7" class="empty">No users yet.</td></tr>
       {/each}
     </tbody>
   </table>
 </div>
 
 <style>
-  .container { max-width: 1100px; margin: 0 auto; padding: 2rem; font-family: system-ui, sans-serif; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 2rem; font-family: system-ui, sans-serif; }
   header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
   h1 { font-size: 1.5rem; font-weight: 600; color: #0a1f0f; }
   .error { background: #fdecea; color: #c0392b; padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 1rem; }
@@ -164,12 +183,14 @@
   .provider.google { background: #e8f0fd; color: #3a5fc8; }
   .provider.email { background: #f0ebfd; color: #6d3fc8; }
   .auth-detail { font-size: 0.75rem; color: #5a7060; margin-top: 2px; }
+  .role-form { display: inline; }
+  .role-form select { padding: 4px 8px; border: 1px solid #c8deca; border-radius: 4px; font-size: 0.8rem; background: white; cursor: pointer; }
   .status { padding: 2px 8px; border-radius: 3px; font-size: 0.75rem; font-weight: 600; }
   .status.active { background: #e8f5ea; color: #2d6a35; }
   .status.pending { background: #fdf3e3; color: #c8832a; }
   .status.revoked { background: #fdecea; color: #c0392b; }
   .date { font-size: 0.85rem; color: #5a7060; }
   .never { color: #c8832a; font-size: 0.8rem; }
-  .actions { display: flex; gap: 0.5rem; }
+  .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
   .empty { text-align: center; color: #5a7060; padding: 2rem; }
 </style>
