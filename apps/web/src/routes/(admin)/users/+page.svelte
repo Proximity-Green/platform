@@ -32,17 +32,20 @@
   <table>
     <thead>
       <tr>
-        <th>Email</th>
-        <th>Provider</th>
+        <th>User</th>
+        <th>Auth Method</th>
         <th>Status</th>
-        <th>Created</th>
+        <th>Joined</th>
         <th>Last Sign In</th>
         <th>Actions</th>
       </tr>
     </thead>
     <tbody>
       {#each data.users as user}
-        <tr class:banned={user.banned_until && new Date(user.banned_until) > new Date()}>
+        {@const isBanned = user.banned_until && new Date(user.banned_until) > new Date()}
+        {@const providers = user.app_metadata?.providers ?? []}
+        {@const primaryProvider = user.app_metadata?.provider ?? 'email'}
+        <tr class:banned={isBanned}>
           <td>
             <div class="user-email">{user.email}</div>
             {#if user.user_metadata?.full_name}
@@ -50,23 +53,43 @@
             {/if}
           </td>
           <td>
-            <span class="provider">{user.app_metadata?.provider ?? 'email'}</span>
+            <div class="providers">
+              {#each providers as p}
+                <span class="provider" class:google={p === 'google'} class:email={p === 'email'}>{p}</span>
+              {/each}
+              {#if providers.length === 0}
+                <span class="provider email">{primaryProvider}</span>
+              {/if}
+            </div>
+            {#if user.user_metadata?.iss}
+              <div class="auth-detail">via {user.user_metadata.iss.includes('google') ? 'Google Workspace' : user.user_metadata.iss}</div>
+            {/if}
           </td>
           <td>
-            {#if user.banned_until && new Date(user.banned_until) > new Date()}
+            {#if isBanned}
               <span class="status revoked">Revoked</span>
             {:else if user.email_confirmed_at}
               <span class="status active">Active</span>
+            {:else if user.invited_at}
+              <span class="status pending">Invited</span>
             {:else}
               <span class="status pending">Pending</span>
             {/if}
           </td>
-          <td class="date">{new Date(user.created_at).toLocaleDateString()}</td>
+          <td class="date">
+            {new Date(user.created_at).toLocaleDateString()}
+            {#if user.invited_at}
+              <div class="auth-detail">Invited</div>
+            {:else}
+              <div class="auth-detail">Self-registered</div>
+            {/if}
+          </td>
           <td class="date">
             {#if user.last_sign_in_at}
-              {new Date(user.last_sign_in_at).toLocaleString()}
+              <div>{new Date(user.last_sign_in_at).toLocaleDateString()}</div>
+              <div class="auth-detail">{new Date(user.last_sign_in_at).toLocaleTimeString()}</div>
             {:else}
-              Never
+              <span class="never">Never</span>
             {/if}
           </td>
           <td class="actions">
@@ -75,7 +98,7 @@
                 <input type="hidden" name="email" value={user.email} />
                 <button type="submit" class="resend">Resend</button>
               </form>
-            {:else if user.banned_until && new Date(user.banned_until) > new Date()}
+            {:else if isBanned}
               <form method="POST" action="?/restore" style="display:inline">
                 <input type="hidden" name="user_id" value={user.id} />
                 <button type="submit" class="restore">Restore</button>
@@ -126,16 +149,21 @@
   .delete:hover { background: #96281b; }
   table { width: 100%; border-collapse: collapse; }
   th { text-align: left; padding: 0.75rem; border-bottom: 2px solid #c8deca; font-size: 0.8rem; color: #5a7060; text-transform: uppercase; letter-spacing: 0.5px; }
-  td { padding: 0.75rem; border-bottom: 1px solid #e8f5ea; font-size: 0.9rem; }
+  td { padding: 0.75rem; border-bottom: 1px solid #e8f5ea; font-size: 0.9rem; vertical-align: top; }
   tr.banned { opacity: 0.5; }
   .user-email { font-weight: 500; }
   .user-name { font-size: 0.8rem; color: #5a7060; }
-  .provider { background: #e8f5ea; color: #2d6a35; padding: 2px 8px; border-radius: 3px; font-size: 0.75rem; text-transform: uppercase; }
+  .providers { display: flex; gap: 4px; flex-wrap: wrap; }
+  .provider { padding: 2px 8px; border-radius: 3px; font-size: 0.75rem; text-transform: uppercase; font-weight: 600; }
+  .provider.google { background: #e8f0fd; color: #3a5fc8; }
+  .provider.email { background: #f0ebfd; color: #6d3fc8; }
+  .auth-detail { font-size: 0.75rem; color: #5a7060; margin-top: 2px; }
   .status { padding: 2px 8px; border-radius: 3px; font-size: 0.75rem; font-weight: 600; }
   .status.active { background: #e8f5ea; color: #2d6a35; }
   .status.pending { background: #fdf3e3; color: #c8832a; }
   .status.revoked { background: #fdecea; color: #c0392b; }
-  .date { font-size: 0.8rem; color: #5a7060; }
+  .date { font-size: 0.85rem; color: #5a7060; }
+  .never { color: #c8832a; font-size: 0.8rem; }
   .actions { display: flex; gap: 0.5rem; }
   .empty { text-align: center; color: #5a7060; padding: 2rem; }
 </style>
