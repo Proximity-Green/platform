@@ -1,4 +1,4 @@
-import { supabase } from '$lib/supabase'
+import { supabaseAdmin as supabase } from '$lib/supabase'
 import { fail } from '@sveltejs/kit'
 
 export const load = async () => {
