@@ -1,14 +1,41 @@
 <script lang="ts">
+  import { supabase } from '$lib/supabase'
+  import { onMount } from 'svelte'
+
   let { data, form } = $props()
   let showInvite = $state(false)
+  let currentUserId = $state<string | null>(null)
+
+  onMount(async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    currentUserId = session?.user?.id ?? null
+  })
 
   function getUserRole(userId: string) {
     const ur = data.userRoles.find((r: any) => r.user_id === userId)
     return ur?.roles?.name ?? null
   }
 
-  function getRoleId(roleName: string) {
-    return data.roles.find((r: any) => r.name === roleName)?.id ?? ''
+  async function impersonate(targetUserId: string) {
+    const reason = prompt('Reason for impersonation (for audit log):')
+    if (reason === null) return
+
+    const res = await fetch('/api/impersonate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'start',
+        adminUserId: currentUserId,
+        targetUserId,
+        reason
+      })
+    })
+    const result = await res.json()
+    if (result.error) {
+      alert(result.error)
+    } else {
+      window.location.href = '/people'
+    }
   }
 </script>
 
@@ -137,6 +164,9 @@
                 </button>
               </form>
             {/if}
+            {#if user.id !== currentUserId && user.email_confirmed_at && !isBanned}
+              <button class="impersonate" onclick={() => impersonate(user.id)}>Impersonate</button>
+            {/if}
             <form method="POST" action="?/delete" style="display:inline">
               <input type="hidden" name="user_id" value={user.id} />
               <button type="submit" class="delete"
@@ -170,6 +200,8 @@
   .resend:hover { background: #5a2db0; }
   .restore { background: #3a5fc8; }
   .restore:hover { background: #2d4a9e; }
+  .impersonate { background: #2c3e50; }
+  .impersonate:hover { background: #1a252f; }
   .delete { background: #c0392b; }
   .delete:hover { background: #96281b; }
   table { width: 100%; border-collapse: collapse; }
