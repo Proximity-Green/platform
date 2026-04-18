@@ -56,6 +56,15 @@ export const actions = {
     return { success: true, message: 'User access restored' }
   },
 
+  resend: async ({ request }) => {
+    const data = await request.formData()
+    const email = data.get('email') as string
+
+    const { error } = await supabase.auth.admin.inviteUserByEmail(email)
+    if (error) return fail(400, { error: error.message })
+    return { success: true, message: `Invitation resent to ${email}` }
+  },
+
   delete: async ({ request }) => {
     const data = await request.formData()
     const userId = data.get('user_id') as string

@@ -70,7 +70,12 @@
             {/if}
           </td>
           <td class="actions">
-            {#if user.banned_until && new Date(user.banned_until) > new Date()}
+            {#if !user.email_confirmed_at}
+              <form method="POST" action="?/resend" style="display:inline">
+                <input type="hidden" name="email" value={user.email} />
+                <button type="submit" class="resend">Resend</button>
+              </form>
+            {:else if user.banned_until && new Date(user.banned_until) > new Date()}
               <form method="POST" action="?/restore" style="display:inline">
                 <input type="hidden" name="user_id" value={user.id} />
                 <button type="submit" class="restore">Restore</button>
@@ -113,6 +118,8 @@
   button:hover { background: #1e4d25; }
   .revoke-btn { background: #c8832a; }
   .revoke-btn:hover { background: #a06b1f; }
+  .resend { background: #6d3fc8; }
+  .resend:hover { background: #5a2db0; }
   .restore { background: #3a5fc8; }
   .restore:hover { background: #2d4a9e; }
   .delete { background: #c0392b; }
