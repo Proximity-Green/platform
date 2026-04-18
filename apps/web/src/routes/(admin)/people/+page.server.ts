@@ -1,15 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public'
-import { env } from '$env/dynamic/private'
 import { fail } from '@sveltejs/kit'
 
-function getClient() {
-  const key = env.SUPABASE_SERVICE_ROLE_KEY || PUBLIC_SUPABASE_ANON_KEY
-  return createClient(PUBLIC_SUPABASE_URL, key)
-}
+const supabase = createClient(
+  process.env.PUBLIC_SUPABASE_URL || '',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.PUBLIC_SUPABASE_ANON_KEY || ''
+)
 
 export const load = async () => {
-  const supabase = getClient()
   const { data: persons, error } = await supabase
     .from('persons')
     .select('*')
@@ -19,7 +16,6 @@ export const load = async () => {
 
 export const actions = {
   create: async ({ request }) => {
-    const supabase = getClient()
     const data = await request.formData()
     const { error } = await supabase
       .from('persons')
@@ -35,7 +31,6 @@ export const actions = {
   },
 
   update: async ({ request }) => {
-    const supabase = getClient()
     const data = await request.formData()
     const { error } = await supabase
       .from('persons')
@@ -51,7 +46,6 @@ export const actions = {
   },
 
   delete: async ({ request }) => {
-    const supabase = getClient()
     const data = await request.formData()
     const { error } = await supabase
       .from('persons')
