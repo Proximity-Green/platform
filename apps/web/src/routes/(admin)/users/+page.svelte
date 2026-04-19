@@ -3,7 +3,6 @@
   import { onMount } from 'svelte'
 
   let { data, form } = $props()
-  let showInvite = $state(false)
   let currentUserId = $state<string | null>(null)
 
   onMount(async () => {
@@ -53,9 +52,7 @@
 <div class="container">
   <header>
     <h1>Users</h1>
-    <button onclick={() => showInvite = !showInvite}>
-      {showInvite ? 'Cancel' : '+ Invite User'}
-    </button>
+    <p class="hint">To add a new user, first create a Person in the <a href="/people">People</a> page, then invite them from there.</p>
   </header>
 
   {#if form?.error}
@@ -64,16 +61,6 @@
 
   {#if form?.success}
     <div class="success">{form.message}</div>
-  {/if}
-
-  {#if showInvite}
-    <form method="POST" action="?/invite" class="form-card">
-      <label>
-        Email Address
-        <input name="email" type="email" required placeholder="user@example.com" />
-      </label>
-      <button type="submit">Send Invitation</button>
-    </form>
   {/if}
 
   <table>
@@ -257,5 +244,7 @@
   .perm-badge { font-size: 0.65rem; background: #e8f5ea; color: #2d6a35; padding: 1px 5px; border-radius: 3px; font-family: monospace; }
   .perm-all { font-size: 0.65rem; background: #fdecea; color: #c0392b; padding: 1px 5px; border-radius: 3px; font-weight: 600; }
   .perm-none { font-size: 0.65rem; background: #fdf3e3; color: #c8832a; padding: 1px 5px; border-radius: 3px; }
+  .hint { font-size: 0.85rem; color: #5a7060; margin: 0; }
+  .hint a { color: #2d6a35; }
   .empty { text-align: center; color: #5a7060; padding: 2rem; }
 </style>

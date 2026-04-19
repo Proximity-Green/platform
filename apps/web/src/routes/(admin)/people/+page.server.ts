@@ -71,8 +71,14 @@ export const actions = {
     // Link the new user to the person record
     await supabase.from('persons').update({ user_id: result.user.id }).eq('id', personId)
 
+    // Auto-assign member role
+    const { data: memberRole } = await supabase.from('roles').select('id').eq('name', 'member').single()
+    if (memberRole) {
+      await supabase.from('user_roles').insert({ user_id: result.user.id, role_id: memberRole.id })
+    }
+
     await log('email', 'success', `Invitation sent to ${email} from People page`, { to: email, type: 'invite', person_id: personId }, userId)
-    await log('auth', 'info', `Person invited as user: ${email}`, { email, person_id: personId }, userId)
+    await log('auth', 'info', `Person invited as user: ${email} (role: member)`, { email, person_id: personId, role: 'member' }, userId)
 
     return { success: true }
   },
