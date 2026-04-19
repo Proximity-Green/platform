@@ -3,7 +3,7 @@
   import { onMount } from 'svelte'
   import { permStore, canDo } from '$lib/stores/permissions'
 
-  let { form, data } = $props()
+  let { form } = $props()
   let session = $state<any>(null)
   let perms = $state({ role: null as string | null, permissions: [] as any, loaded: false })
   let newPassword = $state('')
@@ -14,6 +14,7 @@
   let firstName = $state('')
   let lastName = $state('')
   let phone = $state('')
+  let loaded = $state(false)
 
   permStore.subscribe(v => { perms = v })
 
@@ -21,31 +22,39 @@
     const { data: { session: s } } = await supabase.auth.getSession()
     session = s
     provider = s?.user?.app_metadata?.provider ?? 'email'
-    loadFromSession(s)
+    await loadPerson()
+    loaded = true
   })
 
-  function loadFromSession(s: any) {
-    if (!s) return
-    // Prefer person record from server, fall back to session metadata
-    if (data.person) {
-      firstName = data.person.first_name ?? ''
-      lastName = data.person.last_name ?? ''
-      phone = data.person.phone ?? ''
+  async function loadPerson() {
+    if (!session) return
+    // Load from persons table directly
+    const { data: person } = await supabase
+      .from('persons')
+      .select('*')
+      .eq('email', session.user.email)
+      .single()
+
+    if (person) {
+      firstName = person.first_name ?? ''
+      lastName = person.last_name ?? ''
+      phone = person.phone ?? ''
     } else {
-      const fullName = s?.user?.user_metadata?.full_name ?? ''
+      // Fall back to session metadata
+      const fullName = session.user.user_metadata?.full_name ?? ''
       const parts = fullName.split(' ')
       firstName = parts[0] ?? ''
       lastName = parts.slice(1).join(' ') ?? ''
-      phone = s?.user?.user_metadata?.phone ?? ''
+      phone = session.user.user_metadata?.phone ?? ''
     }
   }
 
-  // Refresh session after form submission
+  // Reload after form submission
   $effect(() => {
-    if (form?.success) {
-      supabase.auth.refreshSession().then(({ data: { session: s } }) => {
-        if (s) { session = s; loadFromSession(s) }
-      })
+    if (form?.success && form?.person) {
+      firstName = form.person.first_name
+      lastName = form.person.last_name
+      phone = form.person.phone
     }
   })
 
@@ -72,7 +81,7 @@
 </script>
 
 <div class="container">
-  {#if session}
+  {#if session && loaded}
     <h1>Profile</h1>
 
     <div class="section">
@@ -85,6 +94,7 @@
       {/if}
       <form method="POST" action="?/updateProfile" class="profile-form">
         <input type="hidden" name="user_id" value={session.user.id} />
+        <input type="hidden" name="email" value={session.user.email} />
         <div class="form-grid">
           <label>First Name <input name="first_name" bind:value={firstName} required /></label>
           <label>Last Name <input name="last_name" bind:value={lastName} required /></label>
@@ -141,23 +151,15 @@
       {#if provider !== 'email'}
         <p class="muted" style="margin-bottom: 1rem;">Your primary login is via {provider}. You can also set a password for email/password login.</p>
       {/if}
-
       {#if error}
         <div class="error">{error}</div>
       {/if}
       {#if message}
         <div class="success">{message}</div>
       {/if}
-
       <form onsubmit={(e) => { e.preventDefault(); updatePassword() }} class="password-form">
-        <label>
-          New Password
-          <input type="password" bind:value={newPassword} required minlength="8" placeholder="Minimum 8 characters" />
-        </label>
-        <label>
-          Confirm Password
-          <input type="password" bind:value={confirmPassword} required placeholder="Repeat password" />
-        </label>
+        <label>New Password <input type="password" bind:value={newPassword} required minlength="8" placeholder="Minimum 8 characters" /></label>
+        <label>Confirm Password <input type="password" bind:value={confirmPassword} required placeholder="Repeat password" /></label>
         <button type="submit">{provider === 'email' ? 'Update Password' : 'Set Password'}</button>
       </form>
     </div>
@@ -169,6 +171,11 @@
   h1 { font-size: 1.5rem; font-weight: 600; color: #0a1f0f; margin-bottom: 2rem; }
   .section { background: white; border: 1px solid #c8deca; border-radius: 10px; padding: 1.5rem; margin-bottom: 1.5rem; }
   h2 { font-size: 1rem; font-weight: 600; color: #0a1f0f; margin: 0 0 1rem; }
+  .profile-form { max-width: 500px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+  .form-grid label { display: flex; flex-direction: column; font-size: 0.85rem; font-weight: 500; color: #5a7060; }
+  .form-grid input { margin-top: 0.25rem; padding: 0.5rem; border: 1px solid #c8deca; border-radius: 4px; font-size: 0.9rem; }
+  .disabled { background: #f0f0f0; color: #999; cursor: not-allowed; }
   .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
   .detail { display: flex; flex-direction: column; gap: 0.25rem; }
   .label { font-size: 0.75rem; color: #5a7060; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -186,11 +193,6 @@
   .password-form { display: flex; flex-direction: column; gap: 1rem; max-width: 350px; }
   .password-form label { display: flex; flex-direction: column; font-size: 0.85rem; font-weight: 500; color: #5a7060; }
   .password-form input { margin-top: 0.25rem; padding: 0.5rem; border: 1px solid #c8deca; border-radius: 4px; font-size: 0.9rem; }
-  .profile-form { max-width: 500px; }
-  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
-  .form-grid label { display: flex; flex-direction: column; font-size: 0.85rem; font-weight: 500; color: #5a7060; }
-  .form-grid input { margin-top: 0.25rem; padding: 0.5rem; border: 1px solid #c8deca; border-radius: 4px; font-size: 0.9rem; }
-  .disabled { background: #f0f0f0; color: #999; cursor: not-allowed; }
   button { padding: 0.5rem 1rem; background: #2d6a35; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem; }
   button:hover { background: #1e4d25; }
 </style>
