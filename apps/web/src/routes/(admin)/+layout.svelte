@@ -7,6 +7,7 @@
   let checking = $state(true)
   let impersonating = $state<any>(null)
   let userPerms = $state<any>({ role: null, permissions: [] })
+  let devMode = $state(false)
 
   onMount(async () => {
     const { data: { session: s } } = await supabase.auth.getSession()
@@ -94,9 +95,48 @@
           <span class="role-badge no-role">no role</span>
         {/if}
         <span class="user-email">{session.user.email}</span>
+        <button onclick={() => devMode = !devMode} class="dev-toggle" title="Toggle dev panel">{devMode ? 'DEV' : 'DEV'}</button>
         <button onclick={signOut} class="sign-out">Sign Out</button>
       </nav>
     </header>
+
+    {#if devMode}
+      <div class="dev-panel">
+        <div class="dev-header">Dev Panel</div>
+        <div class="dev-grid">
+          <div class="dev-section">
+            <h4>Authenticated User</h4>
+            <div class="dev-row"><span>Email:</span> <strong>{session.user.email}</strong></div>
+            <div class="dev-row"><span>User ID:</span> <code>{session.user.id}</code></div>
+            <div class="dev-row"><span>Provider:</span> {session.user.app_metadata?.provider}</div>
+            <div class="dev-row"><span>Last sign in:</span> {new Date(session.user.last_sign_in_at ?? '').toLocaleString()}</div>
+          </div>
+          <div class="dev-section">
+            <h4>Active Permissions {impersonating ? '(impersonated)' : ''}</h4>
+            <div class="dev-row"><span>Role:</span> <strong>{userPerms.role ?? 'none'}</strong></div>
+            {#if userPerms.permissions === 'all'}
+              <div class="dev-row"><span>Access:</span> <strong style="color: #c0392b;">ALL (super_admin bypass)</strong></div>
+            {:else if Array.isArray(userPerms.permissions)}
+              {#each userPerms.permissions as p}
+                <div class="dev-perm"><span class="dev-resource">{p.resource}</span><span class="dev-action">{p.action}</span></div>
+              {/each}
+              {#if userPerms.permissions.length === 0}
+                <div class="dev-row" style="color: #c8832a;">No permissions defined for this role</div>
+              {/if}
+            {/if}
+          </div>
+          {#if impersonating}
+            <div class="dev-section">
+              <h4>Impersonation</h4>
+              <div class="dev-row"><span>Admin:</span> {session.user.email}</div>
+              <div class="dev-row"><span>Viewing as:</span> <strong>{impersonating.targetEmail}</strong></div>
+              <div class="dev-row"><span>Target role:</span> {impersonating.targetRole}</div>
+              <div class="dev-row"><span>Session ID:</span> <code>{impersonating.sessionId?.substring(0, 8)}...</code></div>
+            </div>
+          {/if}
+        </div>
+      </div>
+    {/if}
 
     {#if !userPerms.role}
       <div class="no-access">
@@ -137,6 +177,17 @@
     padding: 0.35rem 0.75rem; background: #2d6a35; color: white;
     border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;
   }
+  .dev-toggle { background: #2c3e50; font-size: 0.7rem; padding: 0.25rem 0.5rem; font-family: monospace; }
+  .dev-panel { background: #1a1a2e; color: #e0e0e0; padding: 1rem 2rem; font-family: monospace; font-size: 0.8rem; border-bottom: 2px solid #6d3fc8; }
+  .dev-header { color: #6d3fc8; font-weight: 700; font-size: 0.75rem; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 0.75rem; }
+  .dev-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; }
+  .dev-section h4 { color: #a8d5b0; font-size: 0.75rem; margin: 0 0 0.5rem; text-transform: uppercase; letter-spacing: 0.5px; }
+  .dev-row { display: flex; gap: 0.5rem; margin-bottom: 0.25rem; }
+  .dev-row span { color: #5a7060; }
+  .dev-row code { background: #2c2c4a; padding: 1px 4px; border-radius: 2px; font-size: 0.75rem; }
+  .dev-perm { display: inline-flex; gap: 4px; margin: 2px 4px 2px 0; }
+  .dev-resource { background: #1e4d25; color: #a8d5b0; padding: 1px 6px; border-radius: 3px; }
+  .dev-action { background: #2d4a9e; color: #c8d8f8; padding: 1px 6px; border-radius: 3px; }
   .no-access {
     text-align: center; padding: 4rem; font-family: system-ui;
   }
