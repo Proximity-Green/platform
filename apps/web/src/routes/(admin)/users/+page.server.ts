@@ -8,11 +8,13 @@ export const load = async ({ cookies }) => {
   const { data: { users }, error } = await supabase.auth.admin.listUsers()
   const { data: roles } = await supabase.from('roles').select('*')
   const { data: userRoles } = await supabase.from('user_roles').select('user_id, role_id, roles(name)')
+  const { data: permissions } = await supabase.from('permissions').select('role_id, resource, action')
 
   return {
     users: users ?? [],
     roles: roles ?? [],
-    userRoles: userRoles ?? []
+    userRoles: userRoles ?? [],
+    permissions: permissions ?? []
   }
 }
 

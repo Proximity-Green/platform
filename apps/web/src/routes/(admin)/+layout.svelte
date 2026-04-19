@@ -60,7 +60,7 @@
       body: JSON.stringify({ action: 'stop' })
     })
     impersonating = null
-    window.location.reload()
+    window.location.href = '/users'
   }
 </script>
 

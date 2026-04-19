@@ -16,6 +16,17 @@
     return ur?.roles?.name ?? null
   }
 
+  function getUserRoleId(userId: string) {
+    const ur = data.userRoles.find((r: any) => r.user_id === userId)
+    return ur?.role_id ?? null
+  }
+
+  function getRolePermissions(userId: string) {
+    const roleId = getUserRoleId(userId)
+    if (!roleId) return []
+    return data.permissions.filter((p: any) => p.role_id === roleId)
+  }
+
   async function impersonate(targetUserId: string) {
     const reason = prompt('Reason for impersonation (for audit log):')
     if (reason === null) return
@@ -110,6 +121,20 @@
                 {/each}
               </select>
             </form>
+            {#if currentRole === 'super_admin'}
+              <div class="perm-badges"><span class="perm-all">all access</span></div>
+            {:else}
+              {@const perms = getRolePermissions(user.id)}
+              {#if perms.length > 0}
+                <div class="perm-badges">
+                  {#each perms as p}
+                    <span class="perm-badge">{p.resource}:{p.action}</span>
+                  {/each}
+                </div>
+              {:else if currentRole}
+                <div class="perm-badges"><span class="perm-none">no permissions</span></div>
+              {/if}
+            {/if}
           </td>
           <td>
             {#if isBanned}
@@ -224,5 +249,9 @@
   .date { font-size: 0.85rem; color: #5a7060; }
   .never { color: #c8832a; font-size: 0.8rem; }
   .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .perm-badges { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+  .perm-badge { font-size: 0.65rem; background: #e8f5ea; color: #2d6a35; padding: 1px 5px; border-radius: 3px; font-family: monospace; }
+  .perm-all { font-size: 0.65rem; background: #fdecea; color: #c0392b; padding: 1px 5px; border-radius: 3px; font-weight: 600; }
+  .perm-none { font-size: 0.65rem; background: #fdf3e3; color: #c8832a; padding: 1px 5px; border-radius: 3px; }
   .empty { text-align: center; color: #5a7060; padding: 2rem; }
 </style>
