@@ -75,6 +75,7 @@
         <th>Email</th>
         <th>Phone</th>
         <th>Job Title</th>
+        <th>Created</th>
         {#if can('persons', 'update') || can('persons', 'delete')}
           <th>Actions</th>
         {/if}
@@ -102,6 +103,10 @@
             <td>{person.email}</td>
             <td>{person.phone ?? '—'}</td>
             <td>{person.job_title ?? '—'}</td>
+            <td class="date">
+              <div>{new Date(person.created_at).toLocaleDateString()}</div>
+              <div class="created-by">{new Date(person.created_at).toLocaleTimeString()}</div>
+            </td>
             {#if can('persons', 'update') || can('persons', 'delete')}
               <td class="actions">
                 {#if can('persons', 'update')}
@@ -149,5 +154,7 @@
   .actions { display: flex; gap: 0.5rem; }
   .edit-form { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
   .edit-form input { padding: 0.35rem; font-size: 0.85rem; }
+  .date { font-size: 0.8rem; color: #5a7060; }
+  .created-by { font-size: 0.7rem; color: #5a7060; }
   .empty { text-align: center; color: #5a7060; padding: 2rem; }
 </style>

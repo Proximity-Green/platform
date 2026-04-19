@@ -8,7 +8,7 @@ export const load = async ({ cookies }) => {
   const { data: persons } = await supabase
     .from('persons')
     .select('*')
-    .order('last_name')
+    .order('created_at', { ascending: false })
   return { persons: persons ?? [] }
 }
 
@@ -23,7 +23,8 @@ export const actions = {
       last_name: data.get('last_name'),
       email: data.get('email'),
       phone: data.get('phone'),
-      job_title: data.get('job_title')
+      job_title: data.get('job_title'),
+      created_by: userId
     })
     if (error) return fail(400, { error: error.message })
     return { success: true }
@@ -45,7 +46,8 @@ export const actions = {
         last_name: last,
         email: `${first.toLowerCase()}.${last.toLowerCase().replace(/\s/g, '')}.${Math.floor(Math.random() * 9999)}@example.com`,
         phone: `+27${Math.floor(Math.random() * 900000000 + 100000000)}`,
-        job_title: titles[Math.floor(Math.random() * titles.length)]
+        job_title: titles[Math.floor(Math.random() * titles.length)],
+        created_by: userId
       }
     })
 
