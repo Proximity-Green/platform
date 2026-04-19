@@ -30,7 +30,22 @@ async function sendEmail(apiKey: string, to: string, subject: string, html: stri
   // Extract message ID for tracking URL
   // Mailgun returns id like "<message-id@mg.proximity.green>"
   const messageId = result.id?.replace(/[<>]/g, '') ?? null
-  const mailgunLogUrl = `https://app.mailgun.com/app/sending/domains/${MAILGUN_DOMAIN}/logs`
+  // Mailgun events API to get the log URL for this specific message
+  let mailgunLogUrl = `https://app.mailgun.com/app/sending/domains/${MAILGUN_DOMAIN}/logs`
+  if (messageId) {
+    try {
+      const eventsResponse = await fetch(
+        `https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/events?message-id=${messageId}&limit=1`,
+        { headers: { 'Authorization': `Basic ${Buffer.from(`api:${apiKey}`).toString('base64')}` } }
+      )
+      if (eventsResponse.ok) {
+        const events = await eventsResponse.json()
+        if (events.items?.[0]?.storage?.url) {
+          mailgunLogUrl = `https://app.mailgun.com/app/sending/domains/${MAILGUN_DOMAIN}/logs/${events.items[0].id}`
+        }
+      }
+    } catch {}
+  }
 
   return { ...result, messageId, mailgunLogUrl }
 }
