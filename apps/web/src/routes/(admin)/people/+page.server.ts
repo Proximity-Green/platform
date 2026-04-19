@@ -85,19 +85,23 @@ export const actions = {
     const inviterEmail = session?.user?.email ?? 'an administrator'
 
     // Trigger welcome email workflow
+    let triggerRunId = null
     try {
-      await tasks.trigger('send-welcome-email', {
+      const handle = await tasks.trigger('send-welcome-email', {
         email,
         firstName: person?.first_name ?? '',
         lastName: person?.last_name ?? '',
         invitedBy: inviterEmail
       })
+      triggerRunId = handle.id
     } catch (e) {
-      // Don't fail the invite if Trigger.dev is down
       console.error('Trigger.dev welcome email failed:', e)
     }
 
-    await log('email', 'success', `Invitation sent to ${email} from People page`, { to: email, type: 'invite', person_id: personId }, userId)
+    await log('email', 'success', `Invitation sent to ${email} from People page`, {
+      to: email, type: 'invite', person_id: personId,
+      ...(triggerRunId ? { trigger_job: 'send-welcome-email', trigger_run_id: triggerRunId, trigger_status: 'triggered' } : {})
+    }, userId)
     await log('auth', 'info', `Person invited as user: ${email} (role: member)`, { email, person_id: personId, role: 'member' }, userId)
 
     return { success: true }
