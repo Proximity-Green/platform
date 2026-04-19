@@ -8,6 +8,13 @@ const supabase = createClient(
 
 export { supabase }
 
+// Set the current user ID in PostgreSQL session for audit triggers
+export async function setUserContext(userId: string | null) {
+  if (userId) {
+    await supabase.rpc('set_user_context', { user_id: userId })
+  }
+}
+
 export async function getUserPermissions(userId: string) {
   const { data: userRole } = await supabase
     .from('user_roles')
@@ -76,8 +83,15 @@ export async function getActualUserId(locals: any): Promise<string | null> {
 }
 
 // Gets effective user ID (impersonated if active) - for permission checks
+// Also sets PostgreSQL session variable for audit trigger attribution
 export async function getUserIdFromRequest(locals: any, cookies: any): Promise<string | null> {
-  // Check impersonation first
+  // Always set the ACTUAL user context for audit (not impersonated)
+  const actualId = await getActualUserId(locals)
+  if (actualId) {
+    await setUserContext(actualId)
+  }
+
+  // Check impersonation for permission checks
   const impersonating = cookies.get('impersonating')
   if (impersonating) {
     try {
@@ -86,6 +100,5 @@ export async function getUserIdFromRequest(locals: any, cookies: any): Promise<s
     } catch {}
   }
 
-  // Fall through to actual user
-  return getActualUserId(locals)
+  return actualId
 }
