@@ -26,38 +26,31 @@ async function sendEmail(apiKey: string, to: string, subject: string, html: stri
   }
 
   const result = await response.json()
-
-  // Extract message ID for tracking URL
-  // Mailgun returns id like "<message-id@mg.proximity.green>"
   const messageId = result.id?.replace(/[<>]/g, '') ?? null
-  // Mailgun events API to get the log URL for this specific message
-  let mailgunLogUrl = `https://app.mailgun.com/app/sending/domains/${MAILGUN_DOMAIN}/logs`
-  if (messageId) {
-    try {
-      const eventsResponse = await fetch(
-        `https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/events?message-id=${messageId}&limit=1`,
-        { headers: { 'Authorization': `Basic ${Buffer.from(`api:${apiKey}`).toString('base64')}` } }
-      )
-      if (eventsResponse.ok) {
-        const events = await eventsResponse.json()
-        if (events.items?.[0]?.storage?.url) {
-          mailgunLogUrl = `https://app.mailgun.com/app/sending/domains/${MAILGUN_DOMAIN}/logs/${events.items[0].id}`
-        }
-      }
-    } catch {}
-  }
+  const mailgunLogUrl = `https://app.mailgun.com/app/sending/domains/${MAILGUN_DOMAIN}/logs`
 
   return { ...result, messageId, mailgunLogUrl }
 }
 
-async function logToSystem(category: string, level: string, message: string, details: any) {
-  const supabaseUrl = process.env.PUBLIC_SUPABASE_URL || ''
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-  if (!supabaseUrl || !supabaseKey) return
+function replaceVariables(template: string, vars: Record<string, string>): string {
+  let result = template
+  for (const [key, val] of Object.entries(vars)) {
+    result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), val)
+  }
+  return result
+}
 
+async function getSupabase() {
+  const { createClient } = await import('@supabase/supabase-js')
+  return createClient(
+    process.env.PUBLIC_SUPABASE_URL || '',
+    process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+  )
+}
+
+async function logToSystem(category: string, level: string, message: string, details: any) {
   try {
-    const { createClient } = await import('@supabase/supabase-js')
-    const supabase = createClient(supabaseUrl, supabaseKey)
+    const supabase = await getSupabase()
     await supabase.from('system_logs').insert({ category, level, message, details })
   } catch (e) {
     logger.error("Failed to log to system_logs", { error: String(e) })
@@ -77,47 +70,39 @@ export const sendWelcomeEmail = task({
     const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY || ''
     if (!MAILGUN_API_KEY) throw new Error('MAILGUN_API_KEY not set')
 
-    logger.log("Sending welcome email", { payload });
+    logger.log("Sending welcome email", { payload })
 
-    // 1. Send welcome email to the invited person
-    const welcomeResult = await sendEmail(
-      MAILGUN_API_KEY,
-      payload.email,
-      `Welcome to Proximity Green, ${payload.firstName}!`,
-      `
-      <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 2rem;">
-        <div style="background: #0a1f0f; color: #a8d5b0; padding: 2rem; border-radius: 12px 12px 0 0; text-align: center;">
-          <h1 style="color: #4caf64; margin: 0; font-size: 1.5rem;">Proximity Green</h1>
-          <p style="margin: 0.5rem 0 0; color: #a8d5b0; font-size: 0.9rem;">Workspace Management Platform</p>
-        </div>
-        <div style="background: white; border: 1px solid #c8deca; border-top: none; border-radius: 0 0 12px 12px; padding: 2rem;">
-          <h2 style="color: #0a1f0f; margin: 0 0 1rem;">Welcome, ${payload.firstName}!</h2>
-          <p style="color: #5a7060; line-height: 1.6;">
-            You've been invited to join Proximity Green by <strong>${payload.invitedBy}</strong>.
-          </p>
-          <p style="color: #5a7060; line-height: 1.6;">
-            Click below to set up your account and get started:
-          </p>
-          <div style="text-align: center; margin: 1.5rem 0;">
-            <a href="${payload.inviteUrl || 'https://poc.proximity.green'}" style="background: #2d6a35; color: white; padding: 0.75rem 2rem; border-radius: 6px; text-decoration: none; font-weight: 500;">
-              Accept Invitation & Set Password
-            </a>
-          </div>
-          <p style="color: #5a7060; font-size: 0.8rem; line-height: 1.5;">
-            Or sign in directly at <a href="https://poc.proximity.green" style="color: #2d6a35;">poc.proximity.green</a>
-          </p>
-          <hr style="border: none; border-top: 1px solid #e8f5ea; margin: 1.5rem 0;" />
-          <p style="color: #5a7060; font-size: 0.75rem; text-align: center;">Proximity Green — Workspace Management Platform</p>
-        </div>
-      </div>
-    `)
+    // Load template from database
+    const supabase = await getSupabase()
+    const { data: template } = await supabase
+      .from('message_templates')
+      .select('subject, html_body')
+      .eq('slug', 'welcome-member')
+      .single()
 
-    logger.log("Welcome email sent", { messageId: welcomeResult.messageId, mailgunUrl: welcomeResult.mailgunLogUrl })
+    if (!template) throw new Error('Template "welcome-member" not found in message_templates')
 
-    // Query Mailgun for delivery status
+    // Replace variables
+    const vars: Record<string, string> = {
+      firstName: payload.firstName,
+      lastName: payload.lastName,
+      email: payload.email,
+      invitedBy: payload.invitedBy,
+      inviteUrl: payload.inviteUrl || 'https://poc.proximity.green',
+      appUrl: 'https://poc.proximity.green'
+    }
+
+    const subject = replaceVariables(template.subject, vars)
+    const html = replaceVariables(template.html_body, vars)
+
+    // Send via Mailgun
+    const welcomeResult = await sendEmail(MAILGUN_API_KEY, payload.email, subject, html)
+
+    logger.log("Welcome email sent", { messageId: welcomeResult.messageId })
+
+    // Check delivery status after delay
     let deliveryStatus = 'accepted'
     try {
-      // Wait for Mailgun to process and index the delivery event
       await new Promise(r => setTimeout(r, 8000))
       const eventsRes = await fetch(
         `https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/events?message-id=${welcomeResult.messageId}&limit=5`,
@@ -127,110 +112,28 @@ export const sendWelcomeEmail = task({
         const events = await eventsRes.json()
         const delivered = events.items?.find((e: any) => e.event === 'delivered')
         const failed = events.items?.find((e: any) => e.event === 'failed')
-        const bounced = events.items?.find((e: any) => e.event === 'rejected' || e.event === 'bounced')
         if (delivered) deliveryStatus = 'delivered'
         else if (failed) deliveryStatus = 'failed'
-        else if (bounced) deliveryStatus = 'bounced'
         else if (events.items?.length > 0) deliveryStatus = events.items[0].event
       }
     } catch {}
 
-    // Log to system logs with Mailgun tracking URL and status
-    await logToSystem('email', deliveryStatus === 'delivered' || deliveryStatus === 'accepted' ? 'success' : 'error',
+    await logToSystem('email',
+      deliveryStatus === 'delivered' || deliveryStatus === 'accepted' ? 'success' : 'error',
       `Welcome email ${deliveryStatus}: ${payload.email}`, {
-      to: payload.email,
-      type: 'welcome_email',
-      mailgun_status: deliveryStatus,
-      mailgun_message_id: welcomeResult.messageId,
-      mailgun_url: welcomeResult.mailgunLogUrl
-    })
-
-    // 2. Admin notifications disabled for now — too many emails during testing
-    // TODO: Re-enable when ready, or make configurable via settings
-    /*
-    const supabaseUrl = process.env.PUBLIC_SUPABASE_URL || ''
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-
-    if (supabaseUrl && supabaseKey) {
-      try {
-        const { createClient } = await import('@supabase/supabase-js')
-        const supabase = createClient(supabaseUrl, supabaseKey)
-
-        const { data: adminRoles } = await supabase
-          .from('roles')
-          .select('id')
-          .in('name', ['admin', 'super_admin'])
-
-        if (adminRoles && adminRoles.length > 0) {
-          const roleIds = adminRoles.map(r => r.id)
-          const { data: adminUserRoles } = await supabase
-            .from('user_roles')
-            .select('user_id')
-            .in('role_id', roleIds)
-
-          if (adminUserRoles && adminUserRoles.length > 0) {
-            const { data: { users } } = await supabase.auth.admin.listUsers()
-            const adminEmails = users
-              ?.filter(u => adminUserRoles.some(aur => aur.user_id === u.id))
-              .map(u => u.email)
-              .filter(Boolean) ?? []
-
-            for (const adminEmail of adminEmails) {
-              try {
-                const adminResult = await sendEmail(
-                  MAILGUN_API_KEY,
-                  adminEmail!,
-                  `New member invited: ${payload.firstName} ${payload.lastName}`,
-                  `
-                  <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 2rem;">
-                    <div style="background: #0a1f0f; padding: 1.5rem; border-radius: 12px 12px 0 0; text-align: center;">
-                      <h1 style="color: #4caf64; margin: 0; font-size: 1.2rem;">Proximity Green</h1>
-                    </div>
-                    <div style="background: white; border: 1px solid #c8deca; border-top: none; border-radius: 0 0 12px 12px; padding: 2rem;">
-                      <h2 style="color: #0a1f0f; margin: 0 0 1rem; font-size: 1.1rem;">New Member Invited</h2>
-                      <table style="width: 100%; font-size: 0.9rem; color: #5a7060;">
-                        <tr><td style="padding: 0.3rem 0; font-weight: 500;">Name:</td><td>${payload.firstName} ${payload.lastName}</td></tr>
-                        <tr><td style="padding: 0.3rem 0; font-weight: 500;">Email:</td><td>${payload.email}</td></tr>
-                        <tr><td style="padding: 0.3rem 0; font-weight: 500;">Invited by:</td><td>${payload.invitedBy}</td></tr>
-                        <tr><td style="padding: 0.3rem 0; font-weight: 500;">Role:</td><td>Member</td></tr>
-                      </table>
-                      <div style="text-align: center; margin: 1.5rem 0;">
-                        <a href="https://poc.proximity.green/users" style="background: #2d6a35; color: white; padding: 0.5rem 1.5rem; border-radius: 6px; text-decoration: none; font-size: 0.85rem;">
-                          View Users
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                `)
-                logger.log("Admin notified", { adminEmail, mailgunUrl: adminResult.mailgunLogUrl })
-
-                await logToSystem('email', 'success', `Admin notification accepted: ${adminEmail}`, {
-                  to: adminEmail,
-                  type: 'admin_notification',
-                  about: payload.email,
-                  mailgun_status: 'accepted',
-                  mailgun_message_id: adminResult.messageId,
-                  mailgun_url: adminResult.mailgunLogUrl
-                })
-              } catch (e) {
-                logger.error("Failed to notify admin", { adminEmail, error: String(e) })
-                await logToSystem('email', 'error', `Failed to notify admin ${adminEmail}`, {
-                  to: adminEmail, error: String(e)
-                })
-              }
-            }
-          }
-        }
-      } catch (e) {
-        logger.error("Failed to fetch admin list", { error: String(e) })
-      }
-    }
-    */
+        to: payload.email,
+        type: 'welcome_email',
+        template: 'welcome-member',
+        mailgun_status: deliveryStatus,
+        mailgun_message_id: welcomeResult.messageId,
+        mailgun_url: welcomeResult.mailgunLogUrl
+      })
 
     return {
       success: true,
       welcomeMessageId: welcomeResult.messageId,
       mailgunUrl: welcomeResult.mailgunLogUrl,
+      deliveryStatus,
       to: payload.email
     }
   },
