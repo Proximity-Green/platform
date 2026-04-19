@@ -90,6 +90,8 @@
                 <span class="detail-key">{key}:</span>
                 {#if typeof val === 'string' && val.startsWith('http')}
                   <a href={val} target="_blank" class="detail-link">{val}</a>
+                {:else if key === 'mailgun_status' || key === 'trigger_status'}
+                  <span class="status-tag" class:tag-delivered={val === 'delivered'} class:tag-accepted={val === 'accepted' || val === 'triggered'} class:tag-failed={val === 'failed' || val === 'bounced' || val === 'rejected'}>{val}</span>
                 {:else}
                   <span class="detail-val">{val}</span>
                 {/if}
@@ -155,6 +157,10 @@
   .detail-val { color: #0a1f0f; font-family: monospace; font-size: 0.75rem; }
   .detail-link { color: #3a5fc8; font-family: monospace; font-size: 0.75rem; text-decoration: none; word-break: break-all; }
   .detail-link:hover { text-decoration: underline; }
+  .status-tag { padding: 2px 8px; border-radius: 3px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
+  .tag-delivered { background: #e8f5ea; color: #2d6a35; }
+  .tag-accepted { background: #e8f0fd; color: #3a5fc8; }
+  .tag-failed { background: #fdecea; color: #c0392b; }
   .empty { text-align: center; color: #5a7060; padding: 3rem; background: white; border: 1px solid #e8f5ea; border-radius: 6px; }
   .pagination { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; font-size: 0.85rem; color: #5a7060; }
   .page-btns { display: flex; gap: 0.5rem; }

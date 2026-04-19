@@ -110,15 +110,40 @@ export const sendWelcomeEmail = task({
 
     logger.log("Welcome email sent", { messageId: welcomeResult.messageId, mailgunUrl: welcomeResult.mailgunLogUrl })
 
-    // Log to system logs with Mailgun tracking URL
-    await logToSystem('email', 'success', `Welcome email sent to ${payload.email}`, {
+    // Query Mailgun for delivery status
+    let deliveryStatus = 'accepted'
+    try {
+      // Small delay to let Mailgun process
+      await new Promise(r => setTimeout(r, 2000))
+      const eventsRes = await fetch(
+        `https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/events?message-id=${welcomeResult.messageId}&limit=5`,
+        { headers: { 'Authorization': `Basic ${Buffer.from(`api:${MAILGUN_API_KEY}`).toString('base64')}` } }
+      )
+      if (eventsRes.ok) {
+        const events = await eventsRes.json()
+        const delivered = events.items?.find((e: any) => e.event === 'delivered')
+        const failed = events.items?.find((e: any) => e.event === 'failed')
+        const bounced = events.items?.find((e: any) => e.event === 'rejected' || e.event === 'bounced')
+        if (delivered) deliveryStatus = 'delivered'
+        else if (failed) deliveryStatus = 'failed'
+        else if (bounced) deliveryStatus = 'bounced'
+        else if (events.items?.length > 0) deliveryStatus = events.items[0].event
+      }
+    } catch {}
+
+    // Log to system logs with Mailgun tracking URL and status
+    await logToSystem('email', deliveryStatus === 'delivered' || deliveryStatus === 'accepted' ? 'success' : 'error',
+      `Welcome email ${deliveryStatus}: ${payload.email}`, {
       to: payload.email,
       type: 'welcome_email',
+      mailgun_status: deliveryStatus,
       mailgun_message_id: welcomeResult.messageId,
       mailgun_url: welcomeResult.mailgunLogUrl
     })
 
-    // 2. Notify all admins and super admins
+    // 2. Admin notifications disabled for now — too many emails during testing
+    // TODO: Re-enable when ready, or make configurable via settings
+    /*
     const supabaseUrl = process.env.PUBLIC_SUPABASE_URL || ''
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
@@ -175,10 +200,11 @@ export const sendWelcomeEmail = task({
                 `)
                 logger.log("Admin notified", { adminEmail, mailgunUrl: adminResult.mailgunLogUrl })
 
-                await logToSystem('email', 'success', `Admin notification sent to ${adminEmail}`, {
+                await logToSystem('email', 'success', `Admin notification accepted: ${adminEmail}`, {
                   to: adminEmail,
                   type: 'admin_notification',
                   about: payload.email,
+                  mailgun_status: 'accepted',
                   mailgun_message_id: adminResult.messageId,
                   mailgun_url: adminResult.mailgunLogUrl
                 })
@@ -195,6 +221,7 @@ export const sendWelcomeEmail = task({
         logger.error("Failed to fetch admin list", { error: String(e) })
       }
     }
+    */
 
     return {
       success: true,
