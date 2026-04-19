@@ -1,9 +1,16 @@
 import { fail } from '@sveltejs/kit'
-import { supabase, requirePermission, getUserIdFromRequest } from '$lib/server/permissions'
+import { supabase, requirePermission, getUserIdFromRequest, getUserPermissions, hasPermission } from '$lib/server/permissions'
 
 export const load = async ({ cookies }) => {
   const userId = await getUserIdFromRequest(cookies)
-  if (userId) await requirePermission(userId, 'roles', 'read')
+  let canManage = false
+  if (userId) {
+    const perms = await getUserPermissions(userId)
+    if (!hasPermission(perms, 'roles', 'read')) {
+      await requirePermission(userId, 'roles', 'read')
+    }
+    canManage = hasPermission(perms, 'roles', 'manage')
+  }
 
   const { data: roles } = await supabase.from('roles').select('*').order('name')
   const { data: permissions } = await supabase.from('permissions').select('*, roles(name)')
@@ -14,7 +21,7 @@ export const load = async ({ cookies }) => {
     roleCounts[ur.role_id] = (roleCounts[ur.role_id] || 0) + 1
   })
 
-  return { roles: roles ?? [], permissions: permissions ?? [], roleCounts }
+  return { roles: roles ?? [], permissions: permissions ?? [], roleCounts, canManage }
 }
 
 export const actions = {

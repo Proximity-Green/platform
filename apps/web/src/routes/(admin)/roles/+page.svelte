@@ -7,9 +7,11 @@
 <div class="container">
   <header>
     <h1>Roles & Permissions</h1>
-    <button onclick={() => showNewRole = !showNewRole}>
-      {showNewRole ? 'Cancel' : '+ New Role'}
-    </button>
+    {#if data.canManage}
+      <button onclick={() => showNewRole = !showNewRole}>
+        {showNewRole ? 'Cancel' : '+ New Role'}
+      </button>
+    {/if}
   </header>
 
   {#if form?.error}
@@ -46,7 +48,7 @@
             {/if}
             <span class="user-count">{userCount} user{userCount !== 1 ? 's' : ''}</span>
           </div>
-          {#if userCount === 0 && !['super_admin', 'admin', 'finance', 'member'].includes(role.name)}
+          {#if data.canManage && userCount === 0 && !['super_admin', 'admin', 'finance', 'member'].includes(role.name)}
             <form method="POST" action="?/deleteRole" style="display:inline">
               <input type="hidden" name="id" value={role.id} />
               <button type="submit" class="delete-sm"
@@ -65,10 +67,12 @@
                 <div class="perm-item">
                   <span class="perm-resource">{perm.resource}</span>
                   <span class="perm-action">{perm.action}</span>
+                  {#if data.canManage}
                   <form method="POST" action="?/removePermission" style="display:inline">
                     <input type="hidden" name="id" value={perm.id} />
                     <button type="submit" class="remove-perm">&times;</button>
                   </form>
+                {/if}
                 </div>
               {/each}
             </div>
@@ -76,35 +80,37 @@
             <p class="no-perms">No permissions defined</p>
           {/if}
 
-          {#if showNewPerm === role.id}
-            <form method="POST" action="?/addPermission" class="perm-form">
-              <input type="hidden" name="role_id" value={role.id} />
-              <select name="resource" required>
-                <option value="">Resource...</option>
-                <option value="persons">Persons</option>
-                <option value="organisations">Organisations</option>
-                <option value="locations">Locations</option>
-                <option value="subscriptions">Subscriptions</option>
-                <option value="invoices">Invoices</option>
-                <option value="wallets">Wallets</option>
-                <option value="users">Users</option>
-                <option value="roles">Roles</option>
-                <option value="audit_log">Audit Log</option>
-                <option value="settings">Settings</option>
-              </select>
-              <select name="action" required>
-                <option value="">Action...</option>
-                <option value="read">Read</option>
-                <option value="create">Create</option>
-                <option value="update">Update</option>
-                <option value="delete">Delete</option>
-                <option value="manage">Manage (all)</option>
-              </select>
-              <button type="submit">Add</button>
-              <button type="button" class="cancel-btn" onclick={() => showNewPerm = null}>Cancel</button>
-            </form>
-          {:else}
-            <button class="add-perm" onclick={() => showNewPerm = role.id}>+ Add Permission</button>
+          {#if data.canManage}
+            {#if showNewPerm === role.id}
+              <form method="POST" action="?/addPermission" class="perm-form">
+                <input type="hidden" name="role_id" value={role.id} />
+                <select name="resource" required>
+                  <option value="">Resource...</option>
+                  <option value="persons">Persons</option>
+                  <option value="organisations">Organisations</option>
+                  <option value="locations">Locations</option>
+                  <option value="subscriptions">Subscriptions</option>
+                  <option value="invoices">Invoices</option>
+                  <option value="wallets">Wallets</option>
+                  <option value="users">Users</option>
+                  <option value="roles">Roles</option>
+                  <option value="audit_log">Audit Log</option>
+                  <option value="settings">Settings</option>
+                </select>
+                <select name="action" required>
+                  <option value="">Action...</option>
+                  <option value="read">Read</option>
+                  <option value="create">Create</option>
+                  <option value="update">Update</option>
+                  <option value="delete">Delete</option>
+                  <option value="manage">Manage (all)</option>
+                </select>
+                <button type="submit">Add</button>
+                <button type="button" class="cancel-btn" onclick={() => showNewPerm = null}>Cancel</button>
+              </form>
+            {:else}
+              <button class="add-perm" onclick={() => showNewPerm = role.id}>+ Add Permission</button>
+            {/if}
           {/if}
         </div>
       </div>
