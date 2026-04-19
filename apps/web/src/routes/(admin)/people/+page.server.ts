@@ -65,10 +65,16 @@ export const actions = {
     const email = data.get('email') as string
     const personId = data.get('person_id') as string
 
-    const { data: result, error } = await supabase.auth.admin.inviteUserByEmail(email, {
-      redirectTo: 'https://poc.proximity.green/auth/confirm'
+    // Generate invite link without sending Supabase's email — we send our own
+    const { data: result, error } = await supabase.auth.admin.generateLink({
+      type: 'invite',
+      email,
+      options: { redirectTo: 'https://poc.proximity.green/auth/confirm' }
     })
     if (error) return fail(400, { error: error.message })
+
+    // Build the invite URL from the generated link properties
+    const inviteUrl = result.properties?.action_link ?? 'https://poc.proximity.green'
 
     // Link the new user to the person record
     await supabase.from('persons').update({ user_id: result.user.id }).eq('id', personId)
@@ -92,7 +98,8 @@ export const actions = {
         email,
         firstName: person?.first_name ?? '',
         lastName: person?.last_name ?? '',
-        invitedBy: inviterEmail
+        invitedBy: inviterEmail,
+        inviteUrl
       })
       triggerRunId = handle?.id ?? null
     } catch (e: any) {

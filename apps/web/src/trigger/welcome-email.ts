@@ -72,6 +72,7 @@ export const sendWelcomeEmail = task({
     firstName: string
     lastName: string
     invitedBy: string
+    inviteUrl?: string
   }) => {
     const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY || ''
     if (!MAILGUN_API_KEY) throw new Error('MAILGUN_API_KEY not set')
@@ -95,13 +96,16 @@ export const sendWelcomeEmail = task({
             You've been invited to join Proximity Green by <strong>${payload.invitedBy}</strong>.
           </p>
           <p style="color: #5a7060; line-height: 1.6;">
-            Click below to sign in and get started:
+            Click below to set up your account and get started:
           </p>
           <div style="text-align: center; margin: 1.5rem 0;">
-            <a href="https://poc.proximity.green" style="background: #2d6a35; color: white; padding: 0.75rem 2rem; border-radius: 6px; text-decoration: none; font-weight: 500;">
-              Sign In to Proximity Green
+            <a href="${payload.inviteUrl || 'https://poc.proximity.green'}" style="background: #2d6a35; color: white; padding: 0.75rem 2rem; border-radius: 6px; text-decoration: none; font-weight: 500;">
+              Accept Invitation & Set Password
             </a>
           </div>
+          <p style="color: #5a7060; font-size: 0.8rem; line-height: 1.5;">
+            Or sign in directly at <a href="https://poc.proximity.green" style="color: #2d6a35;">poc.proximity.green</a>
+          </p>
           <hr style="border: none; border-top: 1px solid #e8f5ea; margin: 1.5rem 0;" />
           <p style="color: #5a7060; font-size: 0.75rem; text-align: center;">Proximity Green — Workspace Management Platform</p>
         </div>
