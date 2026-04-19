@@ -5,6 +5,13 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 )
 
+// Resolve a user ID to email
+async function resolveEmail(userId: string | null | undefined): Promise<string | null> {
+  if (!userId) return null
+  const { data: { user } } = await supabase.auth.admin.getUserById(userId)
+  return user?.email ?? userId
+}
+
 export async function log(
   category: 'email' | 'auth' | 'system' | 'import' | 'integration' | 'billing',
   level: 'info' | 'warning' | 'error' | 'success',
@@ -13,9 +20,19 @@ export async function log(
   performedBy?: string | null,
   onBehalfOf?: string | null
 ) {
-  const enrichedDetails = {
-    ...details,
-    ...(onBehalfOf && onBehalfOf !== performedBy ? { impersonating: onBehalfOf, performed_by: performedBy } : {})
+  // Resolve any user IDs in details to emails
+  const enrichedDetails = { ...details }
+  for (const key of Object.keys(enrichedDetails)) {
+    const val = enrichedDetails[key]
+    if (typeof val === 'string' && val.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)) {
+      const email = await resolveEmail(val)
+      if (email && email !== val) enrichedDetails[key] = email
+    }
+  }
+
+  if (onBehalfOf && onBehalfOf !== performedBy) {
+    enrichedDetails.impersonating = await resolveEmail(onBehalfOf) ?? onBehalfOf
+    enrichedDetails.performed_by = await resolveEmail(performedBy) ?? performedBy
   }
 
   await supabase.from('system_logs').insert({
