@@ -30,9 +30,7 @@ async function sendEmail(apiKey: string, to: string, subject: string, html: stri
   // Extract message ID for tracking URL
   // Mailgun returns id like "<message-id@mg.proximity.green>"
   const messageId = result.id?.replace(/[<>]/g, '') ?? null
-  const mailgunLogUrl = messageId
-    ? `https://app.mailgun.com/app/sending/domains/${MAILGUN_DOMAIN}/logs?query=${encodeURIComponent(messageId)}`
-    : null
+  const mailgunLogUrl = `https://app.mailgun.com/app/sending/domains/${MAILGUN_DOMAIN}/logs`
 
   return { ...result, messageId, mailgunLogUrl }
 }
@@ -98,7 +96,7 @@ export const sendWelcomeEmail = task({
     logger.log("Welcome email sent", { messageId: welcomeResult.messageId, mailgunUrl: welcomeResult.mailgunLogUrl })
 
     // Log to system logs with Mailgun tracking URL
-    await logToSystem('email', 'success', `Welcome email delivered to ${payload.email}`, {
+    await logToSystem('email', 'success', `Welcome email sent to ${payload.email}`, {
       to: payload.email,
       type: 'welcome_email',
       mailgun_message_id: welcomeResult.messageId,
