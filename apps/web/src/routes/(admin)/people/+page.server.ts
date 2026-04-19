@@ -1,6 +1,8 @@
 import { fail } from '@sveltejs/kit'
 import { supabase, requirePermission, getUserIdFromRequest } from '$lib/server/permissions'
 import { log } from '$lib/server/systemLog'
+import { tasks } from '@trigger.dev/sdk/v3'
+import type { sendWelcomeEmail } from '$lib/../trigger/welcome-email'
 
 export const load = async ({ cookies, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)
@@ -75,6 +77,24 @@ export const actions = {
     const { data: memberRole } = await supabase.from('roles').select('id').eq('name', 'member').single()
     if (memberRole) {
       await supabase.from('user_roles').insert({ user_id: result.user.id, role_id: memberRole.id })
+    }
+
+    // Get person details and inviter email for welcome email
+    const { data: person } = await supabase.from('persons').select('first_name, last_name').eq('id', personId).single()
+    const session = await locals.getSession()
+    const inviterEmail = session?.user?.email ?? 'an administrator'
+
+    // Trigger welcome email workflow
+    try {
+      await tasks.trigger('send-welcome-email', {
+        email,
+        firstName: person?.first_name ?? '',
+        lastName: person?.last_name ?? '',
+        invitedBy: inviterEmail
+      })
+    } catch (e) {
+      // Don't fail the invite if Trigger.dev is down
+      console.error('Trigger.dev welcome email failed:', e)
     }
 
     await log('email', 'success', `Invitation sent to ${email} from People page`, { to: email, type: 'invite', person_id: personId }, userId)
