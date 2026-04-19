@@ -1,5 +1,6 @@
 import { fail } from '@sveltejs/kit'
-import { supabase, requirePermission, getUserIdFromRequest } from '$lib/server/permissions'
+import { supabase, requirePermission, getUserIdFromRequest, getActualUserId } from '$lib/server/permissions'
+import { log } from '$lib/server/systemLog'
 
 export const load = async ({ cookies, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)
@@ -100,7 +101,15 @@ export const actions = {
       body: formBody
     })
 
-    if (!response.ok) return fail(400, { error: `Send failed: ${await response.text()}` })
+    if (!response.ok) {
+      const errorText = await response.text()
+      const actualUserId = await getActualUserId(locals)
+      await log('email', 'error', `Test email failed: ${template.name} to ${testEmail}`, { template: template.slug, to: testEmail, error: errorText }, actualUserId)
+      return fail(400, { error: `Send failed: ${errorText}` })
+    }
+
+    const actualUserId = await getActualUserId(locals)
+    await log('email', 'success', `Test email sent: ${template.name} to ${testEmail}`, { template: template.slug, to: testEmail, channel: template.channel }, actualUserId)
     return { success: true, message: `Test email sent to ${testEmail}` }
   }
 }
