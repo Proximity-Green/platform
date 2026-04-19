@@ -86,6 +86,7 @@
         {/if}
         {#if can('audit_log')}
           <a href="/changelog">Log</a>
+          <a href="/system-logs">System</a>
         {/if}
         {#if perms.role}
           <span class="role-badge">{perms.role.replace('_', ' ')}</span>

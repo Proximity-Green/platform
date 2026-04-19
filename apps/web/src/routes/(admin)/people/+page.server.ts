@@ -1,5 +1,6 @@
 import { fail } from '@sveltejs/kit'
 import { supabase, requirePermission, getUserIdFromRequest } from '$lib/server/permissions'
+import { log } from '$lib/server/systemLog'
 
 export const load = async ({ cookies }) => {
   const userId = await getUserIdFromRequest(cookies)
@@ -69,6 +70,9 @@ export const actions = {
 
     // Link the new user to the person record
     await supabase.from('persons').update({ user_id: result.user.id }).eq('id', personId)
+
+    await log('email', 'success', `Invitation sent to ${email} from People page`, { to: email, type: 'invite', person_id: personId }, userId)
+    await log('auth', 'info', `Person invited as user: ${email}`, { email, person_id: personId }, userId)
 
     return { success: true }
   },

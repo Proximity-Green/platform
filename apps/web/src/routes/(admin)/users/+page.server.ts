@@ -1,5 +1,6 @@
 import { fail } from '@sveltejs/kit'
 import { supabase, requirePermission, getUserIdFromRequest, logAuthAction } from '$lib/server/permissions'
+import { log } from '$lib/server/systemLog'
 
 export const load = async ({ cookies }) => {
   const userId = await getUserIdFromRequest(cookies)
@@ -34,6 +35,8 @@ export const actions = {
     await logAuthAction('INSERT', result.user.id, userId, {
       email, action_type: 'invite', invited_by: userId
     })
+    await log('email', 'success', `Invitation email sent to ${email}`, { to: email, type: 'invite' }, userId)
+    await log('auth', 'info', `User invited: ${email}`, { email, invited_by: userId }, userId)
 
     return { success: true, message: `Invitation sent to ${email}` }
   },
@@ -103,6 +106,7 @@ export const actions = {
     await logAuthAction('UPDATE', targetUserId, userId, {
       email: user?.email, action_type: 'revoke', revoked_by: userId
     })
+    await log('auth', 'warning', `User access revoked: ${user?.email}`, { email: user?.email, revoked_by: userId }, userId)
 
     return { success: true, message: 'User access revoked' }
   },
@@ -124,6 +128,7 @@ export const actions = {
     await logAuthAction('RESTORE', targetUserId, userId, {
       email: user?.email, action_type: 'restore_access', restored_by: userId
     })
+    await log('auth', 'info', `User access restored: ${user?.email}`, { email: user?.email, restored_by: userId }, userId)
 
     return { success: true, message: 'User access restored' }
   },
@@ -146,6 +151,7 @@ export const actions = {
       email, action_type: 'password_reset', initiated_by: userId
     })
 
+    await log('email', 'success', `Password reset email sent to ${email}`, { to: email, type: 'password_reset' }, userId)
     return { success: true, message: `Password reset sent to ${email}` }
   },
 
@@ -165,6 +171,7 @@ export const actions = {
       email: user?.email, action_type: 'delete_user', deleted_by: userId
     })
 
+    await log('auth', 'error', `User permanently deleted: ${user?.email}`, { email: user?.email, deleted_by: userId }, userId)
     return { success: true, message: 'User deleted' }
   }
 }
