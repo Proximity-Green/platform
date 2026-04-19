@@ -25,7 +25,30 @@ async function sendEmail(apiKey: string, to: string, subject: string, html: stri
     throw new Error(`Mailgun error (${response.status}): ${text}`)
   }
 
-  return await response.json()
+  const result = await response.json()
+
+  // Extract message ID for tracking URL
+  // Mailgun returns id like "<message-id@mg.proximity.green>"
+  const messageId = result.id?.replace(/[<>]/g, '') ?? null
+  const mailgunLogUrl = messageId
+    ? `https://app.mailgun.com/app/sending/domains/${MAILGUN_DOMAIN}/logs?query=${encodeURIComponent(messageId)}`
+    : null
+
+  return { ...result, messageId, mailgunLogUrl }
+}
+
+async function logToSystem(category: string, level: string, message: string, details: any) {
+  const supabaseUrl = process.env.PUBLIC_SUPABASE_URL || ''
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+  if (!supabaseUrl || !supabaseKey) return
+
+  try {
+    const { createClient } = await import('@supabase/supabase-js')
+    const supabase = createClient(supabaseUrl, supabaseKey)
+    await supabase.from('system_logs').insert({ category, level, message, details })
+  } catch (e) {
+    logger.error("Failed to log to system_logs", { error: String(e) })
+  }
 }
 
 export const sendWelcomeEmail = task({
@@ -59,8 +82,7 @@ export const sendWelcomeEmail = task({
             You've been invited to join Proximity Green by <strong>${payload.invitedBy}</strong>.
           </p>
           <p style="color: #5a7060; line-height: 1.6;">
-            You should have received a separate email with a link to set up your account.
-            Once you've set your password, you can sign in at:
+            Click below to sign in and get started:
           </p>
           <div style="text-align: center; margin: 1.5rem 0;">
             <a href="https://poc.proximity.green" style="background: #2d6a35; color: white; padding: 0.75rem 2rem; border-radius: 6px; text-decoration: none; font-weight: 500;">
@@ -68,17 +90,22 @@ export const sendWelcomeEmail = task({
             </a>
           </div>
           <hr style="border: none; border-top: 1px solid #e8f5ea; margin: 1.5rem 0;" />
-          <p style="color: #5a7060; font-size: 0.75rem; text-align: center;">
-            Proximity Green — Workspace Management Platform
-          </p>
+          <p style="color: #5a7060; font-size: 0.75rem; text-align: center;">Proximity Green — Workspace Management Platform</p>
         </div>
       </div>
     `)
 
-    logger.log("Welcome email sent", { messageId: welcomeResult.id })
+    logger.log("Welcome email sent", { messageId: welcomeResult.messageId, mailgunUrl: welcomeResult.mailgunLogUrl })
+
+    // Log to system logs with Mailgun tracking URL
+    await logToSystem('email', 'success', `Welcome email delivered to ${payload.email}`, {
+      to: payload.email,
+      type: 'welcome_email',
+      mailgun_message_id: welcomeResult.messageId,
+      mailgun_url: welcomeResult.mailgunLogUrl
+    })
 
     // 2. Notify all admins and super admins
-    // Get admin emails from Supabase
     const supabaseUrl = process.env.PUBLIC_SUPABASE_URL || ''
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
@@ -87,7 +114,6 @@ export const sendWelcomeEmail = task({
         const { createClient } = await import('@supabase/supabase-js')
         const supabase = createClient(supabaseUrl, supabaseKey)
 
-        // Get admin and super_admin role IDs
         const { data: adminRoles } = await supabase
           .from('roles')
           .select('id')
@@ -109,7 +135,7 @@ export const sendWelcomeEmail = task({
 
             for (const adminEmail of adminEmails) {
               try {
-                await sendEmail(
+                const adminResult = await sendEmail(
                   MAILGUN_API_KEY,
                   adminEmail!,
                   `New member invited: ${payload.firstName} ${payload.lastName}`,
@@ -134,9 +160,20 @@ export const sendWelcomeEmail = task({
                     </div>
                   </div>
                 `)
-                logger.log("Admin notified", { adminEmail })
+                logger.log("Admin notified", { adminEmail, mailgunUrl: adminResult.mailgunLogUrl })
+
+                await logToSystem('email', 'success', `Admin notification sent to ${adminEmail}`, {
+                  to: adminEmail,
+                  type: 'admin_notification',
+                  about: payload.email,
+                  mailgun_message_id: adminResult.messageId,
+                  mailgun_url: adminResult.mailgunLogUrl
+                })
               } catch (e) {
                 logger.error("Failed to notify admin", { adminEmail, error: String(e) })
+                await logToSystem('email', 'error', `Failed to notify admin ${adminEmail}`, {
+                  to: adminEmail, error: String(e)
+                })
               }
             }
           }
@@ -148,7 +185,8 @@ export const sendWelcomeEmail = task({
 
     return {
       success: true,
-      welcomeMessageId: welcomeResult.id,
+      welcomeMessageId: welcomeResult.messageId,
+      mailgunUrl: welcomeResult.mailgunLogUrl,
       to: payload.email
     }
   },
