@@ -136,12 +136,12 @@
               {#if template.channel === 'email'}
                 <button type="button" class="test-btn" onclick={() => testEmailId = template.id}>Send Test</button>
               {/if}
-              <form method="POST" action="?/delete" style="display:inline">
-                <input type="hidden" name="id" value={template.id} />
-                <button type="submit" class="delete"
-                  onclick={(e) => { if (!confirm('Delete this template?')) e.preventDefault() }}>Delete</button>
-              </form>
             </div>
+          </form>
+          <form method="POST" action="?/delete" style="margin-top: 0.5rem;">
+            <input type="hidden" name="id" value={template.id} />
+            <button type="submit" class="delete"
+              onclick={(e) => { if (!confirm('Delete this template?')) e.preventDefault() }}>Delete Template</button>
           </form>
         {/if}
 
