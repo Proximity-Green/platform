@@ -199,14 +199,16 @@
 ---
 
 ### Next Session TODO
-1. WYSIWYG email template editor with raw HTML toggle
-2. Wire trigger task to read templates from database
-3. Deploy trigger worker to server (`trigger deploy`)
-4. Organisations CRUD
-5. Person detail page
-6. Replace browser dialogs with proper modals
-7. Wire Notes & Tags into People page
-8. Copy permissions from existing role
-9. Theme engine / look and feel
-10. Move keys out of Dockerfile
-11. Make repo private
+1. **Theme engine / look and feel** — CSS custom properties from themes table, prove white-label capability
+2. **Organisations CRUD** — actual page, schema exists
+3. **Deploy trigger worker to server** — `trigger deploy` so it runs without laptop
+4. **Mailgun webhook** — receive delivery/bounce events, replace 8s delay hack
+5. **WYSIWYG email template editor** with raw HTML toggle
+6. **Person detail page** — for User → Person link from Users page
+7. **Wire Notes & Tags** into People page
+8. **Replace browser dialogs** with proper in-app modals
+9. **Copy permissions from existing role**
+10. **Field-level permissions** with threshold constraints
+11. **Move keys out of Dockerfile** — proper secrets management
+12. **Make repo private** — needs deploy key or PAT
+13. **Delete user cascade fix** — foreign key error on delete
