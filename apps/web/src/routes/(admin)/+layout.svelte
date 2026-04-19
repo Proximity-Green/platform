@@ -86,6 +86,8 @@
         {/if}
         {#if can('audit_log')}
           <a href="/changelog">Log</a>
+        {/if}
+        {#if can('system_logs')}
           <a href="/system-logs">System</a>
         {/if}
         {#if perms.role}

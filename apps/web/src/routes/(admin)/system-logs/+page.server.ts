@@ -2,7 +2,7 @@ import { supabase, requirePermission, getUserIdFromRequest } from '$lib/server/p
 
 export const load = async ({ cookies, url }) => {
   const userId = await getUserIdFromRequest(cookies)
-  if (userId) await requirePermission(userId, 'audit_log', 'read')
+  if (userId) await requirePermission(userId, 'system_logs', 'read')
 
   const filterCategory = url.searchParams.get('category') ?? ''
   const filterLevel = url.searchParams.get('level') ?? ''

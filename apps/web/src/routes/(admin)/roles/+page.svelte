@@ -104,6 +104,7 @@
                   <option value="users">Users</option>
                   <option value="roles">Roles</option>
                   <option value="audit_log">Audit Log</option>
+                  <option value="system_logs">System Logs</option>
                   <option value="settings">Settings</option>
                 </select>
                 <select name="action" required>
