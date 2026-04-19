@@ -12,7 +12,7 @@ export const sendWelcomeEmail = task({
     logger.log("Sending welcome email", { payload });
 
     // Send via Mailgun REST API
-    const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY || '8cf5979325b04d155c32723450c5c94a'
+    const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY || ''
     const MAILGUN_DOMAIN = 'mg.proximity.green'
 
     const formData = new URLSearchParams()
