@@ -1,15 +1,26 @@
 import { fail } from '@sveltejs/kit'
-import { supabase, requirePermission, getUserIdFromRequest } from '$lib/server/permissions'
+import { supabase, requirePermission, getUserIdFromRequest, getUserPermissions, hasPermission } from '$lib/server/permissions'
 
 export const load = async ({ cookies }) => {
   const userId = await getUserIdFromRequest(cookies)
-  if (userId) await requirePermission(userId, 'persons', 'read')
+  let perms = { role: null as string | null, permissions: [] as any }
+  if (userId) {
+    perms = await getUserPermissions(userId)
+    if (!hasPermission(perms, 'persons', 'read')) {
+      await requirePermission(userId, 'persons', 'read')
+    }
+  }
 
   const { data: persons, error } = await supabase
     .from('persons')
     .select('*')
     .order('last_name')
-  return { persons: persons ?? [] }
+  return {
+    persons: persons ?? [],
+    canCreate: hasPermission(perms, 'persons', 'create') || hasPermission(perms, 'persons', 'manage'),
+    canUpdate: hasPermission(perms, 'persons', 'update') || hasPermission(perms, 'persons', 'manage'),
+    canDelete: hasPermission(perms, 'persons', 'delete') || hasPermission(perms, 'persons', 'manage')
+  }
 }
 
 export const actions = {
@@ -45,6 +56,31 @@ export const actions = {
         job_title: data.get('job_title')
       })
       .eq('id', data.get('id'))
+    if (error) return fail(400, { error: error.message })
+    return { success: true }
+  },
+
+  generateRandom: async ({ cookies }) => {
+    const userId = await getUserIdFromRequest(cookies)
+    if (userId) await requirePermission(userId, 'persons', 'create')
+
+    const firstNames = ['Sarah', 'James', 'Thandi', 'Mohammed', 'Chen', 'Priya', 'David', 'Emma', 'Sipho', 'Maria', 'Liam', 'Aisha', 'Ravi', 'Nina', 'Oscar', 'Fatima', 'Johan', 'Leila', 'Tom', 'Zanele']
+    const lastNames = ['Moyo', 'Van der Berg', 'Naidoo', 'Smith', 'Okonkwo', 'Patel', 'Khumalo', 'Johnson', 'Mbeki', 'Santos', 'Williams', 'Dlamini', 'Cohen', 'Ndlovu', 'Murphy', 'Govender', 'De Villiers', 'Abrahams', 'Botha', 'Singh']
+    const titles = ['Community Manager', 'Software Developer', 'Graphic Designer', 'Marketing Manager', 'CEO', 'Freelance Writer', 'Data Analyst', 'HR Manager', 'Sales Director', 'Product Manager', 'UX Designer', 'Accountant', 'Operations Lead', 'Business Development', 'Project Manager']
+
+    const people = Array.from({ length: 10 }, () => {
+      const first = firstNames[Math.floor(Math.random() * firstNames.length)]
+      const last = lastNames[Math.floor(Math.random() * lastNames.length)]
+      return {
+        first_name: first,
+        last_name: last,
+        email: `${first.toLowerCase()}.${last.toLowerCase().replace(/\s/g, '')}@example.com`,
+        phone: `+27${Math.floor(Math.random() * 900000000 + 100000000)}`,
+        job_title: titles[Math.floor(Math.random() * titles.length)]
+      }
+    })
+
+    const { error } = await supabase.from('persons').insert(people)
     if (error) return fail(400, { error: error.message })
     return { success: true }
   },
