@@ -26,17 +26,21 @@
     const match = msg.match(/permission to (\w+) (\w+)/)
     if (match) requiredPerm = `${match[2]}:${match[1]}`
 
-    // Get role from permissions API if not impersonating
-    if (!userRole && session) {
+    // Get role and permissions from API
+    const permUserId = impersonating?.targetUserId ?? session?.user?.id
+    if (permUserId) {
       const res = await fetch('/api/permissions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: session.user.id })
+        body: JSON.stringify({ userId: permUserId })
       })
-      const perms = await res.json()
-      userRole = perms.role ?? 'no role'
+      const permData = await res.json()
+      if (!userRole) userRole = permData.role ?? 'no role'
+      currentPerms = permData.permissions === 'all' ? 'all' : permData.permissions ?? []
     }
   })
+
+  let currentPerms = $state<any>([])
 </script>
 
 <div class="error-container">
@@ -48,8 +52,22 @@
       <div class="role-info">
         <div class="role-row"><span>User:</span> <strong>{userEmail}</strong></div>
         <div class="role-row"><span>Current role:</span> <strong>{userRole || 'loading...'}</strong></div>
+        <div class="role-row">
+          <span>Current permissions:</span>
+          {#if currentPerms === 'all'}
+            <strong>all access</strong>
+          {:else if Array.isArray(currentPerms) && currentPerms.length > 0}
+            <div class="perm-list">
+              {#each currentPerms as p}
+                <code>{p.resource}:{p.action}</code>
+              {/each}
+            </div>
+          {:else}
+            <em>none</em>
+          {/if}
+        </div>
         {#if requiredPerm}
-          <div class="role-row"><span>Required permission:</span> <code>{requiredPerm}</code></div>
+          <div class="role-row"><span>Required permission:</span> <code class="required">{requiredPerm}</code></div>
         {/if}
       </div>
       <p class="hint">Your current role does not include the required permissions. Contact an administrator if you need access.</p>
@@ -72,7 +90,9 @@
   p { color: #5a7060; line-height: 1.6; margin-bottom: 0.5rem; }
   .role-info { background: #f7f4ee; border: 1px solid #c8deca; border-radius: 8px; padding: 1rem; margin: 1.5rem 0; text-align: left; }
   .role-row { display: flex; justify-content: space-between; padding: 0.3rem 0; font-size: 0.85rem; color: #5a7060; }
-  .role-row code { background: #e8f5ea; color: #2d6a35; padding: 1px 6px; border-radius: 3px; font-size: 0.8rem; }
+  .role-row code { background: #e8f5ea; color: #2d6a35; padding: 1px 6px; border-radius: 3px; font-size: 0.8rem; margin: 1px; }
+  .role-row code.required { background: #fdecea; color: #c0392b; }
+  .perm-list { display: flex; flex-wrap: wrap; gap: 2px; }
   .hint { font-size: 0.85rem; color: #c8832a; background: #fdf3e3; padding: 0.75rem 1rem; border-radius: 6px; margin-top: 1rem; }
   .back-btn { display: inline-block; margin-top: 1.5rem; padding: 0.6rem 1.5rem; background: #2d6a35; color: white; border-radius: 6px; text-decoration: none; font-size: 0.9rem; }
   .back-btn:hover { background: #1e4d25; }
