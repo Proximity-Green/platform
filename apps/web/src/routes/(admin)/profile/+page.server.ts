@@ -1,12 +1,11 @@
 import { fail } from '@sveltejs/kit'
-import { supabase, getUserIdFromRequest } from '$lib/server/permissions'
+import { supabase } from '$lib/server/permissions'
 
-export const load = async ({ cookies }) => {
-  // Try to get the person record for the current user
-  const userId = await getUserIdFromRequest(cookies)
+export const load = async ({ locals }) => {
+  const session = await locals.getSession()
   let person = null
-  if (userId) {
-    const { data } = await supabase.from('persons').select('*').eq('user_id', userId).single()
+  if (session?.user?.email) {
+    const { data } = await supabase.from('persons').select('*').eq('email', session.user.email).single()
     person = data
   }
   return { person }
@@ -28,46 +27,34 @@ export const actions = {
       }
     })
 
-    // Update or create person record linked to this user
+    // Get user email
+    const { data: { user } } = await supabase.auth.admin.getUserById(userId)
+    const email = user?.email ?? ''
+
+    // Update or create person record
     const { data: existing } = await supabase
       .from('persons')
       .select('id')
-      .eq('user_id', userId)
+      .eq('email', email)
       .single()
 
     if (existing) {
       const { error } = await supabase
         .from('persons')
-        .update({ first_name: firstName, last_name: lastName, phone })
-        .eq('user_id', userId)
+        .update({ first_name: firstName, last_name: lastName, phone, user_id: userId })
+        .eq('id', existing.id)
       if (error) return fail(400, { error: error.message })
     } else {
-      // Check if person exists by email and link them
-      const { data: { user } } = await supabase.auth.admin.getUserById(userId)
-      const { data: personByEmail } = await supabase
+      const { error } = await supabase
         .from('persons')
-        .select('id')
-        .eq('email', user?.email ?? '')
-        .single()
-
-      if (personByEmail) {
-        const { error } = await supabase
-          .from('persons')
-          .update({ user_id: userId, first_name: firstName, last_name: lastName, phone })
-          .eq('id', personByEmail.id)
-        if (error) return fail(400, { error: error.message })
-      } else {
-        const { error } = await supabase
-          .from('persons')
-          .insert({
-            user_id: userId,
-            first_name: firstName,
-            last_name: lastName,
-            email: user?.email ?? '',
-            phone
-          })
-        if (error) return fail(400, { error: error.message })
-      }
+        .insert({
+          user_id: userId,
+          first_name: firstName,
+          last_name: lastName,
+          email,
+          phone
+        })
+      if (error) return fail(400, { error: error.message })
     }
 
     return { success: true, message: 'Profile updated' }
