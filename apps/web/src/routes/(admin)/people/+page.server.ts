@@ -86,6 +86,7 @@ export const actions = {
 
     // Trigger welcome email workflow
     let triggerRunId = null
+    let triggerError = null
     try {
       const handle = await tasks.trigger('send-welcome-email', {
         email,
@@ -93,14 +94,22 @@ export const actions = {
         lastName: person?.last_name ?? '',
         invitedBy: inviterEmail
       })
-      triggerRunId = handle.id
-    } catch (e) {
-      console.error('Trigger.dev welcome email failed:', e)
+      triggerRunId = handle?.id ?? null
+    } catch (e: any) {
+      triggerError = e?.message ?? String(e)
+      console.error('Trigger.dev welcome email failed:', triggerError)
     }
 
-    await log('email', 'success', `Invitation sent to ${email} from People page`, {
+    const triggerBaseUrl = 'https://jobs.poc.proximity.green/orgs/proximity-green-f2c3/projects/poc-aX4R/env/dev/runs'
+    await log('email', triggerError ? 'warning' : 'success', `Invitation sent to ${email} from People page`, {
       to: email, type: 'invite', person_id: personId,
-      ...(triggerRunId ? { trigger_job: 'send-welcome-email', trigger_run_id: triggerRunId, trigger_status: 'triggered' } : {})
+      trigger_job: 'send-welcome-email',
+      ...(triggerRunId ? {
+        trigger_run_id: triggerRunId,
+        trigger_status: 'triggered',
+        trigger_url: `${triggerBaseUrl}/${triggerRunId}`
+      } : {}),
+      ...(triggerError ? { trigger_error: triggerError } : {})
     }, userId)
     await log('auth', 'info', `Person invited as user: ${email} (role: member)`, { email, person_id: personId, role: 'member' }, userId)
 
