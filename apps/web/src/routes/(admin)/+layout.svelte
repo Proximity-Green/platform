@@ -90,6 +90,9 @@
         {#if can('system_logs')}
           <a href="/system-logs">System</a>
         {/if}
+        {#if can('settings')}
+          <a href="/messages">Messages</a>
+        {/if}
         <a href="/dev-changelog" style="font-size: 0.7rem; color: #5a7060;">v1</a>
         <a href="/api/debug-session" target="_blank" style="font-size: 0.7rem; color: #5a7060;">Session</a>
         {#if perms.role}
