@@ -90,7 +90,7 @@
           <span class="role-badge no-role">no role</span>
         {/if}
         <button onclick={() => devMode = !devMode} class="dev-toggle" title="Toggle dev panel">DEV</button>
-        <span class="user-email">{session.user.email}</span>
+        <a href="/profile" class="user-email">{session.user.email}</a>
         <button onclick={signOut} class="sign-out">Sign Out</button>
       </nav>
     </header>

@@ -4,6 +4,22 @@
   let { data, form } = $props()
   let showForm = $state(false)
   let editingId = $state<string | null>(null)
+
+  const firstNames = ['Sarah', 'James', 'Thandi', 'Mohammed', 'Chen', 'Priya', 'David', 'Emma', 'Sipho', 'Maria', 'Liam', 'Aisha', 'Ravi', 'Nina', 'Oscar', 'Fatima', 'Johan', 'Leila', 'Tom', 'Zanele']
+  const lastNames = ['Moyo', 'Van der Berg', 'Naidoo', 'Smith', 'Okonkwo', 'Patel', 'Khumalo', 'Johnson', 'Mbeki', 'Santos', 'Williams', 'Dlamini', 'Cohen', 'Ndlovu', 'Murphy', 'Govender', 'De Villiers', 'Abrahams', 'Botha', 'Singh']
+  const titles = ['Community Manager', 'Software Developer', 'Graphic Designer', 'Marketing Manager', 'CEO', 'Freelance Writer', 'Data Analyst', 'HR Manager', 'Sales Director', 'Product Manager', 'UX Designer', 'Accountant', 'Operations Lead', 'Business Development', 'Project Manager']
+
+  function fillRandom() {
+    const first = firstNames[Math.floor(Math.random() * firstNames.length)]
+    const last = lastNames[Math.floor(Math.random() * lastNames.length)]
+    const form = document.querySelector('.form-card') as HTMLFormElement
+    if (!form) return
+    ;(form.querySelector('[name=first_name]') as HTMLInputElement).value = first
+    ;(form.querySelector('[name=last_name]') as HTMLInputElement).value = last
+    ;(form.querySelector('[name=email]') as HTMLInputElement).value = `${first.toLowerCase()}.${last.toLowerCase().replace(/\s/g, '')}.${Math.floor(Math.random() * 9999)}@example.com`
+    ;(form.querySelector('[name=phone]') as HTMLInputElement).value = `+27${Math.floor(Math.random() * 900000000 + 100000000)}`
+    ;(form.querySelector('[name=job_title]') as HTMLInputElement).value = titles[Math.floor(Math.random() * titles.length)]
+  }
   let perms = $state({ role: null as string | null, permissions: [] as any, loaded: false })
 
   permStore.subscribe(v => { perms = v })
@@ -45,7 +61,10 @@
         <label>Phone <input name="phone" /></label>
         <label>Job Title <input name="job_title" /></label>
       </div>
-      <button type="submit">Create Person</button>
+      <div class="form-actions">
+        <button type="submit">Create Person</button>
+        <button type="button" class="random-btn" onclick={fillRandom}>Fill Random</button>
+      </div>
     </form>
   {/if}
 
@@ -119,6 +138,7 @@
   input { margin-top: 0.25rem; padding: 0.5rem; border: 1px solid #c8deca; border-radius: 4px; font-size: 0.9rem; }
   button { padding: 0.5rem 1rem; background: #2d6a35; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem; }
   button:hover { background: #1e4d25; }
+  .form-actions { display: flex; gap: 0.5rem; }
   .random-btn { background: #3a5fc8; }
   .random-btn:hover { background: #2d4a9e; }
   .delete { background: #c0392b; }

@@ -43,7 +43,7 @@ export const actions = {
       return {
         first_name: first,
         last_name: last,
-        email: `${first.toLowerCase()}.${last.toLowerCase().replace(/\s/g, '')}@example.com`,
+        email: `${first.toLowerCase()}.${last.toLowerCase().replace(/\s/g, '')}.${Math.floor(Math.random() * 9999)}@example.com`,
         phone: `+27${Math.floor(Math.random() * 900000000 + 100000000)}`,
         job_title: titles[Math.floor(Math.random() * titles.length)]
       }
