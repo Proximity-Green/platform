@@ -88,7 +88,11 @@
             {#each Object.entries(entry.details) as [key, val]}
               <div class="detail-row">
                 <span class="detail-key">{key}:</span>
-                <span class="detail-val">{val}</span>
+                {#if typeof val === 'string' && val.startsWith('http')}
+                  <a href={val} target="_blank" class="detail-link">{val}</a>
+                {:else}
+                  <span class="detail-val">{val}</span>
+                {/if}
               </div>
             {/each}
           </div>
@@ -149,6 +153,8 @@
   .detail-row { font-size: 0.8rem; display: flex; gap: 0.5rem; padding: 0.15rem 0; }
   .detail-key { color: #5a7060; font-weight: 500; min-width: 100px; }
   .detail-val { color: #0a1f0f; font-family: monospace; font-size: 0.75rem; }
+  .detail-link { color: #3a5fc8; font-family: monospace; font-size: 0.75rem; text-decoration: none; word-break: break-all; }
+  .detail-link:hover { text-decoration: underline; }
   .empty { text-align: center; color: #5a7060; padding: 3rem; background: white; border: 1px solid #e8f5ea; border-radius: 6px; }
   .pagination { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; font-size: 0.85rem; color: #5a7060; }
   .page-btns { display: flex; gap: 0.5rem; }
