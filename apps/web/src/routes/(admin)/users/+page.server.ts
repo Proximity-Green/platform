@@ -1,5 +1,5 @@
 import { fail } from '@sveltejs/kit'
-import { supabase, requirePermission, getUserIdFromRequest, logAuthAction } from '$lib/server/permissions'
+import { supabase, requirePermission, getUserIdFromRequest, getActualUserId, logAuthAction } from '$lib/server/permissions'
 import { log } from '$lib/server/systemLog'
 
 export const load = async ({ cookies }) => {
@@ -92,6 +92,7 @@ export const actions = {
   revoke: async ({ request, cookies }) => {
     const userId = await getUserIdFromRequest(cookies)
     if (userId) await requirePermission(userId, 'users', 'manage')
+    const actualUserId = await getActualUserId(cookies)
 
     const data = await request.formData()
     const targetUserId = data.get('user_id') as string
@@ -103,10 +104,10 @@ export const actions = {
     })
     if (error) return fail(400, { error: error.message })
 
-    await logAuthAction('UPDATE', targetUserId, userId, {
-      email: user?.email, action_type: 'revoke', revoked_by: userId
+    await logAuthAction('UPDATE', targetUserId, actualUserId, {
+      email: user?.email, action_type: 'revoke', revoked_by: actualUserId
     })
-    await log('auth', 'warning', `User access revoked: ${user?.email}`, { email: user?.email, revoked_by: userId }, userId)
+    await log('auth', 'warning', `User access revoked: ${user?.email}`, { email: user?.email }, actualUserId, userId !== actualUserId ? userId : null)
 
     return { success: true, message: 'User access revoked' }
   },

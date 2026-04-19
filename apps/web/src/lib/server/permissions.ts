@@ -69,6 +69,32 @@ export async function logAuthAction(
   })
 }
 
+// Gets the REAL user ID (not impersonated) - for audit logging "who did this"
+export async function getActualUserId(cookies: any): Promise<string | null> {
+  const allCookies = cookies.getAll()
+  const authCookie = allCookies.find((c: any) => c.name.includes('auth-token'))
+  if (!authCookie?.value) return null
+
+  try {
+    const parsed = JSON.parse(authCookie.value)
+    const accessToken = Array.isArray(parsed) ? parsed[0] : (parsed.access_token ?? parsed)
+    if (typeof accessToken === 'string' && accessToken.startsWith('ey')) {
+      const { data: { user } } = await supabase.auth.getUser(accessToken)
+      return user?.id ?? null
+    }
+    return null
+  } catch {
+    if (authCookie.value.startsWith('ey')) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser(authCookie.value)
+        return user?.id ?? null
+      } catch { return null }
+    }
+    return null
+  }
+}
+
+// Gets effective user ID (impersonated if active) - for permission checks
 export async function getUserIdFromRequest(cookies: any): Promise<string | null> {
   // Check impersonation first
   const impersonating = cookies.get('impersonating')
@@ -79,18 +105,33 @@ export async function getUserIdFromRequest(cookies: any): Promise<string | null>
     } catch {}
   }
 
-  // Get all auth sessions and find the current one
-  // For server-side, we read the sb-* cookies
+  // Find the Supabase auth token cookie (PKCE sets sb-*-auth-token)
   const allCookies = cookies.getAll()
-  const accessToken = allCookies.find((c: any) => c.name.includes('auth-token'))?.value
-  if (!accessToken) return null
+  const authCookie = allCookies.find((c: any) => c.name.includes('auth-token'))
+
+  if (!authCookie?.value) return null
 
   try {
-    const parsed = JSON.parse(accessToken)
-    const token = Array.isArray(parsed) ? parsed[0] : parsed
-    const { data: { user } } = await supabase.auth.getUser(token)
-    return user?.id ?? null
+    // PKCE stores as base64 JSON chunks or direct JSON
+    let tokenValue = authCookie.value
+
+    // Try to parse — could be JSON array [access_token, refresh_token] or object
+    const parsed = JSON.parse(tokenValue)
+    const accessToken = Array.isArray(parsed) ? parsed[0] : (parsed.access_token ?? parsed)
+
+    if (typeof accessToken === 'string' && accessToken.startsWith('ey')) {
+      const { data: { user } } = await supabase.auth.getUser(accessToken)
+      return user?.id ?? null
+    }
+    return null
   } catch {
+    // Might be a raw JWT string
+    if (authCookie.value.startsWith('ey')) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser(authCookie.value)
+        return user?.id ?? null
+      } catch { return null }
+    }
     return null
   }
 }

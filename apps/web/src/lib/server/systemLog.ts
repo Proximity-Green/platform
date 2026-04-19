@@ -10,13 +10,19 @@ export async function log(
   level: 'info' | 'warning' | 'error' | 'success',
   message: string,
   details?: Record<string, any>,
-  createdBy?: string | null
+  performedBy?: string | null,
+  onBehalfOf?: string | null
 ) {
+  const enrichedDetails = {
+    ...details,
+    ...(onBehalfOf && onBehalfOf !== performedBy ? { impersonating: onBehalfOf, performed_by: performedBy } : {})
+  }
+
   await supabase.from('system_logs').insert({
     category,
     level,
     message,
-    details: details ?? null,
-    created_by: createdBy ?? null
+    details: enrichedDetails,
+    created_by: performedBy ?? null
   })
 }
