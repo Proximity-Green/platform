@@ -15,6 +15,7 @@
     const params = new URLSearchParams(window.location.search)
     if (params.get('force_login')) {
       await supabase.auth.signOut()
+      session = null
       window.history.replaceState({}, '', '/')
       checking = false
       return
