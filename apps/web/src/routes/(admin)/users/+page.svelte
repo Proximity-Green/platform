@@ -159,6 +159,10 @@
             {#if user.last_sign_in_at}
               <div>{new Date(user.last_sign_in_at).toLocaleDateString()}</div>
               <div class="auth-detail">{new Date(user.last_sign_in_at).toLocaleTimeString()}</div>
+              {@const lastAmr = user.amr?.[user.amr.length - 1]}
+              {#if lastAmr}
+                <div class="auth-detail">via {lastAmr.method === 'oauth' ? 'Google' : lastAmr.method === 'password' ? 'Email/Password' : lastAmr.method}</div>
+              {/if}
             {:else}
               <span class="never">Never</span>
             {/if}
