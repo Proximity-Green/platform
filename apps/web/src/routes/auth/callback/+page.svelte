@@ -11,14 +11,36 @@
     if (code) {
       const { error } = await supabase.auth.exchangeCodeForSession(code)
       if (error) {
-        status = `Authentication failed: ${error.message}`
+        // PKCE verifier missing — the session might already be set via hash
+        // Try getting session directly
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+          window.location.href = '/people'
+          return
+        }
+        status = `Authentication error. Please try signing in again.`
+        setTimeout(() => { window.location.href = '/' }, 2000)
         return
       }
     }
 
-    // Session is now set client-side — sync to server by navigating
-    // The hooks.server.ts will pick up the session cookies on next request
-    window.location.href = '/people'
+    // Check for hash fragment (implicit flow fallback)
+    if (window.location.hash) {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        window.location.href = '/people'
+        return
+      }
+    }
+
+    // Success or already authenticated
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session) {
+      window.location.href = '/people'
+    } else {
+      status = 'No session found. Redirecting...'
+      setTimeout(() => { window.location.href = '/' }, 2000)
+    }
   })
 </script>
 

@@ -6,8 +6,8 @@ export const GET = async ({ cookies, locals }) => {
   const authCookies = allCookies.filter((c: any) => c.name.includes('sb-') || c.name.includes('auth'))
 
   const session = await locals.getSession()
-  const actualUserId = await getActualUserId(cookies)
-  const effectiveUserId = await getUserIdFromRequest(cookies)
+  const actualUserId = await getActualUserId(locals)
+  const effectiveUserId = await getUserIdFromRequest(locals, cookies)
 
   return json({
     cookieNames: authCookies.map((c: any) => ({ name: c.name, valueLength: c.value?.length, valueStart: c.value?.substring(0, 30) })),

@@ -2,8 +2,8 @@ import { requirePermission, getUserIdFromRequest } from '$lib/server/permissions
 import fs from 'fs'
 import path from 'path'
 
-export const load = async ({ cookies }) => {
-  const userId = await getUserIdFromRequest(cookies)
+export const load = async ({ cookies, locals }) => {
+  const userId = await getUserIdFromRequest(locals, cookies)
   if (userId) await requirePermission(userId, 'settings', 'read')
 
   // Read CHANGELOG.md from repo root

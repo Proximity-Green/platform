@@ -69,41 +69,14 @@ export async function logAuthAction(
   })
 }
 
-// Gets the REAL user ID (not impersonated) - for audit logging "who did this"
-export async function getActualUserId(cookies: any): Promise<string | null> {
-  const allCookies = cookies.getAll()
-
-  // Supabase SSR stores auth in chunked cookies: sb-*-auth-token.0, sb-*-auth-token.1, etc.
-  const authChunks = allCookies
-    .filter((c: any) => c.name.includes('auth-token'))
-    .sort((a: any, b: any) => a.name.localeCompare(b.name))
-
-  if (authChunks.length === 0) return null
-
-  try {
-    // Combine chunks
-    let combined = authChunks.map((c: any) => c.value).join('')
-
-    // Remove base64- prefix if present
-    if (combined.startsWith('base64-')) {
-      combined = Buffer.from(combined.slice(7), 'base64').toString('utf-8')
-    }
-
-    const parsed = JSON.parse(combined)
-    const accessToken = parsed.access_token ?? (Array.isArray(parsed) ? parsed[0] : null)
-
-    if (accessToken && typeof accessToken === 'string' && accessToken.startsWith('ey')) {
-      const { data: { user } } = await supabase.auth.getUser(accessToken)
-      return user?.id ?? null
-    }
-    return null
-  } catch {
-    return null
-  }
+// Gets the REAL user ID (not impersonated) - for audit logging
+export async function getActualUserId(locals: any): Promise<string | null> {
+  const session = await locals.getSession()
+  return session?.user?.id ?? null
 }
 
 // Gets effective user ID (impersonated if active) - for permission checks
-export async function getUserIdFromRequest(cookies: any): Promise<string | null> {
+export async function getUserIdFromRequest(locals: any, cookies: any): Promise<string | null> {
   // Check impersonation first
   const impersonating = cookies.get('impersonating')
   if (impersonating) {
@@ -114,6 +87,5 @@ export async function getUserIdFromRequest(cookies: any): Promise<string | null>
   }
 
   // Fall through to actual user
-  return getActualUserId(cookies)
-  }
+  return getActualUserId(locals)
 }

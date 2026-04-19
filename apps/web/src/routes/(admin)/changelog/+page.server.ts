@@ -1,8 +1,8 @@
 import { fail } from '@sveltejs/kit'
 import { supabase, requirePermission, getUserIdFromRequest } from '$lib/server/permissions'
 
-export const load = async ({ cookies, url }) => {
-  const userId = await getUserIdFromRequest(cookies)
+export const load = async ({ cookies, url, locals }) => {
+  const userId = await getUserIdFromRequest(locals, cookies)
   if (userId) await requirePermission(userId, 'audit_log', 'read')
 
   const page = parseInt(url.searchParams.get('page') ?? '0')
@@ -55,8 +55,8 @@ export const load = async ({ cookies, url }) => {
 }
 
 export const actions = {
-  restore: async ({ request, cookies }) => {
-    const userId = await getUserIdFromRequest(cookies)
+  restore: async ({ request, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'audit_log', 'manage')
 
     const data = await request.formData()

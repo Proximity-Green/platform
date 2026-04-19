@@ -2,8 +2,8 @@ import { fail } from '@sveltejs/kit'
 import { supabase, requirePermission, getUserIdFromRequest, getActualUserId, logAuthAction } from '$lib/server/permissions'
 import { log } from '$lib/server/systemLog'
 
-export const load = async ({ cookies }) => {
-  const userId = await getUserIdFromRequest(cookies)
+export const load = async ({ cookies, locals }) => {
+  const userId = await getUserIdFromRequest(locals, cookies)
   if (userId) await requirePermission(userId, 'users', 'read')
 
   const { data: { users }, error } = await supabase.auth.admin.listUsers()
@@ -20,8 +20,8 @@ export const load = async ({ cookies }) => {
 }
 
 export const actions = {
-  invite: async ({ request, cookies }) => {
-    const userId = await getUserIdFromRequest(cookies)
+  invite: async ({ request, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'users', 'manage')
 
     const data = await request.formData()
@@ -41,8 +41,8 @@ export const actions = {
     return { success: true, message: `Invitation sent to ${email}` }
   },
 
-  resend: async ({ request, cookies }) => {
-    const userId = await getUserIdFromRequest(cookies)
+  resend: async ({ request, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'users', 'manage')
 
     const data = await request.formData()
@@ -60,8 +60,8 @@ export const actions = {
     return { success: true, message: `Invitation resent to ${email}` }
   },
 
-  setRole: async ({ request, cookies }) => {
-    const userId = await getUserIdFromRequest(cookies)
+  setRole: async ({ request, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'users', 'manage')
 
     const data = await request.formData()
@@ -89,10 +89,10 @@ export const actions = {
     return { success: true, message: 'Role updated' }
   },
 
-  revoke: async ({ request, cookies }) => {
-    const userId = await getUserIdFromRequest(cookies)
+  revoke: async ({ request, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'users', 'manage')
-    const actualUserId = await getActualUserId(cookies)
+    const actualUserId = await getActualUserId(locals)
 
     const data = await request.formData()
     const targetUserId = data.get('user_id') as string
@@ -112,8 +112,8 @@ export const actions = {
     return { success: true, message: 'User access revoked' }
   },
 
-  restore: async ({ request, cookies }) => {
-    const userId = await getUserIdFromRequest(cookies)
+  restore: async ({ request, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'users', 'manage')
 
     const data = await request.formData()
@@ -134,8 +134,8 @@ export const actions = {
     return { success: true, message: 'User access restored' }
   },
 
-  resetPassword: async ({ request, cookies }) => {
-    const userId = await getUserIdFromRequest(cookies)
+  resetPassword: async ({ request, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'users', 'manage')
 
     const data = await request.formData()
@@ -156,8 +156,8 @@ export const actions = {
     return { success: true, message: `Password reset sent to ${email}` }
   },
 
-  delete: async ({ request, cookies }) => {
-    const userId = await getUserIdFromRequest(cookies)
+  delete: async ({ request, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'users', 'manage')
 
     const data = await request.formData()

@@ -2,8 +2,8 @@ import { fail } from '@sveltejs/kit'
 import { supabase, requirePermission, getUserIdFromRequest } from '$lib/server/permissions'
 import { log } from '$lib/server/systemLog'
 
-export const load = async ({ cookies }) => {
-  const userId = await getUserIdFromRequest(cookies)
+export const load = async ({ cookies, locals }) => {
+  const userId = await getUserIdFromRequest(locals, cookies)
   if (userId) await requirePermission(userId, 'persons', 'read')
 
   const { data: persons } = await supabase
@@ -14,8 +14,8 @@ export const load = async ({ cookies }) => {
 }
 
 export const actions = {
-  create: async ({ request, cookies }) => {
-    const userId = await getUserIdFromRequest(cookies)
+  create: async ({ request, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'persons', 'create')
 
     const data = await request.formData()
@@ -30,8 +30,8 @@ export const actions = {
     return { success: true }
   },
 
-  generateRandom: async ({ cookies }) => {
-    const userId = await getUserIdFromRequest(cookies)
+  generateRandom: async ({ cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'persons', 'create')
 
     const firstNames = ['Sarah', 'James', 'Thandi', 'Mohammed', 'Chen', 'Priya', 'David', 'Emma', 'Sipho', 'Maria', 'Liam', 'Aisha', 'Ravi', 'Nina', 'Oscar', 'Fatima', 'Johan', 'Leila', 'Tom', 'Zanele']
@@ -55,8 +55,8 @@ export const actions = {
     return { success: true }
   },
 
-  inviteUser: async ({ request, cookies }) => {
-    const userId = await getUserIdFromRequest(cookies)
+  inviteUser: async ({ request, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'users', 'manage')
 
     const data = await request.formData()
@@ -83,8 +83,8 @@ export const actions = {
     return { success: true }
   },
 
-  update: async ({ request, cookies }) => {
-    const userId = await getUserIdFromRequest(cookies)
+  update: async ({ request, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'persons', 'update')
 
     const data = await request.formData()
@@ -98,8 +98,8 @@ export const actions = {
     return { success: true }
   },
 
-  delete: async ({ request, cookies }) => {
-    const userId = await getUserIdFromRequest(cookies)
+  delete: async ({ request, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'persons', 'delete')
 
     const data = await request.formData()

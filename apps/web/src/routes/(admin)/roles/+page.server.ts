@@ -1,8 +1,8 @@
 import { fail } from '@sveltejs/kit'
 import { supabase, requirePermission, getUserIdFromRequest } from '$lib/server/permissions'
 
-export const load = async ({ cookies }) => {
-  const userId = await getUserIdFromRequest(cookies)
+export const load = async ({ cookies, locals }) => {
+  const userId = await getUserIdFromRequest(locals, cookies)
   if (userId) await requirePermission(userId, 'roles', 'read')
 
   const { data: roles } = await supabase.from('roles').select('*').order('name')
@@ -18,8 +18,8 @@ export const load = async ({ cookies }) => {
 }
 
 export const actions = {
-  createRole: async ({ request, cookies }) => {
-    const userId = await getUserIdFromRequest(cookies)
+  createRole: async ({ request, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'roles', 'manage')
 
     const data = await request.formData()
@@ -31,8 +31,8 @@ export const actions = {
     return { success: true, message: 'Role created' }
   },
 
-  deleteRole: async ({ request, cookies }) => {
-    const userId = await getUserIdFromRequest(cookies)
+  deleteRole: async ({ request, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'roles', 'manage')
 
     const data = await request.formData()
@@ -41,8 +41,8 @@ export const actions = {
     return { success: true, message: 'Role deleted' }
   },
 
-  addPermission: async ({ request, cookies }) => {
-    const userId = await getUserIdFromRequest(cookies)
+  addPermission: async ({ request, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'roles', 'manage')
 
     const data = await request.formData()
@@ -55,8 +55,8 @@ export const actions = {
     return { success: true, message: 'Permission added' }
   },
 
-  removePermission: async ({ request, cookies }) => {
-    const userId = await getUserIdFromRequest(cookies)
+  removePermission: async ({ request, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'roles', 'manage')
 
     const data = await request.formData()
