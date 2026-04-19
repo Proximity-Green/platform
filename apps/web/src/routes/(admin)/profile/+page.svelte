@@ -21,13 +21,25 @@
     const { data: { session: s } } = await supabase.auth.getSession()
     session = s
     provider = s?.user?.app_metadata?.provider ?? 'email'
+    loadFromSession(s)
+  })
 
-    // Parse name
+  function loadFromSession(s: any) {
+    if (!s) return
     const fullName = s?.user?.user_metadata?.full_name ?? ''
     const parts = fullName.split(' ')
     firstName = parts[0] ?? ''
     lastName = parts.slice(1).join(' ') ?? ''
     phone = s?.user?.user_metadata?.phone ?? ''
+  }
+
+  // Refresh session after form submission
+  $effect(() => {
+    if (form?.success) {
+      supabase.auth.refreshSession().then(({ data: { session: s } }) => {
+        if (s) { session = s; loadFromSession(s) }
+      })
+    }
   })
 
   async function updatePassword() {
@@ -117,35 +129,31 @@
       {/if}
     </div>
 
-    {#if provider === 'email'}
-      <div class="section">
-        <h2>Change Password</h2>
+    <div class="section">
+      <h2>{provider === 'email' ? 'Change Password' : 'Set Password'}</h2>
+      {#if provider !== 'email'}
+        <p class="muted" style="margin-bottom: 1rem;">Your primary login is via {provider}. You can also set a password for email/password login.</p>
+      {/if}
 
-        {#if error}
-          <div class="error">{error}</div>
-        {/if}
-        {#if message}
-          <div class="success">{message}</div>
-        {/if}
+      {#if error}
+        <div class="error">{error}</div>
+      {/if}
+      {#if message}
+        <div class="success">{message}</div>
+      {/if}
 
-        <form onsubmit={(e) => { e.preventDefault(); updatePassword() }} class="password-form">
-          <label>
-            New Password
-            <input type="password" bind:value={newPassword} required minlength="8" placeholder="Minimum 8 characters" />
-          </label>
-          <label>
-            Confirm Password
-            <input type="password" bind:value={confirmPassword} required placeholder="Repeat password" />
-          </label>
-          <button type="submit">Update Password</button>
-        </form>
-      </div>
-    {:else}
-      <div class="section">
-        <h2>Password</h2>
-        <p class="muted">Your account uses {provider} authentication. Password is managed by your {provider} account.</p>
-      </div>
-    {/if}
+      <form onsubmit={(e) => { e.preventDefault(); updatePassword() }} class="password-form">
+        <label>
+          New Password
+          <input type="password" bind:value={newPassword} required minlength="8" placeholder="Minimum 8 characters" />
+        </label>
+        <label>
+          Confirm Password
+          <input type="password" bind:value={confirmPassword} required placeholder="Repeat password" />
+        </label>
+        <button type="submit">{provider === 'email' ? 'Update Password' : 'Set Password'}</button>
+      </form>
+    </div>
   {/if}
 </div>
 

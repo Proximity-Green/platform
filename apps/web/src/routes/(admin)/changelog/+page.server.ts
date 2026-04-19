@@ -21,6 +21,20 @@ export const load = async ({ cookies, url }) => {
 
   const { data: entries, count } = await query
 
+  // Resolve user IDs to emails
+  const userIds = [...new Set(entries?.map(e => e.changed_by).filter(Boolean) ?? [])]
+  const userMap: Record<string, string> = {}
+  if (userIds.length > 0) {
+    const { data: { users: authUsers } } = await supabase.auth.admin.listUsers()
+    authUsers?.forEach(u => { userMap[u.id] = u.email ?? u.id })
+  }
+
+  // Attach email to each entry
+  const enrichedEntries = entries?.map(e => ({
+    ...e,
+    changed_by_email: e.changed_by ? userMap[e.changed_by] ?? e.changed_by : 'system'
+  })) ?? []
+
   // Get filter options
   const { data: tableNames } = await supabase.from('change_log').select('table_name').limit(1000)
   const { data: actionNames } = await supabase.from('change_log').select('action').limit(1000)
@@ -29,7 +43,7 @@ export const load = async ({ cookies, url }) => {
   const actions = [...new Set(actionNames?.map(a => a.action) ?? [])].sort()
 
   return {
-    entries: entries ?? [],
+    entries: enrichedEntries,
     total: count ?? 0,
     page,
     pageSize,

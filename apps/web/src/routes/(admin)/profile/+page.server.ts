@@ -16,7 +16,8 @@ export const actions = {
     // Update Supabase auth metadata
     await supabase.auth.admin.updateUserById(userId, {
       user_metadata: {
-        full_name: `${firstName} ${lastName}`
+        full_name: `${firstName} ${lastName}`,
+        phone
       }
     })
 

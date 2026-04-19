@@ -1,5 +1,5 @@
 import { fail } from '@sveltejs/kit'
-import { supabase, requirePermission, getUserIdFromRequest } from '$lib/server/permissions'
+import { supabase, requirePermission, getUserIdFromRequest, logAuthAction } from '$lib/server/permissions'
 
 export const load = async ({ cookies }) => {
   const userId = await getUserIdFromRequest(cookies)
@@ -26,10 +26,15 @@ export const actions = {
     const data = await request.formData()
     const email = data.get('email') as string
 
-    const { error } = await supabase.auth.admin.inviteUserByEmail(email, {
+    const { data: result, error } = await supabase.auth.admin.inviteUserByEmail(email, {
       redirectTo: 'https://poc.proximity.green/auth/confirm'
     })
     if (error) return fail(400, { error: error.message })
+
+    await logAuthAction('INSERT', result.user.id, userId, {
+      email, action_type: 'invite', invited_by: userId
+    })
+
     return { success: true, message: `Invitation sent to ${email}` }
   },
 
@@ -40,10 +45,15 @@ export const actions = {
     const data = await request.formData()
     const email = data.get('email') as string
 
-    const { error } = await supabase.auth.admin.inviteUserByEmail(email, {
+    const { data: result, error } = await supabase.auth.admin.inviteUserByEmail(email, {
       redirectTo: 'https://poc.proximity.green/auth/confirm'
     })
     if (error) return fail(400, { error: error.message })
+
+    await logAuthAction('UPDATE', result.user.id, userId, {
+      email, action_type: 'resend_invite', resent_by: userId
+    })
+
     return { success: true, message: `Invitation resent to ${email}` }
   },
 
@@ -55,11 +65,24 @@ export const actions = {
     const targetUserId = data.get('user_id') as string
     const roleId = data.get('role_id') as string
 
+    // Get old role for logging
+    const { data: oldRole } = await supabase.from('user_roles').select('roles(name)').eq('user_id', targetUserId).single()
+    const oldRoleName = (oldRole as any)?.roles?.name ?? 'none'
+
     await supabase.from('user_roles').delete().eq('user_id', targetUserId)
+
+    let newRoleName = 'none'
     if (roleId) {
       const { error } = await supabase.from('user_roles').insert({ user_id: targetUserId, role_id: roleId })
       if (error) return fail(400, { error: error.message })
+      const { data: role } = await supabase.from('roles').select('name').eq('id', roleId).single()
+      newRoleName = role?.name ?? roleId
     }
+
+    await logAuthAction('UPDATE', targetUserId, userId, {
+      action_type: 'role_change', old_role: oldRoleName, new_role: newRoleName, changed_by: userId
+    })
+
     return { success: true, message: 'Role updated' }
   },
 
@@ -70,10 +93,17 @@ export const actions = {
     const data = await request.formData()
     const targetUserId = data.get('user_id') as string
 
+    const { data: { user } } = await supabase.auth.admin.getUserById(targetUserId)
+
     const { error } = await supabase.auth.admin.updateUserById(targetUserId, {
       ban_duration: '876600h'
     })
     if (error) return fail(400, { error: error.message })
+
+    await logAuthAction('UPDATE', targetUserId, userId, {
+      email: user?.email, action_type: 'revoke', revoked_by: userId
+    })
+
     return { success: true, message: 'User access revoked' }
   },
 
@@ -84,10 +114,17 @@ export const actions = {
     const data = await request.formData()
     const targetUserId = data.get('user_id') as string
 
+    const { data: { user } } = await supabase.auth.admin.getUserById(targetUserId)
+
     const { error } = await supabase.auth.admin.updateUserById(targetUserId, {
       ban_duration: 'none'
     })
     if (error) return fail(400, { error: error.message })
+
+    await logAuthAction('RESTORE', targetUserId, userId, {
+      email: user?.email, action_type: 'restore_access', restored_by: userId
+    })
+
     return { success: true, message: 'User access restored' }
   },
 
@@ -98,12 +135,17 @@ export const actions = {
     const data = await request.formData()
     const email = data.get('email') as string
 
-    const { error } = await supabase.auth.admin.generateLink({
+    const { data: link, error } = await supabase.auth.admin.generateLink({
       type: 'recovery',
       email,
       options: { redirectTo: 'https://poc.proximity.green/auth/confirm' }
     })
     if (error) return fail(400, { error: error.message })
+
+    await logAuthAction('UPDATE', link.user.id, userId, {
+      email, action_type: 'password_reset', initiated_by: userId
+    })
+
     return { success: true, message: `Password reset sent to ${email}` }
   },
 
@@ -114,8 +156,15 @@ export const actions = {
     const data = await request.formData()
     const targetUserId = data.get('user_id') as string
 
+    const { data: { user } } = await supabase.auth.admin.getUserById(targetUserId)
+
     const { error } = await supabase.auth.admin.deleteUser(targetUserId)
     if (error) return fail(400, { error: error.message })
+
+    await logAuthAction('DELETE', targetUserId, userId, {
+      email: user?.email, action_type: 'delete_user', deleted_by: userId
+    })
+
     return { success: true, message: 'User deleted' }
   }
 }

@@ -91,6 +91,7 @@
         <th>Action</th>
         <th>Record</th>
         <th>Table</th>
+        <th>Changed By</th>
         <th>When</th>
         <th></th>
       </tr>
@@ -101,12 +102,13 @@
           <td><span class="action-badge {actionColors[entry.action] ?? ''}">{entry.action}</span></td>
           <td class="record-label">{getLabel(entry)}</td>
           <td><span class="table-badge">{entry.table_name}</span></td>
+          <td class="changed-by">{entry.changed_by_email ?? 'system'}</td>
           <td class="time" title={new Date(entry.created_at).toLocaleString()}>{timeAgo(entry.created_at)}</td>
           <td class="expand-icon">{expandedId === entry.id ? '▾' : '▸'}</td>
         </tr>
         {#if expandedId === entry.id}
           <tr>
-            <td colspan="5" class="detail-cell">
+            <td colspan="6" class="detail-cell">
               {#if entry.action === 'UPDATE' || entry.action === 'RESTORE'}
                 {@const fields = getChangedFields(entry)}
                 {#if fields.length > 0}
@@ -158,7 +160,7 @@
           </tr>
         {/if}
       {:else}
-        <tr><td colspan="5" class="empty">No changes recorded yet</td></tr>
+        <tr><td colspan="6" class="empty">No changes recorded yet</td></tr>
       {/each}
     </tbody>
   </table>

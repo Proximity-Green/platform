@@ -54,6 +54,21 @@ export async function requirePermission(userId: string, resource: string, action
   return perms
 }
 
+export async function logAuthAction(
+  action: string,
+  targetUserId: string,
+  changedBy: string | null,
+  details: Record<string, any>
+) {
+  await supabase.from('change_log').insert({
+    table_name: 'auth.users',
+    record_id: targetUserId,
+    action,
+    changed_by: changedBy,
+    new_values: details
+  })
+}
+
 export async function getUserIdFromRequest(cookies: any): Promise<string | null> {
   // Check impersonation first
   const impersonating = cookies.get('impersonating')
