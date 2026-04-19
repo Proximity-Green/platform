@@ -113,8 +113,8 @@ export const sendWelcomeEmail = task({
     // Query Mailgun for delivery status
     let deliveryStatus = 'accepted'
     try {
-      // Small delay to let Mailgun process
-      await new Promise(r => setTimeout(r, 2000))
+      // Wait for Mailgun to process and index the delivery event
+      await new Promise(r => setTimeout(r, 8000))
       const eventsRes = await fetch(
         `https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/events?message-id=${welcomeResult.messageId}&limit=5`,
         { headers: { 'Authorization': `Basic ${Buffer.from(`api:${MAILGUN_API_KEY}`).toString('base64')}` } }
