@@ -74,7 +74,10 @@ export const actions = {
     if (error) return fail(400, { error: error.message })
 
     // Build the invite URL from the generated link properties
-    const inviteUrl = result.properties?.action_link ?? 'https://poc.proximity.green'
+    let inviteUrl = result.properties?.action_link ?? 'https://poc.proximity.green'
+    // Fix internal URL if needed — replace internal supabase-kong with public URL
+    inviteUrl = inviteUrl.replace('http://supabase-kong:8000', 'https://db.poc.proximity.green')
+    console.log('Invite URL generated:', inviteUrl)
 
     // Link the new user to the person record
     await supabase.from('persons').update({ user_id: result.user.id }).eq('id', personId)
