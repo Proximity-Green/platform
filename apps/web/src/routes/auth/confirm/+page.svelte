@@ -10,37 +10,42 @@
   let userEmail = $state('')
 
   onMount(async () => {
-    // If there's a hash fragment with access_token, this is an invite callback
-    // Sign out current user first so the invite token takes over
-    const hash = window.location.hash
-    if (hash && hash.includes('access_token')) {
-      await supabase.auth.signOut()
-      // Small delay to let signout complete
-      await new Promise(r => setTimeout(r, 500))
+    // The hash fragment contains the access_token from the invite verify redirect
+    // Parse it to get the invited user's session
+    const hash = window.location.hash.substring(1)
+    const params = new URLSearchParams(hash)
+    const accessToken = params.get('access_token')
+    const refreshToken = params.get('refresh_token')
+
+    if (accessToken && refreshToken) {
+      // Set the session from the invite token — this overrides any existing session
+      const { data, error: sessionError } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken
+      })
+      if (data.session) {
+        userEmail = data.session.user.email ?? ''
+        loading = false
+        return
+      }
+      if (sessionError) {
+        error = sessionError.message
+        loading = false
+        return
+      }
     }
 
-    // Now listen for the auth state change from the hash token
-    supabase.auth.onAuthStateChange((event, s) => {
-      if (s) {
-        userEmail = s.user.email ?? ''
-        loading = false
-      }
-    })
-
-    // Also check current session (in case already processed)
+    // Fallback — check if already has a session
     const { data: { session: s } } = await supabase.auth.getSession()
     if (s) {
       userEmail = s.user.email ?? ''
       loading = false
+      return
     }
 
-    // Timeout — if still loading after 5s, show error
-    setTimeout(() => {
-      if (loading) {
-        loading = false
-        error = 'Could not verify invitation. The link may have expired.'
-      }
-    }, 5000)
+    // No token and no session
+    loading = false
+    error = 'Invalid or expired invitation link.'
   })
 
   async function setPassword() {
