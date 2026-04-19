@@ -11,6 +11,15 @@
   let accessDenied = $state(false)
 
   onMount(async () => {
+    // Check if force_login param — sign out and show login
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('force_login')) {
+      await supabase.auth.signOut()
+      window.history.replaceState({}, '', '/')
+      checking = false
+      return
+    }
+
     const { data: { session: s } } = await supabase.auth.getSession()
     session = s
     checking = false
