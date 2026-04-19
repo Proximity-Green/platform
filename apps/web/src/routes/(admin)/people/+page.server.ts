@@ -1,12 +1,10 @@
-import { createClient } from '@supabase/supabase-js'
 import { fail } from '@sveltejs/kit'
+import { supabase, requirePermission, getUserIdFromRequest } from '$lib/server/permissions'
 
-const supabase = createClient(
-  process.env.PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.PUBLIC_SUPABASE_ANON_KEY || ''
-)
+export const load = async ({ cookies }) => {
+  const userId = await getUserIdFromRequest(cookies)
+  if (userId) await requirePermission(userId, 'persons', 'read')
 
-export const load = async () => {
   const { data: persons, error } = await supabase
     .from('persons')
     .select('*')
@@ -15,7 +13,10 @@ export const load = async () => {
 }
 
 export const actions = {
-  create: async ({ request }) => {
+  create: async ({ request, cookies }) => {
+    const userId = await getUserIdFromRequest(cookies)
+    if (userId) await requirePermission(userId, 'persons', 'create')
+
     const data = await request.formData()
     const { error } = await supabase
       .from('persons')
@@ -30,7 +31,10 @@ export const actions = {
     return { success: true }
   },
 
-  update: async ({ request }) => {
+  update: async ({ request, cookies }) => {
+    const userId = await getUserIdFromRequest(cookies)
+    if (userId) await requirePermission(userId, 'persons', 'update')
+
     const data = await request.formData()
     const { error } = await supabase
       .from('persons')
@@ -45,7 +49,10 @@ export const actions = {
     return { success: true }
   },
 
-  delete: async ({ request }) => {
+  delete: async ({ request, cookies }) => {
+    const userId = await getUserIdFromRequest(cookies)
+    if (userId) await requirePermission(userId, 'persons', 'delete')
+
     const data = await request.formData()
     const { error } = await supabase
       .from('persons')
