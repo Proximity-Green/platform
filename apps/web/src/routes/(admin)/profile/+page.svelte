@@ -3,7 +3,7 @@
   import { onMount } from 'svelte'
   import { permStore, canDo } from '$lib/stores/permissions'
 
-  let { form } = $props()
+  let { form, data } = $props()
   let session = $state<any>(null)
   let perms = $state({ role: null as string | null, permissions: [] as any, loaded: false })
   let newPassword = $state('')
@@ -26,11 +26,18 @@
 
   function loadFromSession(s: any) {
     if (!s) return
-    const fullName = s?.user?.user_metadata?.full_name ?? ''
-    const parts = fullName.split(' ')
-    firstName = parts[0] ?? ''
-    lastName = parts.slice(1).join(' ') ?? ''
-    phone = s?.user?.user_metadata?.phone ?? ''
+    // Prefer person record from server, fall back to session metadata
+    if (data.person) {
+      firstName = data.person.first_name ?? ''
+      lastName = data.person.last_name ?? ''
+      phone = data.person.phone ?? ''
+    } else {
+      const fullName = s?.user?.user_metadata?.full_name ?? ''
+      const parts = fullName.split(' ')
+      firstName = parts[0] ?? ''
+      lastName = parts.slice(1).join(' ') ?? ''
+      phone = s?.user?.user_metadata?.phone ?? ''
+    }
   }
 
   // Refresh session after form submission

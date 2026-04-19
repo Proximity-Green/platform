@@ -1,8 +1,15 @@
 import { fail } from '@sveltejs/kit'
-import { supabase } from '$lib/server/permissions'
+import { supabase, getUserIdFromRequest } from '$lib/server/permissions'
 
-export const load = async () => {
-  return {}
+export const load = async ({ cookies }) => {
+  // Try to get the person record for the current user
+  const userId = await getUserIdFromRequest(cookies)
+  let person = null
+  if (userId) {
+    const { data } = await supabase.from('persons').select('*').eq('user_id', userId).single()
+    person = data
+  }
+  return { person }
 }
 
 export const actions = {
