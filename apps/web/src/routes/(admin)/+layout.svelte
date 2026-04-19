@@ -90,6 +90,7 @@
         {#if can('system_logs')}
           <a href="/system-logs">System</a>
         {/if}
+        <a href="/dev-changelog" style="font-size: 0.7rem; color: #5a7060;">v1</a>
         {#if perms.role}
           <span class="role-badge">{perms.role.replace('_', ' ')}</span>
         {:else}
