@@ -54,6 +54,25 @@ export const actions = {
     return { success: true }
   },
 
+  inviteUser: async ({ request, cookies }) => {
+    const userId = await getUserIdFromRequest(cookies)
+    if (userId) await requirePermission(userId, 'users', 'manage')
+
+    const data = await request.formData()
+    const email = data.get('email') as string
+    const personId = data.get('person_id') as string
+
+    const { data: result, error } = await supabase.auth.admin.inviteUserByEmail(email, {
+      redirectTo: 'https://poc.proximity.green/auth/confirm'
+    })
+    if (error) return fail(400, { error: error.message })
+
+    // Link the new user to the person record
+    await supabase.from('persons').update({ user_id: result.user.id }).eq('id', personId)
+
+    return { success: true }
+  },
+
   update: async ({ request, cookies }) => {
     const userId = await getUserIdFromRequest(cookies)
     if (userId) await requirePermission(userId, 'persons', 'update')

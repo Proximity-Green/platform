@@ -99,7 +99,12 @@
           </tr>
         {:else}
           <tr>
-            <td>{person.first_name} {person.last_name}</td>
+            <td>
+              {person.first_name} {person.last_name}
+              {#if person.user_id}
+                <span class="user-badge">USER</span>
+              {/if}
+            </td>
             <td>{person.email}</td>
             <td>{person.phone ?? '—'}</td>
             <td>{person.job_title ?? '—'}</td>
@@ -111,6 +116,13 @@
               <td class="actions">
                 {#if can('persons', 'update')}
                   <button onclick={() => editingId = person.id}>Edit</button>
+                {/if}
+                {#if !person.user_id && can('users', 'manage')}
+                  <form method="POST" action="?/inviteUser" style="display:inline">
+                    <input type="hidden" name="email" value={person.email} />
+                    <input type="hidden" name="person_id" value={person.id} />
+                    <button type="submit" class="invite-btn">Invite</button>
+                  </form>
                 {/if}
                 {#if can('persons', 'delete')}
                   <form method="POST" action="?/delete" style="display:inline">
@@ -146,6 +158,9 @@
   .form-actions { display: flex; gap: 0.5rem; }
   .random-btn { background: #3a5fc8; }
   .random-btn:hover { background: #2d4a9e; }
+  .user-badge { font-size: 0.6rem; background: #e8f0fd; color: #3a5fc8; padding: 1px 5px; border-radius: 3px; font-weight: 600; margin-left: 4px; vertical-align: middle; }
+  .invite-btn { background: #6d3fc8; }
+  .invite-btn:hover { background: #5a2db0; }
   .delete { background: #c0392b; }
   .delete:hover { background: #96281b; }
   table { width: 100%; border-collapse: collapse; }
