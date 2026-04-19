@@ -7,20 +7,40 @@
   let error = $state('')
   let success = $state(false)
   let loading = $state(true)
-  let session = $state<any>(null)
+  let userEmail = $state('')
 
   onMount(async () => {
-    // The hash fragment contains the access token from the invite link
-    const { data: { session: s } } = await supabase.auth.getSession()
-    session = s
-    loading = false
+    // If there's a hash fragment with access_token, this is an invite callback
+    // Sign out current user first so the invite token takes over
+    const hash = window.location.hash
+    if (hash && hash.includes('access_token')) {
+      await supabase.auth.signOut()
+      // Small delay to let signout complete
+      await new Promise(r => setTimeout(r, 500))
+    }
 
+    // Now listen for the auth state change from the hash token
     supabase.auth.onAuthStateChange((event, s) => {
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        session = s
+      if (s) {
+        userEmail = s.user.email ?? ''
         loading = false
       }
     })
+
+    // Also check current session (in case already processed)
+    const { data: { session: s } } = await supabase.auth.getSession()
+    if (s) {
+      userEmail = s.user.email ?? ''
+      loading = false
+    }
+
+    // Timeout — if still loading after 5s, show error
+    setTimeout(() => {
+      if (loading) {
+        loading = false
+        error = 'Could not verify invitation. The link may have expired.'
+      }
+    }, 5000)
   })
 
   async function setPassword() {
@@ -39,7 +59,7 @@
       error = updateError.message
     } else {
       success = true
-      setTimeout(() => { window.location.href = '/people' }, 2000)
+      setTimeout(() => { window.location.href = '/' }, 2000)
     }
   }
 </script>
@@ -52,8 +72,8 @@
       <p>Verifying your invitation...</p>
     {:else if success}
       <div class="success">Password set successfully. Redirecting...</div>
-    {:else if session}
-      <p>Welcome, {session.user.email}. Set your password to complete setup.</p>
+    {:else if userEmail}
+      <p>Welcome, <strong>{userEmail}</strong>. Set your password to complete setup.</p>
 
       {#if error}
         <div class="error">{error}</div>
@@ -64,6 +84,9 @@
         <input type="password" bind:value={confirmPassword} placeholder="Confirm password" required />
         <button type="submit">Set Password</button>
       </form>
+    {:else if error}
+      <div class="error">{error}</div>
+      <a href="/" class="link">Back to home</a>
     {:else}
       <p>Invalid or expired invitation link. Please ask your administrator for a new invite.</p>
       <a href="/" class="link">Back to home</a>
