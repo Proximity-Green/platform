@@ -1,13 +1,22 @@
 <script lang="ts">
+  import { permStore, canDo } from '$lib/stores/permissions'
+
   let { data, form } = $props()
   let showNewRole = $state(false)
   let showNewPerm = $state<string | null>(null)
+  let perms = $state({ role: null as string | null, permissions: [] as any, loaded: false })
+
+  permStore.subscribe(v => { perms = v })
+
+  function can(resource: string, action: string = 'read') {
+    return canDo(perms, resource, action)
+  }
 </script>
 
 <div class="container">
   <header>
     <h1>Roles & Permissions</h1>
-    {#if data.canManage}
+    {#if can('roles', 'manage')}
       <button onclick={() => showNewRole = !showNewRole}>
         {showNewRole ? 'Cancel' : '+ New Role'}
       </button>
@@ -48,7 +57,7 @@
             {/if}
             <span class="user-count">{userCount} user{userCount !== 1 ? 's' : ''}</span>
           </div>
-          {#if data.canManage && userCount === 0 && !['super_admin', 'admin', 'finance', 'member'].includes(role.name)}
+          {#if can('roles', 'manage') && userCount === 0 && !['super_admin', 'admin', 'finance', 'member'].includes(role.name)}
             <form method="POST" action="?/deleteRole" style="display:inline">
               <input type="hidden" name="id" value={role.id} />
               <button type="submit" class="delete-sm"
@@ -67,7 +76,7 @@
                 <div class="perm-item">
                   <span class="perm-resource">{perm.resource}</span>
                   <span class="perm-action">{perm.action}</span>
-                  {#if data.canManage}
+                  {#if can('roles', 'manage')}
                   <form method="POST" action="?/removePermission" style="display:inline">
                     <input type="hidden" name="id" value={perm.id} />
                     <button type="submit" class="remove-perm">&times;</button>
@@ -80,7 +89,7 @@
             <p class="no-perms">No permissions defined</p>
           {/if}
 
-          {#if data.canManage}
+          {#if can('roles', 'manage')}
             {#if showNewPerm === role.id}
               <form method="POST" action="?/addPermission" class="perm-form">
                 <input type="hidden" name="role_id" value={role.id} />

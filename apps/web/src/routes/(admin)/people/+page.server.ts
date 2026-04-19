@@ -1,26 +1,15 @@
 import { fail } from '@sveltejs/kit'
-import { supabase, requirePermission, getUserIdFromRequest, getUserPermissions, hasPermission } from '$lib/server/permissions'
+import { supabase, requirePermission, getUserIdFromRequest } from '$lib/server/permissions'
 
 export const load = async ({ cookies }) => {
   const userId = await getUserIdFromRequest(cookies)
-  let perms = { role: null as string | null, permissions: [] as any }
-  if (userId) {
-    perms = await getUserPermissions(userId)
-    if (!hasPermission(perms, 'persons', 'read')) {
-      await requirePermission(userId, 'persons', 'read')
-    }
-  }
+  if (userId) await requirePermission(userId, 'persons', 'read')
 
-  const { data: persons, error } = await supabase
+  const { data: persons } = await supabase
     .from('persons')
     .select('*')
     .order('last_name')
-  return {
-    persons: persons ?? [],
-    canCreate: hasPermission(perms, 'persons', 'create') || hasPermission(perms, 'persons', 'manage'),
-    canUpdate: hasPermission(perms, 'persons', 'update') || hasPermission(perms, 'persons', 'manage'),
-    canDelete: hasPermission(perms, 'persons', 'delete') || hasPermission(perms, 'persons', 'manage')
-  }
+  return { persons: persons ?? [] }
 }
 
 export const actions = {
@@ -29,33 +18,13 @@ export const actions = {
     if (userId) await requirePermission(userId, 'persons', 'create')
 
     const data = await request.formData()
-    const { error } = await supabase
-      .from('persons')
-      .insert({
-        first_name: data.get('first_name'),
-        last_name: data.get('last_name'),
-        email: data.get('email'),
-        phone: data.get('phone'),
-        job_title: data.get('job_title')
-      })
-    if (error) return fail(400, { error: error.message })
-    return { success: true }
-  },
-
-  update: async ({ request, cookies }) => {
-    const userId = await getUserIdFromRequest(cookies)
-    if (userId) await requirePermission(userId, 'persons', 'update')
-
-    const data = await request.formData()
-    const { error } = await supabase
-      .from('persons')
-      .update({
-        first_name: data.get('first_name'),
-        last_name: data.get('last_name'),
-        phone: data.get('phone'),
-        job_title: data.get('job_title')
-      })
-      .eq('id', data.get('id'))
+    const { error } = await supabase.from('persons').insert({
+      first_name: data.get('first_name'),
+      last_name: data.get('last_name'),
+      email: data.get('email'),
+      phone: data.get('phone'),
+      job_title: data.get('job_title')
+    })
     if (error) return fail(400, { error: error.message })
     return { success: true }
   },
@@ -85,15 +54,27 @@ export const actions = {
     return { success: true }
   },
 
+  update: async ({ request, cookies }) => {
+    const userId = await getUserIdFromRequest(cookies)
+    if (userId) await requirePermission(userId, 'persons', 'update')
+
+    const data = await request.formData()
+    const { error } = await supabase.from('persons').update({
+      first_name: data.get('first_name'),
+      last_name: data.get('last_name'),
+      phone: data.get('phone'),
+      job_title: data.get('job_title')
+    }).eq('id', data.get('id'))
+    if (error) return fail(400, { error: error.message })
+    return { success: true }
+  },
+
   delete: async ({ request, cookies }) => {
     const userId = await getUserIdFromRequest(cookies)
     if (userId) await requirePermission(userId, 'persons', 'delete')
 
     const data = await request.formData()
-    const { error } = await supabase
-      .from('persons')
-      .delete()
-      .eq('id', data.get('id'))
+    const { error } = await supabase.from('persons').delete().eq('id', data.get('id'))
     if (error) return fail(400, { error: error.message })
     return { success: true }
   }

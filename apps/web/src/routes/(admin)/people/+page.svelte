@@ -1,14 +1,23 @@
 <script lang="ts">
+  import { permStore, canDo } from '$lib/stores/permissions'
+
   let { data, form } = $props()
   let showForm = $state(false)
   let editingId = $state<string | null>(null)
+  let perms = $state({ role: null as string | null, permissions: [] as any, loaded: false })
+
+  permStore.subscribe(v => { perms = v })
+
+  function can(resource: string, action: string = 'read') {
+    return canDo(perms, resource, action)
+  }
 </script>
 
 <div class="container">
   <header>
     <h1>People</h1>
     <div class="header-actions">
-      {#if data.canCreate}
+      {#if can('persons', 'create')}
         <form method="POST" action="?/generateRandom" style="display:inline">
           <button type="submit" class="random-btn">+ 10 Random</button>
         </form>
@@ -27,29 +36,14 @@
     <div class="success">Saved successfully</div>
   {/if}
 
-  {#if showForm && data.canCreate}
+  {#if showForm && can('persons', 'create')}
     <form method="POST" action="?/create" class="form-card">
       <div class="form-grid">
-        <label>
-          First Name *
-          <input name="first_name" required />
-        </label>
-        <label>
-          Last Name *
-          <input name="last_name" required />
-        </label>
-        <label>
-          Email *
-          <input name="email" type="email" required />
-        </label>
-        <label>
-          Phone
-          <input name="phone" />
-        </label>
-        <label>
-          Job Title
-          <input name="job_title" />
-        </label>
+        <label>First Name * <input name="first_name" required /></label>
+        <label>Last Name * <input name="last_name" required /></label>
+        <label>Email * <input name="email" type="email" required /></label>
+        <label>Phone <input name="phone" /></label>
+        <label>Job Title <input name="job_title" /></label>
       </div>
       <button type="submit">Create Person</button>
     </form>
@@ -62,16 +56,16 @@
         <th>Email</th>
         <th>Phone</th>
         <th>Job Title</th>
-        {#if data.canUpdate || data.canDelete}
+        {#if can('persons', 'update') || can('persons', 'delete')}
           <th>Actions</th>
         {/if}
       </tr>
     </thead>
     <tbody>
       {#each data.persons as person}
-        {#if editingId === person.id && data.canUpdate}
+        {#if editingId === person.id && can('persons', 'update')}
           <tr>
-            <td colspan={data.canDelete ? 5 : 4}>
+            <td colspan="5">
               <form method="POST" action="?/update" class="edit-form">
                 <input type="hidden" name="id" value={person.id} />
                 <input name="first_name" value={person.first_name} required />
@@ -89,18 +83,16 @@
             <td>{person.email}</td>
             <td>{person.phone ?? '—'}</td>
             <td>{person.job_title ?? '—'}</td>
-            {#if data.canUpdate || data.canDelete}
+            {#if can('persons', 'update') || can('persons', 'delete')}
               <td class="actions">
-                {#if data.canUpdate}
+                {#if can('persons', 'update')}
                   <button onclick={() => editingId = person.id}>Edit</button>
                 {/if}
-                {#if data.canDelete}
+                {#if can('persons', 'delete')}
                   <form method="POST" action="?/delete" style="display:inline">
                     <input type="hidden" name="id" value={person.id} />
                     <button type="submit" class="delete"
-                      onclick={(e) => { if (!confirm('Delete this person?')) e.preventDefault() }}>
-                      Delete
-                    </button>
+                      onclick={(e) => { if (!confirm('Delete this person?')) e.preventDefault() }}>Delete</button>
                   </form>
                 {/if}
               </td>
