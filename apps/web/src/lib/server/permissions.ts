@@ -72,24 +72,32 @@ export async function logAuthAction(
 // Gets the REAL user ID (not impersonated) - for audit logging "who did this"
 export async function getActualUserId(cookies: any): Promise<string | null> {
   const allCookies = cookies.getAll()
-  const authCookie = allCookies.find((c: any) => c.name.includes('auth-token'))
-  if (!authCookie?.value) return null
+
+  // Supabase SSR stores auth in chunked cookies: sb-*-auth-token.0, sb-*-auth-token.1, etc.
+  const authChunks = allCookies
+    .filter((c: any) => c.name.includes('auth-token'))
+    .sort((a: any, b: any) => a.name.localeCompare(b.name))
+
+  if (authChunks.length === 0) return null
 
   try {
-    const parsed = JSON.parse(authCookie.value)
-    const accessToken = Array.isArray(parsed) ? parsed[0] : (parsed.access_token ?? parsed)
-    if (typeof accessToken === 'string' && accessToken.startsWith('ey')) {
+    // Combine chunks
+    let combined = authChunks.map((c: any) => c.value).join('')
+
+    // Remove base64- prefix if present
+    if (combined.startsWith('base64-')) {
+      combined = Buffer.from(combined.slice(7), 'base64').toString('utf-8')
+    }
+
+    const parsed = JSON.parse(combined)
+    const accessToken = parsed.access_token ?? (Array.isArray(parsed) ? parsed[0] : null)
+
+    if (accessToken && typeof accessToken === 'string' && accessToken.startsWith('ey')) {
       const { data: { user } } = await supabase.auth.getUser(accessToken)
       return user?.id ?? null
     }
     return null
   } catch {
-    if (authCookie.value.startsWith('ey')) {
-      try {
-        const { data: { user } } = await supabase.auth.getUser(authCookie.value)
-        return user?.id ?? null
-      } catch { return null }
-    }
     return null
   }
 }
@@ -105,33 +113,7 @@ export async function getUserIdFromRequest(cookies: any): Promise<string | null>
     } catch {}
   }
 
-  // Find the Supabase auth token cookie (PKCE sets sb-*-auth-token)
-  const allCookies = cookies.getAll()
-  const authCookie = allCookies.find((c: any) => c.name.includes('auth-token'))
-
-  if (!authCookie?.value) return null
-
-  try {
-    // PKCE stores as base64 JSON chunks or direct JSON
-    let tokenValue = authCookie.value
-
-    // Try to parse — could be JSON array [access_token, refresh_token] or object
-    const parsed = JSON.parse(tokenValue)
-    const accessToken = Array.isArray(parsed) ? parsed[0] : (parsed.access_token ?? parsed)
-
-    if (typeof accessToken === 'string' && accessToken.startsWith('ey')) {
-      const { data: { user } } = await supabase.auth.getUser(accessToken)
-      return user?.id ?? null
-    }
-    return null
-  } catch {
-    // Might be a raw JWT string
-    if (authCookie.value.startsWith('ey')) {
-      try {
-        const { data: { user } } = await supabase.auth.getUser(authCookie.value)
-        return user?.id ?? null
-      } catch { return null }
-    }
-    return null
+  // Fall through to actual user
+  return getActualUserId(cookies)
   }
 }
