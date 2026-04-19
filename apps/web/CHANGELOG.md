@@ -1,5 +1,54 @@
 # Proximity Green — Development Changelog
 
+## Session 4 — 2026-04-19, 14:00–15:40
+
+### Single Welcome Email with Invite Link
+- Replaced `inviteUserByEmail` with `generateLink` — no more Supabase invite email
+- Invite link embedded in our branded welcome email — user gets ONE email, not two
+- Welcome email reads from `message_templates` table — no hardcoded HTML in trigger task
+- Email shows two sign-in options: "Sign In with Google" or "Set Password"
+- Email explicitly shows which email address to use for Google sign-in
+- `{{inviteUrl}}` and `{{appUrl}}` variables added to template
+
+### Confirm Page Fix
+- Parses `access_token` and `refresh_token` directly from hash fragment
+- Calls `setSession()` to override any existing session
+- Shows the **invited person's email**, not the admin's
+- Works whether admin is signed in or not
+
+### Force Login
+- `?force_login=true` URL param — signs out current user and shows login page
+- Used in welcome email "Sign In with Google" button
+- Prevents auto-login as admin when clicking from email
+
+### Trigger.dev — Fully Working
+- Trigger.dev initialized and connected
+- SMTP configured with Mailgun for magic link login
+- `send-welcome-email` task reads template from database
+- Mailgun delivery status checked after 8s delay
+- Mailgun status shown as colour-coded tags (DELIVERED/ACCEPTED/FAILED) in system logs
+- Mailgun log URL included in system log details (clickable)
+- Admin notification emails disabled (too noisy during testing)
+- Trigger.dev run ID and URL logged in system logs
+- `MAILGUN_API_KEY` set as runtime env var (not in source code — GitHub push protection caught it)
+- Node.js v20 installed on server for future `trigger deploy`
+
+### Message Templates (`/messages`)
+- `message_templates` table renamed from `email_templates`
+- Multi-channel support: email, sms, whatsapp, push, in_app
+- Template editor with preview, edit, test send
+- Channel badges
+- Test sends logged in system logs
+- `settings` resource added to permissions dropdown
+
+### System Logs Improvements
+- Clickable URLs in expanded details
+- Mailgun status tags (colour-coded)
+- Trigger status tags
+- Test email sends logged with template name
+
+---
+
 ## Session 3 — 2026-04-19, 11:30–14:00
 
 ### PKCE Auth Flow (properly fixed)
