@@ -22,23 +22,28 @@ export const actions = {
       }
     })
 
-    // Update or create person record
-    const { data: existing } = await supabase
-      .from('persons')
-      .select('id')
-      .eq('email', email)
-      .single()
+    // Get user email from auth if not provided
+    let userEmail = email
+    if (!userEmail) {
+      const { data: { user } } = await supabase.auth.admin.getUserById(userId)
+      userEmail = user?.email ?? ''
+    }
 
-    if (existing) {
+    // Update or create person record — try by user_id first, then email
+    const { data: byUserId } = await supabase.from('persons').select('id').eq('user_id', userId).single()
+    const { data: byEmail } = !byUserId ? await supabase.from('persons').select('id').eq('email', userEmail).single() : { data: null }
+    const existingId = byUserId?.id ?? byEmail?.id
+
+    if (existingId) {
       const { error } = await supabase
         .from('persons')
         .update({ first_name: firstName, last_name: lastName, phone, user_id: userId })
-        .eq('id', existing.id)
+        .eq('id', existingId)
       if (error) return fail(400, { error: error.message })
     } else {
       const { error } = await supabase
         .from('persons')
-        .insert({ user_id: userId, first_name: firstName, last_name: lastName, email, phone })
+        .insert({ user_id: userId, first_name: firstName, last_name: lastName, email: userEmail, phone })
       if (error) return fail(400, { error: error.message })
     }
 
