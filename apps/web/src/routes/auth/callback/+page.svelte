@@ -1,0 +1,3 @@
+<div style="text-align: center; padding: 4rem; font-family: system-ui; color: #5a7060;">
+  Authenticating...
+</div>
