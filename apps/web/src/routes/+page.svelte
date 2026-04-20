@@ -24,8 +24,14 @@
     // Handle auth callback code if redirected here
     const code = new URLSearchParams(window.location.search).get('code')
     if (code) {
-      await supabase.auth.exchangeCodeForSession(code)
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code)
       window.history.replaceState({}, '', '/')
+      if (data.session) {
+        session = data.session
+        checking = false
+        await checkAccess(data.session)
+        return
+      }
     }
 
     const { data: { session: s } } = await supabase.auth.getSession()
