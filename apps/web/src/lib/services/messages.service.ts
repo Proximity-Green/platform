@@ -1,5 +1,6 @@
 import { supabase } from '$lib/services/permissions.service'
 import { log } from '$lib/services/system-log.service'
+import { MAILGUN_API_KEY as CONFIGURED_MAILGUN_API_KEY } from '$lib/server/env'
 
 export type ServiceResult<T = undefined> =
   | { ok: true; message?: string; data?: T }
@@ -93,11 +94,11 @@ export async function sendTestEmail(
   testEmail: string,
   userId: string | null
 ): Promise<ServiceResult> {
-  const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY
-  if (!MAILGUN_API_KEY) {
+  if (!CONFIGURED_MAILGUN_API_KEY) {
     await log('email', 'error', 'Test email aborted: MAILGUN_API_KEY not configured', { to: testEmail }, userId)
     return { ok: false, error: 'MAILGUN_API_KEY is not configured' }
   }
+  const MAILGUN_API_KEY = CONFIGURED_MAILGUN_API_KEY
 
   const { data: template } = await supabase.from('message_templates').select('*').eq('id', templateId).single<Template>()
   if (!template) return { ok: false, error: 'Template not found' }

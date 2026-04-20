@@ -1,10 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { json } from '@sveltejs/kit'
+import { PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from '$lib/server/env'
 
-const supabase = createClient(
-  process.env.PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-)
+const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 export const POST = async ({ request, cookies }) => {
   const { action, adminUserId, targetUserId, reason } = await request.json()

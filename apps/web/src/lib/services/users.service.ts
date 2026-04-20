@@ -1,7 +1,8 @@
 import { supabase, logAuthAction } from '$lib/services/permissions.service'
 import { log } from '$lib/services/system-log.service'
+import { PUBLIC_APP_URL } from '$lib/server/env'
 
-const APP_URL = process.env.PUBLIC_APP_URL || 'https://poc.proximity.green'
+const APP_URL = PUBLIC_APP_URL
 const AUTH_CONFIRM_URL = `${APP_URL}/auth/confirm`
 
 export type ServiceResult = { ok: true; message?: string } | { ok: false; error: string }

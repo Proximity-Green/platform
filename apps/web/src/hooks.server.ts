@@ -1,9 +1,10 @@
 import { createServerClient } from '@supabase/ssr'
 import type { Handle } from '@sveltejs/kit'
+import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$lib/server/env'
 
 export const handle: Handle = async ({ event, resolve }) => {
-  const supabaseUrl = process.env.PUBLIC_SUPABASE_URL || ''
-  const supabaseAnonKey = process.env.PUBLIC_SUPABASE_ANON_KEY || ''
+  const supabaseUrl = PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = PUBLIC_SUPABASE_ANON_KEY
 
   event.locals.supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {

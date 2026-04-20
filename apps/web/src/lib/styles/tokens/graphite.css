@@ -1,0 +1,123 @@
+/* Graphite theme — aligned to the proximity.green marketing site.
+   Warm paper canvas in day, forest-green-black in night. Forest green accent.
+   Semantic tokens only. */
+
+[data-theme='graphite'] {
+  --font-display: var(--stack-serif);
+  --font-body: var(--stack-sans);
+  --font-mono: var(--stack-mono);
+
+  --label-letter-spacing: var(--tracking-wider);
+  --heading-tracking: var(--tracking-tight);
+}
+
+/* ---------- Day — Moss tint scale ----------
+   Pale Moss canvas, Moss 40%/60% for borders, 100% for accent.
+   Slate #474a54 for text. Clay #d66645 for warnings. */
+[data-theme='graphite'][data-mode='light'],
+[data-theme='graphite']:not([data-mode]) {
+  --surface:        #eaf3ec;   /* Moss ~12% */
+  --surface-raised: #ffffff;
+  --surface-sunk:   #d6e7d8;   /* Moss ~25% */
+  --surface-tint:   #eef5ef;
+  --surface-hover:  #f1f7f2;
+
+  --text:         #474a54;     /* Slate */
+  --text-muted:   #6f7681;
+  --text-subtle:  #9aa0a8;
+  --text-inverse: #ffffff;
+
+  --border:        #c5d9c8;    /* Moss 40% */
+  --border-strong: #a8c6ae;    /* Moss 55% */
+  --border-focus:  var(--accent);
+
+  --accent:          #59a370;  /* Moss 100% */
+  --accent-hover:    #4a8f60;
+  --accent-soft:     rgba(89, 163, 112, 0.14);
+  --accent-contrast: #ffffff;
+
+  --success:      #59a370;
+  --success-soft: rgba(89, 163, 112, 0.14);
+  --warning:      #d66645;     /* Clay */
+  --warning-soft: rgba(214, 102, 69, 0.14);
+  --info:         #5d7fa1;
+  --info-soft:    rgba(93, 127, 161, 0.14);
+  --danger:       #c95437;
+  --danger-soft:  rgba(214, 102, 69, 0.14);
+
+  --heading-color: #2b2e36;
+  --label-color:   #7a8283;
+
+  --nav-bg:              #dfece1;   /* Moss ~22% */
+  --nav-selected-bg:     rgba(89, 163, 112, 0.16);
+  --nav-selected-accent: var(--accent);
+  --nav-item-color:      var(--text);
+
+  --kpi-value-color: var(--heading-color);
+  --kpi-label-color: var(--label-color);
+
+  --badge-default-bg:    #d6e7d8;
+  --badge-default-color: #47555a;
+
+  --progress-track: #c5d9c8;
+
+  --shadow-sm: 0 1px 2px rgba(71, 74, 84, 0.05);
+  --shadow-md: 0 3px 10px rgba(71, 74, 84, 0.07);
+  --shadow-lg: 0 12px 28px rgba(71, 74, 84, 0.10);
+
+  color-scheme: light;
+}
+
+/* ---------- Night ---------- */
+[data-theme='graphite'][data-mode='dark'] {
+  --surface:        #0f1312;
+  --surface-raised: #171b19;
+  --surface-sunk:   #090b0a;
+  --surface-tint:   #1a211c;
+  --surface-hover:  #1d2420;
+
+  --text:         #ebe6d9;
+  --text-muted:   #8b9083;
+  --text-subtle:  #575b51;
+  --text-inverse: #0f1312;
+
+  --border:        #202521;
+  --border-strong: #2d332c;
+  --border-focus:  var(--accent);
+
+  --accent:          #8ab094;
+  --accent-hover:    #9cc2a5;
+  --accent-soft:     rgba(138, 176, 148, 0.14);
+  --accent-contrast: #0f1312;
+
+  --success:      #8ab094;
+  --success-soft: rgba(138, 176, 148, 0.14);
+  --warning:      #d98c5a;
+  --warning-soft: rgba(217, 140, 90, 0.15);
+  --info:         #8ba9c8;
+  --info-soft:    rgba(139, 169, 200, 0.14);
+  --danger:       #d96b5c;
+  --danger-soft:  rgba(217, 107, 92, 0.15);
+
+  --heading-color: #f2ede0;
+  --label-color:   #7f847a;
+
+  --nav-bg:              #121614;
+  --nav-selected-bg:     rgba(138, 176, 148, 0.10);
+  --nav-selected-accent: var(--accent);
+  --nav-item-color:      var(--text);
+
+  --kpi-value-color: var(--heading-color);
+  --kpi-label-color: var(--label-color);
+
+  --badge-default-bg:    #1f2421;
+  --badge-default-color: #a5aa9f;
+
+  --progress-track: #1a1e1b;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 3px 10px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
+
+  color-scheme: dark;
+}

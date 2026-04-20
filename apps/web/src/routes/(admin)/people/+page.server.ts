@@ -22,7 +22,7 @@ export const actions = {
       job_title: data.get('job_title') as string
     })
     if (!result.ok) return fail(400, { error: result.error })
-    return { success: true }
+    return { success: true, message: 'Person created' }
   },
 
   generateRandom: async ({ cookies, locals }) => {
@@ -31,7 +31,7 @@ export const actions = {
 
     const result = await personsService.generateRandomPersons()
     if (!result.ok) return fail(400, { error: result.error })
-    return { success: true }
+    return { success: true, message: '10 random people added' }
   },
 
   inviteUser: async ({ request, cookies, locals }) => {
@@ -47,7 +47,7 @@ export const actions = {
       inviterEmail: session?.user?.email ?? 'an administrator'
     })
     if (!result.ok) return fail(400, { error: result.error })
-    return { success: true }
+    return { success: true, message: 'Person invited' }
   },
 
   update: async ({ request, cookies, locals }) => {
@@ -62,7 +62,7 @@ export const actions = {
       job_title: data.get('job_title') as string
     })
     if (!result.ok) return fail(400, { error: result.error })
-    return { success: true }
+    return { success: true, message: 'Person updated' }
   },
 
   delete: async ({ request, cookies, locals }) => {
@@ -72,6 +72,6 @@ export const actions = {
     const data = await request.formData()
     const result = await personsService.deletePerson(data.get('id') as string)
     if (!result.ok) return fail(400, { error: result.error })
-    return { success: true }
+    return { success: true, message: 'Person deleted' }
   }
 }

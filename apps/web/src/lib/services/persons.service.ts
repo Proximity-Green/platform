@@ -2,8 +2,9 @@ import { supabase } from '$lib/services/permissions.service'
 import { log } from '$lib/services/system-log.service'
 import { tasks } from '@trigger.dev/sdk/v3'
 import type { sendWelcomeEmail } from '$lib/../trigger/welcome-email'
+import { PUBLIC_APP_URL } from '$lib/server/env'
 
-const APP_URL = process.env.PUBLIC_APP_URL || 'https://poc.proximity.green'
+const APP_URL = PUBLIC_APP_URL
 const AUTH_CONFIRM_URL = `${APP_URL}/auth/confirm`
 const TRIGGER_RUNS_BASE_URL = 'https://jobs.poc.proximity.green/orgs/proximity-green-f2c3/projects/poc-aX4R/env/dev/runs'
 
