@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit'
-import { getActualUserId, getUserIdFromRequest } from '$lib/server/permissions'
+import { getActualUserId, getUserIdFromRequest } from '$lib/services/permissions.service'
 
 export const GET = async ({ cookies, locals }) => {
   const allCookies = cookies.getAll()

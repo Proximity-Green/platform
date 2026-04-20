@@ -1,5 +1,5 @@
 import { fail } from '@sveltejs/kit'
-import { supabase } from '$lib/server/permissions'
+import { supabase } from '$lib/services/permissions.service'
 
 export const load = async () => {
   return {}

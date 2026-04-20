@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit'
-import { getUserPermissions } from '$lib/server/permissions'
+import { getUserPermissions } from '$lib/services/permissions.service'
 
 export const POST = async ({ request }) => {
   const { userId } = await request.json()

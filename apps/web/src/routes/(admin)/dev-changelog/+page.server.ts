@@ -1,4 +1,4 @@
-import { requirePermission, getUserIdFromRequest } from '$lib/server/permissions'
+import { requirePermission, getUserIdFromRequest } from '$lib/services/permissions.service'
 import fs from 'fs'
 import path from 'path'
 

@@ -1,5 +1,5 @@
 import { fail } from '@sveltejs/kit'
-import { supabase, requirePermission, getUserIdFromRequest } from '$lib/server/permissions'
+import { supabase, requirePermission, getUserIdFromRequest } from '$lib/services/permissions.service'
 
 export const load = async ({ cookies, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)

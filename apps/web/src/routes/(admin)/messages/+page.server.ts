@@ -1,6 +1,6 @@
 import { fail } from '@sveltejs/kit'
-import { supabase, requirePermission, getUserIdFromRequest, getActualUserId } from '$lib/server/permissions'
-import { log } from '$lib/server/systemLog'
+import { supabase, requirePermission, getUserIdFromRequest, getActualUserId } from '$lib/services/permissions.service'
+import { log } from '$lib/services/system-log.service'
 
 export const load = async ({ cookies, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)

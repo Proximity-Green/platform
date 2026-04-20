@@ -1,4 +1,4 @@
-import { supabase, requirePermission, getUserIdFromRequest } from '$lib/server/permissions'
+import { supabase, requirePermission, getUserIdFromRequest } from '$lib/services/permissions.service'
 
 export const load = async ({ cookies, url, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)

@@ -1,6 +1,6 @@
 import { fail } from '@sveltejs/kit'
-import { supabase, requirePermission, getUserIdFromRequest, getActualUserId, logAuthAction } from '$lib/server/permissions'
-import { log } from '$lib/server/systemLog'
+import { supabase, requirePermission, getUserIdFromRequest, getActualUserId, logAuthAction } from '$lib/services/permissions.service'
+import { log } from '$lib/services/system-log.service'
 
 const APP_URL = process.env.PUBLIC_APP_URL || 'https://poc.proximity.green'
 const AUTH_CONFIRM_URL = `${APP_URL}/auth/confirm`
