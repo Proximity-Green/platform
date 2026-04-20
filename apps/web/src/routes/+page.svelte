@@ -21,6 +21,13 @@
       return
     }
 
+    // Handle auth callback code if redirected here
+    const code = new URLSearchParams(window.location.search).get('code')
+    if (code) {
+      await supabase.auth.exchangeCodeForSession(code)
+      window.history.replaceState({}, '', '/')
+    }
+
     const { data: { session: s } } = await supabase.auth.getSession()
     session = s
     checking = false
@@ -62,7 +69,7 @@
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: window.location.origin,
         queryParams: {
           prompt: 'select_account'
         }
