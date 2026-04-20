@@ -112,7 +112,7 @@ export const actions = {
 
     const triggerBaseUrl = 'https://jobs.poc.proximity.green/orgs/proximity-green-f2c3/projects/poc-aX4R/env/dev/runs'
     await log('email', triggerError ? 'warning' : 'success', `Invitation sent to ${email} from People page`, {
-      to: email, type: 'invite', person_id: personId,
+      to: email, type: 'invite', source: 'app', person_id: personId,
       trigger_job: 'send-welcome-email',
       ...(triggerRunId ? {
         trigger_run_id: triggerRunId,

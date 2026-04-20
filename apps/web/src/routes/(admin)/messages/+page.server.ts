@@ -104,12 +104,12 @@ export const actions = {
     if (!response.ok) {
       const errorText = await response.text()
       const actualUserId = await getActualUserId(locals)
-      await log('email', 'error', `Test email failed: ${template.name} to ${testEmail}`, { template: template.slug, to: testEmail, error: errorText }, actualUserId)
+      await log('email', 'error', `Test email failed: ${template.name} to ${testEmail}`, { template: template.slug, to: testEmail, error: errorText, source: 'mailgun' }, actualUserId)
       return fail(400, { error: `Send failed: ${errorText}` })
     }
 
     const actualUserId = await getActualUserId(locals)
-    await log('email', 'success', `Test email sent: ${template.name} to ${testEmail}`, { template: template.slug, to: testEmail, channel: template.channel }, actualUserId)
+    await log('email', 'success', `Test email sent: ${template.name} to ${testEmail}`, { template: template.slug, to: testEmail, channel: template.channel, source: 'mailgun' }, actualUserId)
     return { success: true, message: `Test email sent to ${testEmail}` }
   }
 }

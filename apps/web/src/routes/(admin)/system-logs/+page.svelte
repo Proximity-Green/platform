@@ -79,6 +79,9 @@
         <div class="log-main">
           <span class="level-dot {levelColors[entry.level]}"></span>
           <span class="category-badge">{entry.category}</span>
+          {#if entry.details?.source}
+            <span class="source-badge" class:src-trigger={entry.details.source === 'trigger'} class:src-mailgun={entry.details.source === 'mailgun'} class:src-supabase={entry.details.source === 'supabase'} class:src-app={entry.details.source === 'app'}>{entry.details.source}</span>
+          {/if}
           <span class="log-message">{entry.message}</span>
           <span class="log-user">{entry.created_by_email}</span>
           <span class="log-time" title={new Date(entry.created_at).toLocaleString()}>{timeAgo(entry.created_at)}</span>
@@ -148,6 +151,11 @@
   .lvl-warning { background: #c8832a; }
   .lvl-error { background: #c0392b; }
   .category-badge { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; background: #f7f4ee; color: #5a7060; padding: 2px 6px; border-radius: 3px; flex-shrink: 0; }
+  .source-badge { font-size: 0.6rem; font-weight: 600; text-transform: uppercase; padding: 1px 5px; border-radius: 3px; flex-shrink: 0; }
+  .src-trigger { background: #f0ebfd; color: #6d3fc8; }
+  .src-mailgun { background: #fdf3e3; color: #c8832a; }
+  .src-supabase { background: #e8f0fd; color: #3a5fc8; }
+  .src-app { background: #e8f5ea; color: #2d6a35; }
   .log-message { flex: 1; color: #0a1f0f; }
   .log-user { font-size: 0.75rem; color: #5a7060; flex-shrink: 0; }
   .log-time { font-size: 0.75rem; color: #5a7060; flex-shrink: 0; min-width: 60px; text-align: right; }
