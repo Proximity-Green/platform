@@ -82,6 +82,12 @@
           {#if entry.details?.source}
             <span class="source-badge" class:src-trigger={entry.details.source === 'trigger'} class:src-mailgun={entry.details.source === 'mailgun'} class:src-supabase={entry.details.source === 'supabase'} class:src-app={entry.details.source === 'app'}>{entry.details.source}</span>
           {/if}
+          {#if entry.details?.mailgun_status}
+            <span class="status-tag" class:tag-delivered={entry.details.mailgun_status === 'delivered'} class:tag-accepted={entry.details.mailgun_status === 'accepted'} class:tag-failed={entry.details.mailgun_status === 'failed' || entry.details.mailgun_status === 'bounced'}>{entry.details.mailgun_status}</span>
+          {/if}
+          {#if entry.details?.trigger_status}
+            <span class="status-tag tag-accepted">{entry.details.trigger_status}</span>
+          {/if}
           <span class="log-message">{entry.message}</span>
           <span class="log-user">{entry.created_by_email}</span>
           <span class="log-time" title={new Date(entry.created_at).toLocaleString()}>{timeAgo(entry.created_at)}</span>
