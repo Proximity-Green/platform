@@ -40,11 +40,11 @@
   function can(resource: string, action: string = 'read') { return canDo(perms, resource, action) }
 
   const columns: Column<Person>[] = [
-    { key: 'name', label: 'Name', sortable: true, width: '14%', get: p => `${p.first_name} ${p.last_name}` },
-    { key: 'email', label: 'Email', sortable: true, width: '27%', ellipsis: true, muted: true },
-    { key: 'phone', label: 'Phone', width: '14%', mono: true, muted: true, hideBelow: 'md' },
-    { key: 'job_title', label: 'Job Title', sortable: true, width: '16%', muted: true, hideBelow: 'md' },
-    { key: 'created_at', label: 'Created', sortable: true, width: '13%', date: true, hideBelow: 'sm' }
+    { key: 'name', label: 'Name', sortable: true, width: '20%', get: p => `${p.first_name} ${p.last_name}` },
+    { key: 'email', label: 'Email', sortable: true, width: '24%', ellipsis: true, muted: true },
+    { key: 'phone', label: 'Phone', width: '13%', mono: true, muted: true, hideBelow: 'md' },
+    { key: 'job_title', label: 'Job Title', sortable: true, width: '15%', muted: true, hideBelow: 'md' },
+    { key: 'created_at', label: 'Created', sortable: true, width: '12%', date: true, hideBelow: 'sm' }
   ]
 
   const filters: Filter<Person>[] = [

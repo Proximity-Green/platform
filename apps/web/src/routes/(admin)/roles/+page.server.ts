@@ -22,6 +22,20 @@ export const actions = {
     return { success: true, message: result.message }
   },
 
+  updateRole: async ({ request, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
+    if (userId) await requirePermission(userId, 'roles', 'manage')
+
+    const data = await request.formData()
+    const result = await rolesService.updateRole(
+      data.get('id') as string,
+      data.get('name') as string,
+      data.get('description') as string
+    )
+    if (!result.ok) return fail(400, { error: result.error })
+    return { success: true, message: result.message }
+  },
+
   deleteRole: async ({ request, cookies, locals }) => {
     const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'roles', 'manage')
@@ -41,6 +55,19 @@ export const actions = {
       data.get('role_id') as string,
       data.get('resource') as string,
       data.get('action') as string
+    )
+    if (!result.ok) return fail(400, { error: result.error })
+    return { success: true, message: result.message }
+  },
+
+  detachUser: async ({ request, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
+    if (userId) await requirePermission(userId, 'roles', 'manage')
+
+    const data = await request.formData()
+    const result = await rolesService.detachUserFromRole(
+      data.get('user_id') as string,
+      data.get('role_id') as string
     )
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: result.message }

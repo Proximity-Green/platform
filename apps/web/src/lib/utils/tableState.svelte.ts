@@ -26,14 +26,22 @@ export function createTableState(opts: TableStateOptions) {
   const prefSortKey = `table.${opts.table}.sort`
   const prefDirKey  = `table.${opts.table}.dir`
 
-  const def: TableParams = {
+  // hardDef = the baseline used for URL diffing (so the URL always reflects
+  // explicit user choices, even when they match saved prefs).
+  const hardDef: TableParams = {
     q: '',
     filter: 'all',
-    sort: getPref<string>(prefSortKey, opts.defaults?.sort ?? ''),
-    dir: getPref<SortDir>(prefDirKey, opts.defaults?.dir ?? 'desc'),
+    sort: opts.defaults?.sort ?? '',
+    dir: opts.defaults?.dir ?? 'desc',
     page: 1,
-    size: getPref<number>(prefSizeKey, opts.defaults?.size ?? 50),
-    ...(opts.defaults ?? {})
+    size: opts.defaults?.size ?? 50
+  }
+  // def = the effective default for initial state, pulling from user prefs.
+  const def: TableParams = {
+    ...hardDef,
+    sort: getPref<string>(prefSortKey, hardDef.sort),
+    dir: getPref<SortDir>(prefDirKey, hardDef.dir),
+    size: getPref<number>(prefSizeKey, hardDef.size)
   }
   const debounceMs = opts.debounceMs ?? 250
 
@@ -57,12 +65,12 @@ export function createTableState(opts: TableStateOptions) {
     if (timer) { clearTimeout(timer); timer = null }
     const run = () => {
       const sp = new URLSearchParams()
-      if (state.q !== def.q) sp.set('q', state.q)
-      if (state.filter !== def.filter) sp.set('filter', state.filter)
-      if (state.sort !== def.sort) sp.set('sort', state.sort)
-      if (state.dir !== def.dir) sp.set('dir', state.dir)
-      if (state.page !== def.page) sp.set('page', String(state.page))
-      if (state.size !== def.size) sp.set('size', String(state.size))
+      if (state.q !== hardDef.q) sp.set('q', state.q)
+      if (state.filter !== hardDef.filter) sp.set('filter', state.filter)
+      if (state.sort !== hardDef.sort) sp.set('sort', state.sort)
+      if (state.dir !== hardDef.dir) sp.set('dir', state.dir)
+      if (state.page !== hardDef.page) sp.set('page', String(state.page))
+      if (state.size !== hardDef.size) sp.set('size', String(state.size))
       const qs = sp.toString()
       goto(qs ? `?${qs}` : location.pathname, {
         replaceState: true,
@@ -75,6 +83,9 @@ export function createTableState(opts: TableStateOptions) {
   }
 
   readFromUrl()
+  // After hydrating from URL, reflect any pref-loaded defaults into the URL so
+  // saved prefs are always visible in the address bar.
+  writeToUrl(true)
 
   return {
     get params() { return state },

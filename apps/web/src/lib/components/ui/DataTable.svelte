@@ -33,6 +33,7 @@
   import { createTableState } from '$lib/utils/tableState.svelte'
   import { downloadCsv, type CsvColumn } from '$lib/utils/csv'
   import { showTimes } from '$lib/stores/ui'
+  import { getPref, setPref } from '$lib/stores/prefs'
 
   type Props = {
     data: T[]
@@ -50,12 +51,18 @@
     isActiveRow?: (row: T) => boolean
     /** Fires on Cmd/Ctrl+Enter with the keyboard-selected row */
     onActivate?: (row: T) => void
+    /** Fires when a row is clicked (not buttons or form controls inside it) */
+    onRowClick?: (row: T) => void
     /** Field used for type-to-jump (defaults to first searchField) */
     typeAheadField?: string
+    /** Returns true for rows that should render their `expanded` snippet below */
+    isExpandedRow?: (row: T) => boolean
     row?: Snippet<[T, { showTimes: boolean }]>
     actions?: Snippet<[T]>
     headActions?: Snippet<[]>
     emptyState?: Snippet<[]>
+    /** Rendered in a full-width sub-row when isExpandedRow returns true */
+    expanded?: Snippet<[T]>
   }
   let {
     data,
@@ -71,12 +78,24 @@
     actionsLabel = 'Actions',
     isActiveRow,
     onActivate,
+    onRowClick,
     typeAheadField,
+    isExpandedRow,
     row,
     actions,
     headActions,
-    emptyState
+    emptyState,
+    expanded
   }: Props = $props()
+
+  function handleRowClick(e: MouseEvent, item: T, i: number) {
+    selectedIndex = i
+    if (!onRowClick) return
+    // Don't treat clicks on interactive controls as row clicks.
+    const target = e.target as HTMLElement
+    if (target.closest('button, a, input, select, textarea, label, .actions-col')) return
+    onRowClick(item)
+  }
 
   const ts = createTableState({ table })
   const p = $derived(ts.params)
@@ -89,9 +108,13 @@
     const q = p.q.trim().toLowerCase()
     let list = data as T[]
     if (q && searchFields.length) {
-      list = list.filter(row =>
-        searchFields.some(f => String(resolvePath(row, f) ?? '').toLowerCase().includes(q))
-      )
+      const terms = q.split(/\s+/).filter(Boolean)
+      list = list.filter(row => {
+        const haystack = searchFields
+          .map(f => String(resolvePath(row, f) ?? '').toLowerCase())
+          .join(' ')
+        return terms.every(t => haystack.includes(t))
+      })
     }
     if (p.filter && p.filter !== 'all') {
       const f = filters.find(x => x.key === p.filter)
@@ -218,6 +241,37 @@
     return () => window.removeEventListener('keydown', handleKey)
   })
 
+  // Column widths — persisted per-table user preference.
+  const widthsKey = `table.${table}.colWidths`
+  let colWidths = $state<Record<string, string>>({ ...getPref<Record<string, string>>(widthsKey, {}) })
+
+  function widthFor(col: Column<T>): string {
+    return colWidths[col.key] ?? col.width ?? ''
+  }
+
+  function startResize(e: MouseEvent, col: Column<T>) {
+    e.preventDefault()
+    e.stopPropagation()
+    const th = (e.currentTarget as HTMLElement).closest('th') as HTMLElement
+    const startX = e.clientX
+    const startW = th.getBoundingClientRect().width
+
+    function onMove(m: MouseEvent) {
+      const newW = Math.max(60, Math.round(startW + (m.clientX - startX)))
+      colWidths = { ...colWidths, [col.key]: `${newW}px` }
+    }
+    function onUp() {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      setPref(widthsKey, colWidths)
+    }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
 </script>
 
 <div class="toolbar">
@@ -247,14 +301,16 @@
   <div class="table-scroll">
     <table>
       <colgroup>
+        {#if isExpandedRow}<col style="width: 28px" />{/if}
         {#each columns as col}
-          <col class={hideClass(col)} style={col.width ? `width: ${col.width}` : ''} />
+          <col class={hideClass(col)} style={widthFor(col) ? `width: ${widthFor(col)}` : ''} />
         {/each}
         {#if hasActions}<col style="width: auto" />{/if}
       </colgroup>
       <thead>
         <tr>
-          {#each columns as col}
+          {#if isExpandedRow}<th class="expand-col" aria-hidden="true"></th>{/if}
+          {#each columns as col, i}
             <th
               class={hideClass(col)}
               class:sortable={col.sortable}
@@ -262,6 +318,15 @@
               onclick={col.sortable ? () => ts.toggleSort(col.key, col.date ? 'desc' : 'asc') : undefined}
             >
               {col.label}{#if col.sortable && p.sort === col.key}<span class="sort">{p.dir === 'asc' ? '↑' : '↓'}</span>{/if}
+              {#if i < columns.length - 1 || hasActions}
+                <span
+                  class="resizer"
+                  onmousedown={(e) => startResize(e, col)}
+                  onclick={(e) => e.stopPropagation()}
+                  role="separator"
+                  aria-label="Resize {col.label} column"
+                ></span>
+              {/if}
             </th>
           {/each}
           {#if hasActions}<th class="actions-col">{actionsLabel}</th>{/if}
@@ -272,8 +337,16 @@
           <tr
             class:is-active={isActiveRow?.(item)}
             class:is-selected={i === selectedIndex}
-            onclick={() => selectedIndex = i}
+            class:clickable={!!onRowClick}
+            onclick={(e) => handleRowClick(e, item, i)}
           >
+            {#if isExpandedRow}
+              <td class="expand-col" aria-hidden="true">
+                <svg class="chevron" class:open={isExpandedRow(item)} width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M4 2 L8 6 L4 10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </td>
+            {/if}
             {#if row}
               {@render row(item, { showTimes: $showTimes })}
             {:else}
@@ -294,6 +367,13 @@
               </td>
             {/if}
           </tr>
+          {#if expanded && isExpandedRow?.(item)}
+            <tr class="expanded-row">
+              <td colspan={columns.length + (hasActions ? 1 : 0) + 1}>
+                {@render expanded(item)}
+              </td>
+            </tr>
+          {/if}
         {:else}
           <tr>
             <td colspan={columns.length + (hasActions ? 1 : 0)} class="empty">
@@ -382,21 +462,47 @@
     font-size: var(--text-sm);
     table-layout: fixed;
   }
+  thead {
+    background: var(--surface-sunk, var(--surface-raised));
+  }
   th {
     text-align: left;
-    padding: var(--space-2) var(--space-3);
+    padding: var(--space-3) var(--space-3);
     font-size: var(--text-xs);
     font-weight: var(--weight-semibold);
     text-transform: uppercase;
     letter-spacing: var(--label-letter-spacing, 0.1em);
     color: var(--label-color);
-    border-bottom: 1px solid var(--border);
+    border-bottom: 2px solid var(--border-strong, var(--border));
     white-space: nowrap;
   }
+  th { position: relative; }
   th.sortable { cursor: pointer; user-select: none; }
   th.sortable:hover { color: var(--text); }
   th.align-right, td.align-right { text-align: right; }
   .sort { margin-left: 4px; color: var(--accent); }
+
+  .resizer {
+    position: absolute;
+    top: 0;
+    right: -4px;
+    width: 8px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 1;
+    user-select: none;
+  }
+  .resizer:hover::after,
+  .resizer:active::after {
+    content: '';
+    position: absolute;
+    top: 25%;
+    right: 3px;
+    width: 2px;
+    height: 50%;
+    background: var(--accent);
+    border-radius: 1px;
+  }
 
   /* Use :global() so styles reach <td>s rendered inside the `row` snippet
      (snippet content lives in the parent page's CSS scope, not DataTable's). */
@@ -413,7 +519,21 @@
     white-space: nowrap;
   }
   .table-scroll :global(tbody tr:last-child td) { border-bottom: none; }
+  .table-scroll :global(tr.expanded-row > td) {
+    background: var(--surface-sunk, var(--surface-raised));
+    padding: var(--space-4) var(--space-5);
+    border-top: 1px solid var(--accent);
+    border-bottom: 1px solid var(--accent);
+  }
+  /* The row directly above an expanded row is joined to it — drop its
+     bottom border and lift the accent tint so they read as one block. */
+  .table-scroll :global(tr:has(+ tr.expanded-row) > td) {
+    border-bottom: none;
+    background: var(--accent-soft);
+  }
   tbody tr:hover { background: var(--surface-hover); }
+  tbody tr.clickable { cursor: pointer; }
+  tbody tr.expanded-row:hover { background: var(--surface-sunk, var(--surface-raised)); }
   tbody tr.is-selected { background: var(--surface-hover); }
   .table-scroll :global(tbody tr.is-selected td:first-child) {
     box-shadow: inset 2px 0 0 var(--accent);
@@ -426,6 +546,26 @@
   .actions { display: flex; gap: var(--space-2); justify-content: flex-end; align-items: center; }
   .actions-col { text-align: right; }
   th.actions-col { text-align: right; }
+
+  th.expand-col, .table-scroll :global(td.expand-col) {
+    padding: 0 4px 0 10px;
+    width: 28px;
+    text-align: center;
+    color: var(--text-muted);
+  }
+  .chevron {
+    display: inline-block;
+    vertical-align: middle;
+    color: var(--text-muted);
+    transition: transform var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
+  }
+  tbody tr.clickable:hover .chevron {
+    color: var(--text);
+  }
+  .chevron.open {
+    transform: rotate(90deg);
+    color: var(--accent);
+  }
 
   /* While a SubmitButton is in-flight, hide its siblings so the pending
      button is the only visible action in the row. */
