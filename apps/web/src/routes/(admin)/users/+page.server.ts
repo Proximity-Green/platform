@@ -2,6 +2,9 @@ import { fail } from '@sveltejs/kit'
 import { supabase, requirePermission, getUserIdFromRequest, getActualUserId, logAuthAction } from '$lib/server/permissions'
 import { log } from '$lib/server/systemLog'
 
+const APP_URL = process.env.PUBLIC_APP_URL || 'https://poc.proximity.green'
+const AUTH_CONFIRM_URL = `${APP_URL}/auth/confirm`
+
 export const load = async ({ cookies, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)
   if (userId) await requirePermission(userId, 'users', 'read')
@@ -28,7 +31,7 @@ export const actions = {
     const email = data.get('email') as string
 
     const { data: result, error } = await supabase.auth.admin.inviteUserByEmail(email, {
-      redirectTo: 'https://poc.proximity.green/auth/confirm'
+      redirectTo: AUTH_CONFIRM_URL
     })
     if (error) return fail(400, { error: error.message })
 
@@ -49,7 +52,7 @@ export const actions = {
     const email = data.get('email') as string
 
     const { data: result, error } = await supabase.auth.admin.inviteUserByEmail(email, {
-      redirectTo: 'https://poc.proximity.green/auth/confirm'
+      redirectTo: AUTH_CONFIRM_URL
     })
     if (error) return fail(400, { error: error.message })
 
@@ -144,7 +147,7 @@ export const actions = {
     const { data: link, error } = await supabase.auth.admin.generateLink({
       type: 'recovery',
       email,
-      options: { redirectTo: 'https://poc.proximity.green/auth/confirm' }
+      options: { redirectTo: AUTH_CONFIRM_URL }
     })
     if (error) return fail(400, { error: error.message })
 

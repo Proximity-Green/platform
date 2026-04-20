@@ -16,6 +16,7 @@ COPY --from=build /app/package.json .
 COPY --from=build /app/node_modules ./node_modules
 ENV PORT=3000
 ENV HOST=0.0.0.0
+ENV PUBLIC_APP_URL=https://poc.proximity.green
 ENV TRIGGER_SECRET_KEY=tr_dev_pkq8YUNNUayNgJhuZFJg
 ENV TRIGGER_API_URL=https://jobs.poc.proximity.green
 ENV PUBLIC_SUPABASE_URL=https://db.poc.proximity.green

@@ -4,6 +4,9 @@ import { log } from '$lib/server/systemLog'
 import { tasks } from '@trigger.dev/sdk/v3'
 import type { sendWelcomeEmail } from '$lib/../trigger/welcome-email'
 
+const APP_URL = process.env.PUBLIC_APP_URL || 'https://poc.proximity.green'
+const AUTH_CONFIRM_URL = `${APP_URL}/auth/confirm`
+
 export const load = async ({ cookies, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)
   if (userId) await requirePermission(userId, 'persons', 'read')
@@ -69,12 +72,12 @@ export const actions = {
     const { data: result, error } = await supabase.auth.admin.generateLink({
       type: 'invite',
       email,
-      options: { redirectTo: 'https://poc.proximity.green/auth/confirm' }
+      options: { redirectTo: AUTH_CONFIRM_URL }
     })
     if (error) return fail(400, { error: error.message })
 
     // Build the invite URL from the generated link properties
-    let inviteUrl = result.properties?.action_link ?? 'https://poc.proximity.green'
+    let inviteUrl = result.properties?.action_link ?? APP_URL
     // Fix internal URL if needed — replace internal supabase-kong with public URL
     inviteUrl = inviteUrl.replace('http://supabase-kong:8000', 'https://db.poc.proximity.green')
     console.log('Invite URL generated:', inviteUrl)

@@ -88,8 +88,8 @@ export const sendWelcomeEmail = task({
       lastName: payload.lastName,
       email: payload.email,
       invitedBy: payload.invitedBy,
-      inviteUrl: payload.inviteUrl || 'https://poc.proximity.green',
-      appUrl: 'https://poc.proximity.green'
+      inviteUrl: payload.inviteUrl || (process.env.PUBLIC_APP_URL || 'https://poc.proximity.green'),
+      appUrl: process.env.PUBLIC_APP_URL || 'https://poc.proximity.green'
     }
 
     const subject = replaceVariables(template.subject, vars)
