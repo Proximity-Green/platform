@@ -9,6 +9,7 @@
     required?: boolean
     disabled?: boolean
     size?: 'sm' | 'md'
+    width?: string
     onchange?: (value: string) => void
   }
   let {
@@ -19,6 +20,7 @@
     required = false,
     disabled = false,
     size = 'md',
+    width,
     onchange
   }: Props = $props()
 
@@ -27,7 +29,7 @@
   }
 </script>
 
-<div class="select-wrap" class:sm={size === 'sm'}>
+<div class="select-wrap" class:sm={size === 'sm'} style={width ? `--sel-width: ${width}` : undefined}>
   <select
     {name}
     {required}
@@ -68,7 +70,7 @@
     font-size: var(--text-sm);
     font-weight: var(--weight-medium);
     cursor: pointer;
-    min-width: 140px;
+    min-width: var(--sel-width, 140px);
     transition:
       border-color var(--motion-fast) var(--ease-out),
       box-shadow var(--motion-fast) var(--ease-out),
@@ -78,7 +80,7 @@
     height: 30px;
     font-size: var(--text-xs);
     padding: 0 1.75rem 0 0.7rem;
-    min-width: 110px;
+    min-width: var(--sel-width, 110px);
   }
   select:hover:not(:disabled) {
     background: var(--surface-hover);

@@ -163,8 +163,8 @@
             }}
           >
             <input type="hidden" name="role_id" value={role.id} />
-            <Select name="resource" options={resources} placeholder="Resource…" required size="sm" />
-            <Select name="action" options={actionKinds} placeholder="Action…" required size="sm" />
+            <Select name="resource" options={resources} placeholder="Resource…" required size="sm" width="180px" />
+            <Select name="action" options={actionKinds} placeholder="Action…" required size="sm" width="140px" />
             <Button type="submit" size="sm" variant="secondary">+ Add Permission</Button>
           </form>
         {/if}
