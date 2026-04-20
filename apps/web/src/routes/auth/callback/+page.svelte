@@ -5,40 +5,55 @@
   let status = $state('Authenticating...')
 
   onMount(async () => {
-    // Try exchanging code if present
+    // The PKCE code comes as ?code= param
     const code = new URLSearchParams(window.location.search).get('code')
+
     if (code) {
-      await supabase.auth.exchangeCodeForSession(code)
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+      if (data.session) {
+        window.location.href = '/people'
+        return
+      }
+      // If exchange failed, the code might have been consumed already
+      // Check if we have a session anyway
     }
 
-    // Try getting session from hash fragment
+    // Check for hash fragment (fallback)
     if (window.location.hash && window.location.hash.includes('access_token')) {
       const hash = window.location.hash.substring(1)
       const params = new URLSearchParams(hash)
       const accessToken = params.get('access_token')
       const refreshToken = params.get('refresh_token')
       if (accessToken && refreshToken) {
-        await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+        const { data } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+        if (data.session) {
+          window.location.href = '/people'
+          return
+        }
       }
     }
 
-    // Check if we have a session now
+    // Maybe session already exists from cookies
     const { data: { session } } = await supabase.auth.getSession()
     if (session) {
       window.location.href = '/people'
       return
     }
 
-    // Wait a moment and try again — session might be setting
-    await new Promise(r => setTimeout(r, 1000))
-    const { data: { session: s2 } } = await supabase.auth.getSession()
-    if (s2) {
-      window.location.href = '/people'
-      return
-    }
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        subscription.unsubscribe()
+        window.location.href = '/people'
+      }
+    })
 
-    status = 'Authentication error. Redirecting...'
-    setTimeout(() => { window.location.href = '/' }, 2000)
+    // Timeout
+    setTimeout(() => {
+      subscription.unsubscribe()
+      status = 'Could not sign in. Redirecting...'
+      setTimeout(() => { window.location.href = '/' }, 2000)
+    }, 5000)
   })
 </script>
 
