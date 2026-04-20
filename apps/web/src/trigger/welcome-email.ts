@@ -123,7 +123,8 @@ export const sendWelcomeEmail = task({
       `Welcome email ${deliveryStatus}: ${payload.email}`, {
         to: payload.email,
         type: 'welcome_email',
-        source: 'trigger',
+        source: 'mailgun',
+        via: 'trigger',
         template: 'welcome-member',
         mailgun_status: deliveryStatus,
         mailgun_message_id: welcomeResult.messageId,

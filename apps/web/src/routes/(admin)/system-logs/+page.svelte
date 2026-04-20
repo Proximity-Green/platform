@@ -82,6 +82,10 @@
           {#if entry.details?.source}
             <span class="source-badge" class:src-trigger={entry.details.source === 'trigger'} class:src-mailgun={entry.details.source === 'mailgun'} class:src-supabase={entry.details.source === 'supabase'} class:src-app={entry.details.source === 'app'}>{entry.details.source}</span>
           {/if}
+          {#if entry.details?.via}
+            <span class="via-label">via</span>
+            <span class="source-badge" class:src-trigger={entry.details.via === 'trigger'} class:src-mailgun={entry.details.via === 'mailgun'} class:src-supabase={entry.details.via === 'supabase'} class:src-app={entry.details.via === 'app'}>{entry.details.via}</span>
+          {/if}
           {#if entry.details?.mailgun_status}
             <span class="status-tag" class:tag-delivered={entry.details.mailgun_status === 'delivered'} class:tag-accepted={entry.details.mailgun_status === 'accepted'} class:tag-failed={entry.details.mailgun_status === 'failed' || entry.details.mailgun_status === 'bounced'}>{entry.details.mailgun_status}</span>
           {/if}
@@ -162,6 +166,7 @@
   .src-mailgun { background: #fdf3e3; color: #c8832a; }
   .src-supabase { background: #e8f0fd; color: #3a5fc8; }
   .src-app { background: #e8f5ea; color: #2d6a35; }
+  .via-label { font-size: 0.55rem; color: #5a7060; }
   .log-message { flex: 1; color: #0a1f0f; }
   .log-user { font-size: 0.75rem; color: #5a7060; flex-shrink: 0; }
   .log-time { font-size: 0.75rem; color: #5a7060; flex-shrink: 0; min-width: 60px; text-align: right; }
