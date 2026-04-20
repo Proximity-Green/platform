@@ -111,6 +111,8 @@
   {columns}
   {filters}
   table="people"
+  title="Members"
+  lede="Everyone connected to your workspaces — members, prospects, and contacts."
   searchFields={['first_name', 'last_name', 'email', 'job_title']}
   searchPlaceholder="Search name, email, job title…"
   csvFilename="members"
@@ -139,6 +141,16 @@
         <div class="date-time">{new Date(person.created_at).toLocaleTimeString()}</div>
       {/if}
     </td>
+  {/snippet}
+  {#snippet pageActions()}
+    {#if can('persons', 'create')}
+      <form method="POST" action="?/generateRandom" style="display:contents">
+        <Button type="submit" variant="secondary" size="sm">+ 10 Random</Button>
+      </form>
+      <Button size="sm" onclick={() => { showCreate = !showCreate }}>
+        {showCreate ? 'Cancel' : '+ Add Person'}
+      </Button>
+    {/if}
   {/snippet}
   {#snippet actions(person)}
     {#if !person.user_id && can('users', 'manage')}

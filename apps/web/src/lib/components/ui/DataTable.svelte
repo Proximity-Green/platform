@@ -39,6 +39,9 @@
     data: T[]
     columns: Column<T>[]
     table: string
+    /** Title shown in the fullscreen header (hidden in normal mode since PageHead already shows it) */
+    title?: string
+    lede?: string
     filters?: Filter<T>[]
     searchFields?: string[]
     searchPlaceholder?: string
@@ -60,6 +63,8 @@
     row?: Snippet<[T, { showTimes: boolean }]>
     actions?: Snippet<[T]>
     headActions?: Snippet<[]>
+    /** Page-level actions (e.g. "+ Add Person") shown in the fullscreen header */
+    pageActions?: Snippet<[]>
     emptyState?: Snippet<[]>
     /** Rendered in a full-width sub-row when isExpandedRow returns true */
     expanded?: Snippet<[T]>
@@ -68,6 +73,8 @@
     data,
     columns,
     table,
+    title,
+    lede,
     filters = [],
     searchFields = [],
     searchPlaceholder = 'Search…',
@@ -84,6 +91,7 @@
     row,
     actions,
     headActions,
+    pageActions,
     emptyState,
     expanded
   }: Props = $props()
@@ -98,7 +106,29 @@
   }
 
   const ts = createTableState({ table })
+
+  let fullscreen = $state(false)
   const p = $derived(ts.params)
+
+  function fsPortal(node: HTMLElement, active: boolean) {
+    let parent: ParentNode | null = null
+    let next: Node | null = null
+    function apply(on: boolean) {
+      if (on && node.parentNode !== document.body) {
+        parent = node.parentNode
+        next = node.nextSibling
+        document.body.appendChild(node)
+      } else if (!on && parent) {
+        parent.insertBefore(node, next)
+        parent = null
+      }
+    }
+    apply(active)
+    return {
+      update(v: boolean) { apply(v) },
+      destroy() { if (parent) parent.insertBefore(node, next) }
+    }
+  }
 
   function resolvePath(obj: any, path: string): any {
     return path.split('.').reduce((acc, k) => (acc == null ? acc : acc[k]), obj)
@@ -274,6 +304,18 @@
   }
 </script>
 
+<div class="dt-root" class:dt-fullscreen={fullscreen} use:fsPortal={fullscreen}>
+{#if fullscreen && (title || pageActions)}
+  <div class="fs-header">
+    <div class="fs-header-text">
+      {#if title}<h1>{title}</h1>{/if}
+      {#if lede}<p class="fs-lede">{lede}</p>{/if}
+    </div>
+    {#if pageActions}
+      <div class="fs-header-actions">{@render pageActions()}</div>
+    {/if}
+  </div>
+{/if}
 <div class="toolbar">
   <input
     class="search"
@@ -294,6 +336,23 @@
     <TimesToggle />
   {/if}
   <Button variant="ghost" size="sm" onclick={exportCsv} disabled={filtered.length === 0}>↓ CSV</Button>
+  <button
+    class="fs-btn"
+    type="button"
+    onclick={() => fullscreen = !fullscreen}
+    aria-label={fullscreen ? 'Exit full screen' : 'Full screen'}
+    title={fullscreen ? 'Exit full screen' : 'Full screen'}
+  >
+    {#if fullscreen}
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+        <path d="M8 2v4h4M6 12V8H2M8 6l5-5M1 13l5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    {:else}
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+        <path d="M2 5V2h3M12 5V2H9M2 9v3h3M12 9v3H9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    {/if}
+  </button>
   {#if headActions}{@render headActions()}{/if}
 </div>
 
@@ -395,6 +454,7 @@
     onPageSize={(v) => ts.setSize(v)}
   />
 </Card>
+</div>
 
 <style>
   .toolbar {
@@ -423,6 +483,49 @@
     border-color: var(--border-focus);
     box-shadow: 0 0 0 3px var(--accent-soft);
   }
+  .fs-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 6px;
+    border-radius: var(--radius-sm);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    transition: background var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
+  }
+  .fs-btn:hover { background: var(--surface-hover); color: var(--text); }
+
+  :global(.dt-root.dt-fullscreen) {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: var(--surface);
+    padding: var(--space-4) var(--space-5);
+    overflow: auto;
+  }
+  .fs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-5);
+    margin-bottom: var(--space-4);
+  }
+  .fs-header-text { flex: 1; min-width: 0; }
+  .fs-header h1 {
+    font-size: var(--text-2xl);
+    margin: 0 0 var(--space-1);
+  }
+  .fs-lede {
+    color: var(--text-muted);
+    font-size: var(--text-md);
+    max-width: 620px;
+    margin: 0;
+  }
+  .fs-header-actions { display: flex; gap: var(--space-2); align-items: center; }
+
   .filters { display: flex; gap: 4px; }
   .chip {
     height: 28px;

@@ -11,8 +11,18 @@
   }
   let { open, title, width = '480px', formId, onClose, children, footer }: Props = $props()
   let drawerEl: HTMLElement | undefined = $state()
+  let fullscreen = $state(false)
 
-  const FOCUSABLE = 'input:not([type=hidden]):not([disabled]):not([readonly]), textarea:not([disabled]):not([readonly]), select:not([disabled]), button:not([disabled]):not(.close), [tabindex]:not([tabindex="-1"])'
+  $effect(() => { if (!open) fullscreen = false })
+
+  function portal(node: HTMLElement) {
+    document.body.appendChild(node)
+    return {
+      destroy() { node.parentNode?.removeChild(node) }
+    }
+  }
+
+  const FOCUSABLE = 'input:not([type=hidden]):not([disabled]):not([readonly]), textarea:not([disabled]):not([readonly]), select:not([disabled]), button:not([disabled]):not(.icon-btn), [tabindex]:not([tabindex="-1"])'
 
   function focusableEls(): HTMLElement[] {
     if (!drawerEl) return []
@@ -56,12 +66,26 @@
 </script>
 
 {#if open}
-  <div class="backdrop" onclick={onClose} role="presentation"></div>
-  <aside bind:this={drawerEl} class="drawer" style="width: {width}" role="dialog" aria-modal="true" aria-label={title ?? 'Drawer'}>
+  <div class="drawer-root" use:portal>
+    <div class="backdrop" onclick={onClose} role="presentation"></div>
+    <aside bind:this={drawerEl} class="drawer" class:fullscreen style="width: {fullscreen ? '100vw' : width}" role="dialog" aria-modal="true" aria-label={title ?? 'Drawer'}>
     {#if title}
       <header class="drawer-head">
         <h2>{title}</h2>
-        <button class="close" onclick={onClose} aria-label="Close" type="button">✕</button>
+        <div class="head-actions">
+          <button class="icon-btn" onclick={() => fullscreen = !fullscreen} aria-label={fullscreen ? 'Exit full screen' : 'Full screen'} type="button" title={fullscreen ? 'Exit full screen (Esc)' : 'Full screen'}>
+            {#if fullscreen}
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <path d="M8 2v4h4M6 12V8H2M8 6l5-5M1 13l5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            {:else}
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <path d="M2 5V2h3M12 5V2H9M2 9v3h3M12 9v3H9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            {/if}
+          </button>
+          <button class="icon-btn close" onclick={onClose} aria-label="Close" type="button">✕</button>
+        </div>
       </header>
     {/if}
     <div class="drawer-body">
@@ -73,6 +97,7 @@
       </footer>
     {/if}
   </aside>
+  </div>
 {/if}
 
 <style>
@@ -81,7 +106,7 @@
     background: rgba(0, 0, 0, 0.25);
     backdrop-filter: blur(3px);
     -webkit-backdrop-filter: blur(3px);
-    z-index: 100;
+    z-index: 10000;
     animation: fadeIn 180ms var(--ease-out);
   }
   .drawer {
@@ -89,7 +114,7 @@
     top: 0; right: 0; bottom: 0;
     background: var(--surface-raised);
     box-shadow: -10px 0 30px rgba(0, 0, 0, 0.12);
-    z-index: 101;
+    z-index: 10001;
     display: flex;
     flex-direction: column;
     animation: slideIn 220ms var(--ease-out);
@@ -108,17 +133,21 @@
     color: var(--heading-color);
     margin: 0;
   }
-  .close {
+  .head-actions { display: inline-flex; align-items: center; gap: 2px; }
+  .icon-btn {
     background: none;
     border: none;
     cursor: pointer;
     color: var(--text-muted);
-    font-size: var(--text-md);
+    font-size: var(--text-sm);
     padding: 4px 8px;
     border-radius: var(--radius-sm);
     line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
-  .close:hover { background: var(--surface-hover); color: var(--text); }
+  .icon-btn:hover { background: var(--surface-hover); color: var(--text); }
   .drawer-body {
     flex: 1;
     overflow-y: auto;
