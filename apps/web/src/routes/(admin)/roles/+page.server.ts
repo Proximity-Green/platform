@@ -1,20 +1,11 @@
 import { fail } from '@sveltejs/kit'
-import { supabase, requirePermission, getUserIdFromRequest } from '$lib/services/permissions.service'
+import { requirePermission, getUserIdFromRequest } from '$lib/services/permissions.service'
+import * as rolesService from '$lib/services/roles.service'
 
 export const load = async ({ cookies, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)
   if (userId) await requirePermission(userId, 'roles', 'read')
-
-  const { data: roles } = await supabase.from('roles').select('*').order('name')
-  const { data: permissions } = await supabase.from('permissions').select('*, roles(name)')
-  const { data: userRoles } = await supabase.from('user_roles').select('role_id')
-
-  const roleCounts: Record<string, number> = {}
-  userRoles?.forEach((ur: any) => {
-    roleCounts[ur.role_id] = (roleCounts[ur.role_id] || 0) + 1
-  })
-
-  return { roles: roles ?? [], permissions: permissions ?? [], roleCounts }
+  return await rolesService.listRolesWithCounts()
 }
 
 export const actions = {
@@ -23,12 +14,12 @@ export const actions = {
     if (userId) await requirePermission(userId, 'roles', 'manage')
 
     const data = await request.formData()
-    const { error } = await supabase.from('roles').insert({
-      name: data.get('name'),
-      description: data.get('description')
-    })
-    if (error) return fail(400, { error: error.message })
-    return { success: true, message: 'Role created' }
+    const result = await rolesService.createRole(
+      data.get('name') as string,
+      data.get('description') as string
+    )
+    if (!result.ok) return fail(400, { error: result.error })
+    return { success: true, message: result.message }
   },
 
   deleteRole: async ({ request, cookies, locals }) => {
@@ -36,9 +27,9 @@ export const actions = {
     if (userId) await requirePermission(userId, 'roles', 'manage')
 
     const data = await request.formData()
-    const { error } = await supabase.from('roles').delete().eq('id', data.get('id'))
-    if (error) return fail(400, { error: error.message })
-    return { success: true, message: 'Role deleted' }
+    const result = await rolesService.deleteRole(data.get('id') as string)
+    if (!result.ok) return fail(400, { error: result.error })
+    return { success: true, message: result.message }
   },
 
   addPermission: async ({ request, cookies, locals }) => {
@@ -46,13 +37,13 @@ export const actions = {
     if (userId) await requirePermission(userId, 'roles', 'manage')
 
     const data = await request.formData()
-    const { error } = await supabase.from('permissions').insert({
-      role_id: data.get('role_id'),
-      resource: data.get('resource'),
-      action: data.get('action')
-    })
-    if (error) return fail(400, { error: error.message })
-    return { success: true, message: 'Permission added' }
+    const result = await rolesService.addPermission(
+      data.get('role_id') as string,
+      data.get('resource') as string,
+      data.get('action') as string
+    )
+    if (!result.ok) return fail(400, { error: result.error })
+    return { success: true, message: result.message }
   },
 
   removePermission: async ({ request, cookies, locals }) => {
@@ -60,8 +51,8 @@ export const actions = {
     if (userId) await requirePermission(userId, 'roles', 'manage')
 
     const data = await request.formData()
-    const { error } = await supabase.from('permissions').delete().eq('id', data.get('id'))
-    if (error) return fail(400, { error: error.message })
-    return { success: true, message: 'Permission removed' }
+    const result = await rolesService.removePermission(data.get('id') as string)
+    if (!result.ok) return fail(400, { error: result.error })
+    return { success: true, message: result.message }
   }
 }
