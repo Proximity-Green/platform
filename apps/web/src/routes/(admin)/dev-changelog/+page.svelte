@@ -1,38 +1,70 @@
 <script lang="ts">
+  import { PageHead } from '$lib/components/ui'
   let { data } = $props()
-
-  function renderMarkdown(md: string): string {
-    return md
-      .replace(/^### (.*$)/gm, '<h3>$1</h3>')
-      .replace(/^## (.*$)/gm, '<h2>$1</h2>')
-      .replace(/^# (.*$)/gm, '<h1>$1</h1>')
-      .replace(/^\- \*\*(.*?)\*\*:? ?(.*$)/gm, '<li><strong>$1</strong> $2</li>')
-      .replace(/^\- (.*$)/gm, '<li>$1</li>')
-      .replace(/^\d+\. (.*$)/gm, '<li>$1</li>')
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/^---$/gm, '<hr/>')
-      .replace(/\n\n/g, '<br/><br/>')
-  }
 </script>
 
-<div class="container">
-  <h1>Development Changelog</h1>
-  <div class="content">
-    {@html renderMarkdown(data.content)}
-  </div>
-</div>
+<PageHead title="Development Changelog" lede="Every session's shipped work. Edit CHANGELOG.md to update." />
+
+<article class="doc">
+  {@html data.html}
+</article>
 
 <style>
-  .container { max-width: 900px; margin: 0 auto; padding: 2rem; font-family: system-ui, sans-serif; }
-  h1 { font-size: 1.5rem; font-weight: 600; color: #0a1f0f; margin-bottom: 2rem; }
-  .content { line-height: 1.8; color: #0a1f0f; }
-  .content :global(h1) { font-size: 1.6rem; color: #2d6a35; margin: 2rem 0 1rem; border-bottom: 2px solid #c8deca; padding-bottom: 0.5rem; }
-  .content :global(h2) { font-size: 1.2rem; color: #2d6a35; margin: 2rem 0 0.75rem; }
-  .content :global(h3) { font-size: 1rem; color: #0a1f0f; margin: 1.5rem 0 0.5rem; }
-  .content :global(li) { margin: 0.25rem 0; padding-left: 0.5rem; font-size: 0.9rem; list-style: none; }
-  .content :global(li::before) { content: '•'; color: #2d6a35; font-weight: bold; margin-right: 0.5rem; }
-  .content :global(strong) { color: #0a1f0f; }
-  .content :global(code) { background: #e8f5ea; color: #2d6a35; padding: 1px 5px; border-radius: 3px; font-size: 0.85em; }
-  .content :global(hr) { border: none; border-top: 1px solid #c8deca; margin: 2rem 0; }
+  .doc {
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--space-6) var(--space-7);
+    box-shadow: var(--shadow-sm);
+    line-height: 1.65;
+    color: var(--text);
+    max-width: 900px;
+  }
+
+  .doc :global(h1) {
+    font-size: var(--text-2xl);
+    margin: 0 0 var(--space-4);
+    color: var(--heading-color);
+  }
+  .doc :global(h2) {
+    font-size: var(--text-lg);
+    margin: var(--space-6) 0 var(--space-3);
+    color: var(--accent);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: var(--space-2);
+  }
+  .doc :global(h3) {
+    font-size: var(--text-md);
+    margin: var(--space-5) 0 var(--space-2);
+    color: var(--heading-color);
+  }
+  .doc :global(p) { margin: 0 0 var(--space-3); }
+  .doc :global(ul), .doc :global(ol) { margin: 0 0 var(--space-3); padding-left: var(--space-5); }
+  .doc :global(li) { margin-bottom: var(--space-1); font-size: var(--text-sm); }
+  .doc :global(strong) { color: var(--text); font-weight: var(--weight-semibold); }
+  .doc :global(em) { font-style: italic; color: var(--text-muted); }
+  .doc :global(code) {
+    background: var(--surface-sunk, var(--surface-hover));
+    padding: 1px 6px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    color: var(--accent);
+  }
+  .doc :global(pre) {
+    background: var(--surface-sunk, var(--surface-hover));
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    overflow-x: auto;
+    margin: 0 0 var(--space-4);
+    font-size: var(--text-sm);
+  }
+  .doc :global(pre code) { background: none; padding: 0; color: var(--text); }
+  .doc :global(hr) {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: var(--space-6) 0;
+  }
+  .doc :global(a) { color: var(--accent); text-decoration: underline; }
 </style>

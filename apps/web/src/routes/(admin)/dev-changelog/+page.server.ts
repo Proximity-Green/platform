@@ -1,24 +1,25 @@
 import { requirePermission, getUserIdFromRequest } from '$lib/services/permissions.service'
-import fs from 'fs'
-import path from 'path'
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
+import { marked } from 'marked'
 
 export const load = async ({ cookies, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)
   if (userId) await requirePermission(userId, 'settings', 'read')
 
-  // Read CHANGELOG.md from repo root
-  let content = ''
-  try {
-    // In production build, the file is at the project root
-    const filePath = path.resolve('CHANGELOG.md')
-    content = fs.readFileSync(filePath, 'utf-8')
-  } catch {
+  const candidates = [
+    resolve(process.cwd(), 'CHANGELOG.md'),
+    resolve(process.cwd(), '../../CHANGELOG.md')
+  ]
+
+  let md = '# No changelog found'
+  for (const p of candidates) {
     try {
-      content = fs.readFileSync(path.resolve('../../CHANGELOG.md'), 'utf-8')
-    } catch {
-      content = '# No changelog found'
-    }
+      md = await readFile(p, 'utf8')
+      break
+    } catch {}
   }
 
-  return { content }
+  const html = await marked.parse(md, { gfm: true })
+  return { html }
 }

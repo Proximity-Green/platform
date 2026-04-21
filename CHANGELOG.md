@@ -1,5 +1,61 @@
 # Proximity Green — Development Changelog
 
+## Session 5 — 2026-04-20 / 2026-04-21
+
+### Shared UI primitives — keyboard-first everywhere
+- New primitives exported from `lib/components/ui/`: `Prompt`, `Select`, `SubmitButton`
+- **DataTable** overhaul — arrow-key row nav across pages, Cmd+Enter activate, type-to-jump (`h` jumps to first row starting with "h"), multi-term search ("mark seftel" now matches), drag-resize columns (saved per user), full-screen toggle that portals to `document.body` (no stacking-context clashes)
+- **DataTable** expandable rows — `→` expands, `←` collapses; on pages without expand, `→` opens the Edit drawer
+- **Drawer** — focus trap, autofocus first field, Tab wraps, full-screen toggle, portals to body
+- **SubmitButton** — hides sibling actions while a submission is in flight
+
+### Roles page — expandable view
+- Rows click-to-expand: shows permissions + assigned users in-place
+- Inline "Add Permission" form (stays open after submit)
+- Hover-reveal × to detach a user from a role
+- Edit role (name + description) via Drawer; system roles have read-only names
+- Permissions dropdowns widened (Resource 180px / Action 140px) and alphabetised
+
+### Change Log page — rebuilt on shared primitives
+- Refactored off hand-rolled table onto `DataTable` with filter chips (All/Insert/Update/Delete/Restore), sort, adaptive pagination, multi-term search, CSV export, full-screen
+- Action badges via `<Badge>` (success/info/danger/warning tones)
+- Expandable row shows field-by-field diff (old → new) with a **Restore to this version** button on UPDATE rows
+- **RESTORE entries render distinctly** from UPDATE (orange ↩ arrow, explanatory header, warning-tone value) — no more look-alike rows
+- Timestamps always show `HH:MM:SS.mmm` (millisecond precision) — ordering and debugging now unambiguous
+- Columns: `changed_by_email` (was raw UUID), sortable / searchable
+
+### Restore single-row fix (DB)
+- Migration `011_restore_rpc.sql` — new `restore_record()` RPC runs the snapshot + UPDATE + RESTORE-row insert in one transaction, with a session-local `app.suppress_audit` flag the trigger honours
+- Result: one user action → one `RESTORE` row (previously got `RESTORE` + duplicate `UPDATE`)
+- Locked in as the canonical pattern for any multi-step audit-aware write
+
+### Persons — WSM-critical fields migrated
+- Migration `012_persons_wsm_fields.sql` adds: `id_number`, `wsm_id`, `organisation_id`, `department`, `status` (active/inactive/offboarded), `started_at`, `onboarded_at`, `offboarded_at`, `external_accounting_customer_id`
+- Edit Member drawer restructured into four sections: **Identity / Affiliation / Lifecycle / Finance** with Select dropdowns (org, status) and native date pickers
+- Provider-agnostic naming: `external_accounting_customer_id` (not `xero_id`) so the column survives an accounting-tool swap
+- `membership_id` / `home_location_id` intentionally **not** migrated — they come from the licence now, not from the person
+
+### Members page polish
+- Actions reordered: `Invite | Edit | Delete`
+- Cmd+Enter opens Edit drawer; Tab cycles trapped inside
+- Column widths configurable + saved to user preferences (jsonb blob)
+- URL reflects per-user size preference (`?size=100` when set)
+
+### Architecture docs
+- New `docs/ARCHITECTURE.md` — stack, repo layout, data flow, audit pipeline, UI primitives, auth, deployment
+- New `docs/CONVENTIONS.md` — naming rules (snake_case, `<verb>_at` timestamps, no `_date`, provider-agnostic external IDs, `<entity>_id` FKs), service-layer shape, UI primitive rule, migration discipline, things-to-avoid list
+- In-app **Docs** page at `/docs` renders the markdown live (server reads files per request, `marked` renders); sidebar link added
+- Rule: architecture/convention changes must update these docs in the **same commit** going forward
+
+### Commits
+- `a87411b` feat: changelog refactor, persons WSM fields, in-app docs
+- `676f8b1` feat: full-screen toggle on Drawer and DataTable
+- `62ad36e` feat: widen roles page Select dropdowns, sort permissions
+- `d8460cb` feat: keyboard-first tables, expandable Roles page, column resize
+- `53a0bcd` feat: shared UI primitives + keyboard-first Members page
+
+---
+
 ## Session 4 — 2026-04-19, 14:00–15:40
 
 ### Single Welcome Email with Invite Link
