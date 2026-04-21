@@ -2,20 +2,10 @@ import { fail } from '@sveltejs/kit'
 import { requirePermission, getUserIdFromRequest } from '$lib/services/permissions.service'
 import * as changeLogService from '$lib/services/change-log.service'
 
-export const load = async ({ cookies, url, locals }) => {
+export const load = async ({ cookies, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)
   if (userId) await requirePermission(userId, 'audit_log', 'read')
-
-  const page = parseInt(url.searchParams.get('page') ?? '0')
-  const filterTable = url.searchParams.get('table') ?? ''
-  const filterAction = url.searchParams.get('action') ?? ''
-  const pageSize = 50
-
-  const { entries, total, tables, actions } = await changeLogService.listWithFilters({
-    page, pageSize, filterTable, filterAction
-  })
-
-  return { entries, total, page, pageSize, tables, actions, filterTable, filterAction }
+  return await changeLogService.listAll()
 }
 
 export const actions = {

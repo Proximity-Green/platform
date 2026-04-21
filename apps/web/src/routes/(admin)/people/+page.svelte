@@ -10,6 +10,7 @@
     FormCard,
     FieldGrid,
     Field,
+    Select,
     Copyable,
     SubmitButton
   } from '$lib/components/ui'
@@ -24,6 +25,25 @@
     job_title: string | null
     user_id: string | null
     created_at: string
+    id_number: string | null
+    wsm_id: string | null
+    organisation_id: string | null
+    department: string | null
+    status: 'active' | 'inactive' | 'offboarded'
+    started_at: string | null
+    onboarded_at: string | null
+    offboarded_at: string | null
+    external_accounting_customer_id: string | null
+  }
+
+  function toDateInput(v: string | null): string {
+    if (!v) return ''
+    const d = new Date(v)
+    if (isNaN(d.getTime())) return ''
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
   }
 
   let { data, form } = $props()
@@ -202,12 +222,59 @@
     >
       <input type="hidden" name="id" value={editing.id} />
       <input type="hidden" name="email" value={editing.email} />
+
+      <h3 class="section-title">Identity</h3>
       <FieldGrid cols={2}>
         <Field name="first_name" label="First Name" value={editing.first_name} required />
         <Field name="last_name" label="Last Name" value={editing.last_name} required />
         <Field name="email_display" label="Email (read-only)" type="email" value={editing.email} readonly />
         <Field name="phone" label="Phone" value={editing.phone ?? ''} />
-        <Field name="job_title" label="Job Title" value={editing.job_title ?? ''} full />
+        <Field name="id_number" label="ID Number" value={editing.id_number ?? ''} />
+        {#if editing.wsm_id}
+          <Field name="wsm_id_display" label="WSM ID (read-only)" value={editing.wsm_id} readonly />
+        {/if}
+      </FieldGrid>
+
+      <h3 class="section-title">Affiliation</h3>
+      <FieldGrid cols={2}>
+        <Field name="job_title" label="Job Title" value={editing.job_title ?? ''} />
+        <Field name="department" label="Department" value={editing.department ?? ''} />
+        <Field label="Organisation">
+          <Select
+            name="organisation_id"
+            value={editing.organisation_id ?? ''}
+            placeholder="None"
+            options={[{ value: '', label: 'None' }, ...data.organisations.map((o: any) => ({ value: o.id, label: o.name }))]}
+          />
+        </Field>
+      </FieldGrid>
+
+      <h3 class="section-title">Lifecycle</h3>
+      <FieldGrid cols={2}>
+        <Field label="Status">
+          <Select
+            name="status"
+            value={editing.status ?? 'inactive'}
+            options={[
+              { value: 'active', label: 'Active' },
+              { value: 'inactive', label: 'Inactive' },
+              { value: 'offboarded', label: 'Offboarded' }
+            ]}
+          />
+        </Field>
+        <Field name="started_at" label="Started" type="date" value={toDateInput(editing.started_at)} />
+        <Field name="onboarded_at" label="Onboarded" type="date" value={toDateInput(editing.onboarded_at)} />
+        <Field name="offboarded_at" label="Offboarded" type="date" value={toDateInput(editing.offboarded_at)} />
+      </FieldGrid>
+
+      <h3 class="section-title">Finance</h3>
+      <FieldGrid cols={1}>
+        <Field
+          name="external_accounting_customer_id"
+          label="External Accounting Customer ID"
+          value={editing.external_accounting_customer_id ?? ''}
+          placeholder="e.g. Xero contact id"
+        />
       </FieldGrid>
     </form>
   {/if}
@@ -243,6 +310,16 @@
   .date-time { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-subtle); }
 
   .action-primary { margin-right: auto; }
+
+  .section-title {
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-wide, 0.08em);
+    text-transform: uppercase;
+    color: var(--label-color);
+    margin: var(--space-4) 0 var(--space-2);
+  }
+  .section-title:first-of-type { margin-top: 0; }
 
   @media (max-width: 640px) { .hide-sm { display: none; } }
   @media (max-width: 900px) { .hide-md { display: none; } }

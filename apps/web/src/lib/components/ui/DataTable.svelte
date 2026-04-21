@@ -238,6 +238,20 @@
         e.preventDefault()
         onActivate(paged[selectedIndex])
       }
+    } else if (e.key === 'ArrowRight' && paged[selectedIndex]) {
+      const row = paged[selectedIndex]
+      if (onRowClick && isExpandedRow) {
+        if (!isExpandedRow(row)) { e.preventDefault(); onRowClick(row) }
+      } else if (onActivate) {
+        e.preventDefault()
+        onActivate(row)
+      }
+    } else if (e.key === 'ArrowLeft' && onRowClick && isExpandedRow && paged[selectedIndex]) {
+      const row = paged[selectedIndex]
+      if (isExpandedRow(row)) {
+        e.preventDefault()
+        onRowClick(row)
+      }
     } else if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key.length === 1 && /\S/.test(e.key)) {
       e.preventDefault()
       handleTypeAhead(e.key.toLowerCase())

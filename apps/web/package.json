@@ -25,6 +25,7 @@
 		"@supabase/ssr": "^0.10.2",
 		"@supabase/supabase-js": "^2.103.3",
 		"@sveltejs/adapter-node": "^5.5.4",
-		"@trigger.dev/sdk": "^4.4.4"
+		"@trigger.dev/sdk": "^4.4.4",
+		"marked": "^18.0.2"
 	}
 }

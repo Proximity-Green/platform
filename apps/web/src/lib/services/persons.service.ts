@@ -14,6 +14,14 @@ export type PersonInput = {
   email?: string
   phone?: string
   job_title?: string
+  id_number?: string | null
+  organisation_id?: string | null
+  department?: string | null
+  status?: 'active' | 'inactive' | 'offboarded'
+  started_at?: string | null
+  onboarded_at?: string | null
+  offboarded_at?: string | null
+  external_accounting_customer_id?: string | null
 }
 
 export type ServiceResult = { ok: true } | { ok: false; error: string }

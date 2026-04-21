@@ -69,7 +69,8 @@
     { href: '/roles',         label: 'Roles',         guard: 'roles' },
     { href: '/messages',      label: 'Messages',      guard: 'settings' },
     { href: '/changelog',     label: 'Change Log',    guard: 'audit_log' },
-    { href: '/system-logs',   label: 'System Logs',   guard: 'system_logs' }
+    { href: '/system-logs',   label: 'System Logs',   guard: 'system_logs' },
+    { href: '/docs',          label: 'Docs' }
   ]
 </script>
 

@@ -1,6 +1,6 @@
 <script lang="ts">
   type Props = {
-    name: string
+    name?: string
     label: string
     type?: string
     value?: string
