@@ -107,7 +107,13 @@
 
   const ts = createTableState({ table })
 
-  let fullscreen = $state(false)
+  type ViewMode = 'normal' | 'wide' | 'fullscreen'
+  let viewMode = $state<ViewMode>('normal')
+  const viewExpanded = $derived(viewMode !== 'normal')
+  const fullscreen = $derived(viewMode === 'fullscreen')
+  function cycleViewMode() {
+    viewMode = viewMode === 'normal' ? 'wide' : viewMode === 'wide' ? 'fullscreen' : 'normal'
+  }
   const p = $derived(ts.params)
 
   function fsPortal(node: HTMLElement, active: boolean) {
@@ -318,8 +324,8 @@
   }
 </script>
 
-<div class="dt-root" class:dt-fullscreen={fullscreen} use:fsPortal={fullscreen}>
-{#if fullscreen && (title || pageActions)}
+<div class="dt-root" class:dt-wide={viewMode === 'wide'} class:dt-fullscreen={fullscreen} use:fsPortal={viewExpanded}>
+{#if viewExpanded && (title || pageActions)}
   <div class="fs-header">
     <div class="fs-header-text">
       {#if title}<h1>{title}</h1>{/if}
@@ -353,13 +359,17 @@
   <button
     class="fs-btn"
     type="button"
-    onclick={() => fullscreen = !fullscreen}
-    aria-label={fullscreen ? 'Exit full screen' : 'Full screen'}
-    title={fullscreen ? 'Exit full screen' : 'Full screen'}
+    onclick={cycleViewMode}
+    aria-label={viewMode === 'normal' ? 'Expand to wide' : viewMode === 'wide' ? 'Expand to full screen' : 'Collapse'}
+    title={viewMode === 'normal' ? 'Wide' : viewMode === 'wide' ? 'Full screen' : 'Collapse'}
   >
-    {#if fullscreen}
+    {#if viewMode === 'fullscreen'}
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
         <path d="M8 2v4h4M6 12V8H2M8 6l5-5M1 13l5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    {:else if viewMode === 'wide'}
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+        <path d="M1 7h12M4 4L1 7l3 3M10 4l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     {:else}
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
@@ -519,6 +529,21 @@
     background: var(--surface);
     padding: var(--space-4) var(--space-5);
     overflow: auto;
+  }
+  :global(.dt-root.dt-wide) {
+    position: fixed;
+    top: var(--space-4);
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(calc(100vw - var(--space-8)), 2400px);
+    max-height: calc(100vh - var(--space-8));
+    z-index: 9999;
+    background: var(--surface);
+    padding: var(--space-4) var(--space-5);
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
   }
   .fs-header {
     display: flex;

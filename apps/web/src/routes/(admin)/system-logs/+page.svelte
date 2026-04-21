@@ -1,187 +1,210 @@
 <script lang="ts">
+  import { PageHead, Badge, KpiCard, DataTable } from '$lib/components/ui'
+  import type { Column, Filter } from '$lib/components/ui/DataTable.svelte'
+
+  type Entry = {
+    id: string
+    level: 'success' | 'info' | 'warning' | 'error'
+    category: string
+    message: string
+    created_by: string | null
+    created_by_email: string
+    details: Record<string, any> | null
+    created_at: string
+  }
+
   let { data } = $props()
-
-  const levelColors: Record<string, string> = {
-    success: 'lvl-success',
-    info: 'lvl-info',
-    warning: 'lvl-warning',
-    error: 'lvl-error'
-  }
-
-  const categoryIcons: Record<string, string> = {
-    email: 'email',
-    auth: 'auth',
-    system: 'system',
-    import: 'import',
-    integration: 'integration',
-    billing: 'billing'
-  }
-
-  function timeAgo(date: string): string {
-    const diff = Date.now() - new Date(date).getTime()
-    const mins = Math.floor(diff / 60000)
-    if (mins < 1) return 'just now'
-    if (mins < 60) return `${mins}m ago`
-    const hrs = Math.floor(mins / 60)
-    if (hrs < 24) return `${hrs}h ago`
-    const days = Math.floor(hrs / 24)
-    if (days < 30) return `${days}d ago`
-    return new Date(date).toLocaleDateString()
-  }
-
   let expandedId = $state<string | null>(null)
+
+  const levelTone: Record<string, 'success' | 'info' | 'warning' | 'danger' | 'default'> = {
+    success: 'success',
+    info: 'info',
+    warning: 'warning',
+    error: 'danger'
+  }
+
+  const sourceTone: Record<string, 'success' | 'info' | 'warning' | 'default'> = {
+    trigger: 'info',
+    mailgun: 'warning',
+    supabase: 'info',
+    app: 'success'
+  }
+
+  function statusTone(status: string): 'success' | 'info' | 'danger' | 'default' {
+    if (status === 'delivered') return 'success'
+    if (status === 'accepted' || status === 'triggered') return 'info'
+    if (status === 'failed' || status === 'bounced' || status === 'rejected') return 'danger'
+    return 'default'
+  }
+
+  function formatTimeMs(iso: string): string {
+    const d = new Date(iso)
+    const hh = String(d.getHours()).padStart(2, '0')
+    const mm = String(d.getMinutes()).padStart(2, '0')
+    const ss = String(d.getSeconds()).padStart(2, '0')
+    return `${hh}:${mm}:${ss}`
+  }
+
+  const columns: Column<Entry>[] = [
+    { key: 'level', label: 'Level', sortable: true, width: '8%' },
+    { key: 'category', label: 'Category', sortable: true, width: '10%' },
+    { key: 'message', label: 'Message', width: '42%' },
+    { key: 'created_by_email', label: 'User', sortable: true, width: '18%', muted: true },
+    { key: 'created_at', label: 'When', sortable: true, width: '14%', date: true }
+  ]
+
+  const filters: Filter<Entry>[] = [
+    { key: 'all', label: 'All' },
+    { key: 'errors', label: 'Errors', test: e => e.level === 'error' },
+    { key: 'warnings', label: 'Warnings', test: e => e.level === 'warning' },
+    { key: 'info', label: 'Info', test: e => e.level === 'info' },
+    { key: 'success', label: 'Success', test: e => e.level === 'success' }
+  ]
 </script>
 
-<div class="container">
-  <header>
-    <div>
-      <h1>System Logs</h1>
-      <p class="subtitle">{data.total} entries</p>
-    </div>
-  </header>
+<PageHead title="System Logs" lede="Every side-effect: emails sent, auth events, background jobs. Click a row for details." />
 
-  <div class="stats">
-    <div class="stat"><span class="stat-num">{data.counts.total}</span><span class="stat-label">Total</span></div>
-    <div class="stat"><span class="stat-num email">{data.counts.email}</span><span class="stat-label">Email</span></div>
-    <div class="stat"><span class="stat-num auth">{data.counts.auth}</span><span class="stat-label">Auth</span></div>
-    <div class="stat"><span class="stat-num system">{data.counts.system}</span><span class="stat-label">System</span></div>
-    <div class="stat"><span class="stat-num warning">{data.counts.warning}</span><span class="stat-label">Warnings</span></div>
-    <div class="stat"><span class="stat-num error">{data.counts.error}</span><span class="stat-label">Errors</span></div>
-  </div>
-
-  <div class="filters">
-    <form method="GET" class="filter-form">
-      <select name="category" onchange={(e) => e.currentTarget.form?.submit()}>
-        <option value="">All categories</option>
-        <option value="email" selected={data.filterCategory === 'email'}>Email</option>
-        <option value="auth" selected={data.filterCategory === 'auth'}>Auth</option>
-        <option value="system" selected={data.filterCategory === 'system'}>System</option>
-        <option value="import" selected={data.filterCategory === 'import'}>Import</option>
-        <option value="integration" selected={data.filterCategory === 'integration'}>Integration</option>
-        <option value="billing" selected={data.filterCategory === 'billing'}>Billing</option>
-      </select>
-      <select name="level" onchange={(e) => e.currentTarget.form?.submit()}>
-        <option value="">All levels</option>
-        <option value="success" selected={data.filterLevel === 'success'}>Success</option>
-        <option value="info" selected={data.filterLevel === 'info'}>Info</option>
-        <option value="warning" selected={data.filterLevel === 'warning'}>Warning</option>
-        <option value="error" selected={data.filterLevel === 'error'}>Error</option>
-      </select>
-      {#if data.filterCategory || data.filterLevel}
-        <a href="/system-logs" class="clear">Clear</a>
-      {/if}
-    </form>
-  </div>
-
-  <div class="log-list">
-    {#each data.entries as entry (entry.id)}
-      <div class="log-entry" onclick={() => expandedId = expandedId === entry.id ? null : entry.id}>
-        <div class="log-main">
-          <span class="level-dot {levelColors[entry.level]}"></span>
-          <span class="category-badge">{entry.category}</span>
-          {#if entry.details?.source}
-            <span class="source-badge" class:src-trigger={entry.details.source === 'trigger'} class:src-mailgun={entry.details.source === 'mailgun'} class:src-supabase={entry.details.source === 'supabase'} class:src-app={entry.details.source === 'app'}>{entry.details.source}</span>
-          {/if}
-          {#if entry.details?.via}
-            <span class="via-label">via</span>
-            <span class="source-badge" class:src-trigger={entry.details.via === 'trigger'} class:src-mailgun={entry.details.via === 'mailgun'} class:src-supabase={entry.details.via === 'supabase'} class:src-app={entry.details.via === 'app'}>{entry.details.via}</span>
-          {/if}
-          {#if entry.details?.mailgun_status}
-            <span class="status-tag" class:tag-delivered={entry.details.mailgun_status === 'delivered'} class:tag-accepted={entry.details.mailgun_status === 'accepted'} class:tag-failed={entry.details.mailgun_status === 'failed' || entry.details.mailgun_status === 'bounced'}>{entry.details.mailgun_status}</span>
-          {/if}
-          {#if entry.details?.trigger_status}
-            <span class="status-tag tag-accepted">{entry.details.trigger_status}</span>
-          {/if}
-          <span class="log-message">{entry.message}</span>
-          <span class="log-user">{entry.created_by_email}</span>
-          <span class="log-time" title={new Date(entry.created_at).toLocaleString()}>{timeAgo(entry.created_at)}</span>
-        </div>
-        {#if expandedId === entry.id && entry.details}
-          <div class="log-details">
-            {#each Object.entries(entry.details) as [key, val]}
-              <div class="detail-row">
-                <span class="detail-key">{key}:</span>
-                {#if typeof val === 'string' && val.startsWith('http')}
-                  <a href={val} target="_blank" class="detail-link">{val}</a>
-                {:else if key === 'mailgun_status' || key === 'trigger_status'}
-                  <span class="status-tag" class:tag-delivered={val === 'delivered'} class:tag-accepted={val === 'accepted' || val === 'triggered'} class:tag-failed={val === 'failed' || val === 'bounced' || val === 'rejected'}>{val}</span>
-                {:else}
-                  <span class="detail-val">{val}</span>
-                {/if}
-              </div>
-            {/each}
-          </div>
-        {/if}
-      </div>
-    {:else}
-      <div class="empty">No system logs yet. Actions like invites, revocations, and emails will appear here.</div>
-    {/each}
-  </div>
-
-  {#if data.total > data.pageSize}
-    <div class="pagination">
-      <span>Page {data.page + 1} of {Math.ceil(data.total / data.pageSize)}</span>
-      <div class="page-btns">
-        {#if data.page > 0}
-          <a href="/system-logs?page={data.page - 1}&category={data.filterCategory}&level={data.filterLevel}">Prev</a>
-        {/if}
-        {#if (data.page + 1) * data.pageSize < data.total}
-          <a href="/system-logs?page={data.page + 1}&category={data.filterCategory}&level={data.filterLevel}">Next</a>
-        {/if}
-      </div>
-    </div>
-  {/if}
+<div class="kpis">
+  <KpiCard label="Total" value={data.counts.total} />
+  <KpiCard label="Email" value={data.counts.email} />
+  <KpiCard label="Auth" value={data.counts.auth} />
+  <KpiCard label="System" value={data.counts.system} />
+  <KpiCard label="Warnings" value={data.counts.warning} tone="warning" />
+  <KpiCard label="Errors" value={data.counts.error} tone="danger" />
 </div>
 
+<DataTable
+  data={data.entries as Entry[]}
+  {columns}
+  {filters}
+  table="system-logs"
+  title="System Logs"
+  lede="Every side-effect: emails sent, auth events, background jobs."
+  searchFields={['message', 'category', 'level', 'created_by_email']}
+  searchPlaceholder="Search message, category, user…"
+  csvFilename="system-logs"
+  empty="No system logs yet."
+  isExpandedRow={(e) => e.id === expandedId}
+  isActiveRow={(e) => e.id === expandedId}
+  onActivate={(e) => expandedId = expandedId === e.id ? null : e.id}
+  onRowClick={(e) => expandedId = expandedId === e.id ? null : e.id}
+>
+  {#snippet row(entry)}
+    <td><Badge tone={levelTone[entry.level] ?? 'default'}>{entry.level}</Badge></td>
+    <td><span class="cat-chip">{entry.category}</span></td>
+    <td>
+      <div class="message-cell">
+        {#if entry.details?.source}
+          <Badge tone={sourceTone[entry.details.source] ?? 'default'}>{entry.details.source}</Badge>
+        {/if}
+        {#if entry.details?.via}
+          <span class="via">via</span>
+          <Badge tone={sourceTone[entry.details.via] ?? 'default'}>{entry.details.via}</Badge>
+        {/if}
+        {#if entry.details?.mailgun_status}
+          <Badge tone={statusTone(entry.details.mailgun_status)}>{entry.details.mailgun_status}</Badge>
+        {/if}
+        {#if entry.details?.trigger_status}
+          <Badge tone={statusTone(entry.details.trigger_status)}>{entry.details.trigger_status}</Badge>
+        {/if}
+        <span class="message">{entry.message}</span>
+      </div>
+    </td>
+    <td class="muted mono">{entry.created_by_email}</td>
+    <td class="date">
+      <div>{new Date(entry.created_at).toLocaleDateString()}</div>
+      <div class="date-time">{formatTimeMs(entry.created_at)}</div>
+    </td>
+  {/snippet}
+
+  {#snippet expanded(entry)}
+    <div class="details">
+      {#if entry.details}
+        {#each Object.entries(entry.details) as [key, val]}
+          <div class="detail-row">
+            <span class="detail-key">{key}</span>
+            {#if typeof val === 'string' && val.startsWith('http')}
+              <a href={val} target="_blank" rel="noopener" class="detail-link">{val}</a>
+            {:else if key === 'mailgun_status' || key === 'trigger_status'}
+              <Badge tone={statusTone(String(val))}>{val}</Badge>
+            {:else}
+              <span class="detail-val">{typeof val === 'object' ? JSON.stringify(val) : val}</span>
+            {/if}
+          </div>
+        {/each}
+      {:else}
+        <p class="no-details">No additional details.</p>
+      {/if}
+    </div>
+  {/snippet}
+</DataTable>
+
 <style>
-  .container { max-width: 1100px; margin: 0 auto; padding: 2rem; font-family: system-ui, sans-serif; }
-  header { margin-bottom: 1.5rem; }
-  h1 { font-size: 1.5rem; font-weight: 600; color: #0a1f0f; margin: 0; }
-  .subtitle { font-size: 0.85rem; color: #5a7060; margin: 0.25rem 0 0; }
-  .stats { display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
-  .stat { background: white; border: 1px solid #c8deca; border-radius: 8px; padding: 0.75rem 1.25rem; text-align: center; min-width: 80px; }
-  .stat-num { display: block; font-size: 1.5rem; font-weight: 700; color: #0a1f0f; }
-  .stat-num.email { color: #3a5fc8; }
-  .stat-num.auth { color: #6d3fc8; }
-  .stat-num.system { color: #2d6a35; }
-  .stat-num.warning { color: #c8832a; }
-  .stat-num.error { color: #c0392b; }
-  .stat-label { font-size: 0.7rem; color: #5a7060; text-transform: uppercase; letter-spacing: 0.5px; }
-  .filters { margin-bottom: 1rem; }
-  .filter-form { display: flex; gap: 0.5rem; align-items: center; }
-  .filter-form select { padding: 0.4rem 0.75rem; border: 1px solid #c8deca; border-radius: 4px; font-size: 0.85rem; background: white; }
-  .clear { font-size: 0.8rem; color: #5a7060; }
-  .log-list { display: flex; flex-direction: column; gap: 2px; }
-  .log-entry { background: white; border: 1px solid #e8f5ea; border-radius: 6px; cursor: pointer; }
-  .log-entry:hover { border-color: #c8deca; }
-  .log-main { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; font-size: 0.85rem; }
-  .level-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-  .lvl-success { background: #2d6a35; }
-  .lvl-info { background: #3a5fc8; }
-  .lvl-warning { background: #c8832a; }
-  .lvl-error { background: #c0392b; }
-  .category-badge { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; background: #f7f4ee; color: #5a7060; padding: 2px 6px; border-radius: 3px; flex-shrink: 0; }
-  .source-badge { font-size: 0.6rem; font-weight: 600; text-transform: uppercase; padding: 1px 5px; border-radius: 3px; flex-shrink: 0; }
-  .src-trigger { background: #f0ebfd; color: #6d3fc8; }
-  .src-mailgun { background: #fdf3e3; color: #c8832a; }
-  .src-supabase { background: #e8f0fd; color: #3a5fc8; }
-  .src-app { background: #e8f5ea; color: #2d6a35; }
-  .via-label { font-size: 0.55rem; color: #5a7060; }
-  .log-message { flex: 1; color: #0a1f0f; }
-  .log-user { font-size: 0.75rem; color: #5a7060; flex-shrink: 0; }
-  .log-time { font-size: 0.75rem; color: #5a7060; flex-shrink: 0; min-width: 60px; text-align: right; }
-  .log-details { padding: 0.5rem 1rem 0.75rem 2.5rem; background: #fafcfa; border-top: 1px solid #e8f5ea; }
-  .detail-row { font-size: 0.8rem; display: flex; gap: 0.5rem; padding: 0.15rem 0; }
-  .detail-key { color: #5a7060; font-weight: 500; min-width: 100px; }
-  .detail-val { color: #0a1f0f; font-family: monospace; font-size: 0.75rem; }
-  .detail-link { color: #3a5fc8; font-family: monospace; font-size: 0.75rem; text-decoration: none; word-break: break-all; }
-  .detail-link:hover { text-decoration: underline; }
-  .status-tag { padding: 2px 8px; border-radius: 3px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
-  .tag-delivered { background: #e8f5ea; color: #2d6a35; }
-  .tag-accepted { background: #e8f0fd; color: #3a5fc8; }
-  .tag-failed { background: #fdecea; color: #c0392b; }
-  .empty { text-align: center; color: #5a7060; padding: 3rem; background: white; border: 1px solid #e8f5ea; border-radius: 6px; }
-  .pagination { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; font-size: 0.85rem; color: #5a7060; }
-  .page-btns { display: flex; gap: 0.5rem; }
-  .page-btns a { padding: 0.4rem 0.75rem; border: 1px solid #c8deca; border-radius: 4px; text-decoration: none; color: #0a1f0f; }
+  .kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: var(--space-3);
+    margin-bottom: var(--space-5);
+  }
+
+  .cat-chip {
+    font-size: var(--text-xs);
+    background: var(--surface-sunk, var(--surface-hover));
+    color: var(--text-muted);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .message-cell {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+  .message { color: var(--text); }
+  .via { font-size: var(--text-xs); color: var(--text-muted); }
+
+  .date { font-size: var(--text-sm); color: var(--text-muted); white-space: nowrap; }
+  .date-time { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-subtle); }
+
+  .details {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+  .detail-row {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-3);
+    font-size: var(--text-sm);
+  }
+  .detail-key {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    min-width: 140px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .detail-val {
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    word-break: break-all;
+  }
+  .detail-link {
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    text-decoration: underline;
+    word-break: break-all;
+  }
+  .no-details {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    margin: 0;
+  }
 </style>

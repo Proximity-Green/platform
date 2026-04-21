@@ -21,8 +21,8 @@
 <style>
   .layout {
     display: grid;
-    grid-template-columns: 200px 1fr;
-    gap: var(--space-6);
+    grid-template-columns: 160px 1fr;
+    gap: var(--space-3);
     align-items: start;
   }
   .side {
@@ -57,12 +57,13 @@
     background: var(--surface-raised);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    padding: var(--space-6) var(--space-7);
+    padding: 2.5rem 3rem;
     box-shadow: var(--shadow-sm);
     line-height: 1.6;
     color: var(--text);
-    max-width: 880px;
+    min-width: 0;
   }
+  .doc :global(> *:first-child) { margin-top: 0; }
 
   .doc :global(h1) {
     font-size: var(--text-2xl);

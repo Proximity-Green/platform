@@ -7,8 +7,12 @@
   import { Badge, Button, ModeToggle, ThemeToggle, Workshop17Logo } from '$lib/components/ui'
 
   let { children, data } = $props()
+  // Trust the server-provided session — +layout.server.ts has already gated
+  // admin routes and redirected to / if there's no session. No need to re-verify
+  // on the client (which breaks when localStorage and cookies drift — common
+  // when switching ports or clearing storage).
   let session = $state(data.session)
-  let checking = $state(true)
+  let checking = $state(false)
   let impersonating = $state<any>(null)
   let devMode = $state(false)
   let perms = $state({ role: null as string | null, permissions: [] as any, loaded: false })
@@ -16,10 +20,7 @@
   permStore.subscribe(v => { perms = v })
 
   onMount(async () => {
-    const { data: { session: s } } = await supabase.auth.getSession()
-    session = s
-    checking = false
-
+    // Session already provided by the server; don't re-fetch and overwrite it.
     const cookie = document.cookie.split(';').find(c => c.trim().startsWith('impersonating='))
     if (cookie) {
       try {
@@ -27,17 +28,21 @@
       } catch {}
     }
 
-    if (s) {
-      const permUserId = impersonating ? impersonating.targetUserId : s.user.id
+    if (session) {
+      const permUserId = impersonating ? impersonating.targetUserId : session.user.id
       await Promise.all([
         loadPermissions(permUserId),
-        loadPrefs(s.user.id)
+        loadPrefs(session.user.id)
       ])
     }
 
-    supabase.auth.onAuthStateChange((_event, s) => {
+    supabase.auth.onAuthStateChange((event, s) => {
       session = s
-      if (!s) window.location.href = '/'
+      // Only redirect on explicit sign-out — don't react to transient null sessions
+      // during token refreshes or initial hydration (which was causing flap-back-to-login)
+      if (event === 'SIGNED_OUT') {
+        window.location.href = '/'
+      }
     })
   })
 
@@ -65,6 +70,15 @@
   const navItems: NavItem[] = [
     { href: '/people',        label: 'Members',       guard: 'persons' },
     { href: '/organisations', label: 'Organisations', guard: 'organisations' },
+    { href: '/locations',     label: 'Locations',     guard: 'locations' },
+    { href: '/spaces',        label: 'Spaces',        guard: 'locations' },
+    { href: '/items',         label: 'Items',         guard: 'items' },
+    { href: '/licenses',      label: 'Licences',      guard: 'subscriptions' },
+    { href: '/subs',          label: 'Subscriptions', guard: 'subscriptions' },
+    { href: '/invoices',      label: 'Invoices',      guard: 'invoices' },
+    { href: '/contracts',     label: 'Contracts',     guard: 'contracts' },
+    { href: '/wallets',       label: 'Wallets',       guard: 'wallets' },
+    { href: '/item-types',    label: 'Item Types',    guard: 'items' },
     { href: '/users',         label: 'Users',         guard: 'users' },
     { href: '/roles',         label: 'Roles',         guard: 'roles' },
     { href: '/messages',      label: 'Messages',      guard: 'settings' },

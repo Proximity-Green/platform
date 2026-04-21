@@ -14,12 +14,12 @@
     background: var(--surface-raised);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    padding: var(--space-6) var(--space-7);
+    padding: 2.5rem 3rem;
     box-shadow: var(--shadow-sm);
     line-height: 1.65;
     color: var(--text);
-    max-width: 900px;
   }
+  .doc :global(> *:first-child) { margin-top: 0; }
 
   .doc :global(h1) {
     font-size: var(--text-2xl);

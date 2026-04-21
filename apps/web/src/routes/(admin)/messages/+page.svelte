@@ -161,7 +161,7 @@
 </div>
 
 <style>
-  .container { max-width: 1000px; margin: 0 auto; padding: 2rem; font-family: system-ui, sans-serif; }
+  .container { font-family: system-ui, sans-serif; }
   header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
   h1 { font-size: 1.5rem; font-weight: 600; color: #0a1f0f; }
   .error { background: #fdecea; color: #c0392b; padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 1rem; }

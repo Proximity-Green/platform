@@ -5,15 +5,62 @@
     width?: string
     /** If set, Cmd/Ctrl+Enter submits the form with this id */
     formId?: string
+    /** Key used to persist user-chosen width in localStorage */
+    storageKey?: string
     onClose: () => void
     children?: any
     footer?: any
   }
-  let { open, title, width = '480px', formId, onClose, children, footer }: Props = $props()
+  let {
+    open,
+    title,
+    width = '480px',
+    formId,
+    storageKey = 'drawer-width',
+    onClose,
+    children,
+    footer
+  }: Props = $props()
+
   let drawerEl: HTMLElement | undefined = $state()
   let fullscreen = $state(false)
+  let userWidth = $state<string | null>(null)
+  let resizing = $state(false)
+
+  const MIN_PX = 360
+  const MAX_VW = 95
 
   $effect(() => { if (!open) fullscreen = false })
+
+  $effect(() => {
+    if (typeof window === 'undefined') return
+    const saved = localStorage.getItem(storageKey)
+    if (saved) userWidth = saved
+  })
+
+  function startResize(e: MouseEvent) {
+    if (fullscreen) return
+    e.preventDefault()
+    resizing = true
+    const onMove = (ev: MouseEvent) => {
+      const fromRight = window.innerWidth - ev.clientX
+      const clamped = Math.max(MIN_PX, Math.min(window.innerWidth * (MAX_VW / 100), fromRight))
+      userWidth = `${Math.round(clamped)}px`
+    }
+    const onUp = () => {
+      resizing = false
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      if (userWidth) localStorage.setItem(storageKey, userWidth)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
+
+  function resetWidth() {
+    userWidth = null
+    try { localStorage.removeItem(storageKey) } catch {}
+  }
 
   function portal(node: HTMLElement) {
     document.body.appendChild(node)
@@ -63,12 +110,34 @@
       }
     }
   })
+
+  const effectiveWidth = $derived(fullscreen ? '100vw' : (userWidth ?? width))
 </script>
 
 {#if open}
   <div class="drawer-root" use:portal>
     <div class="backdrop" onclick={onClose} role="presentation"></div>
-    <aside bind:this={drawerEl} class="drawer" class:fullscreen style="width: {fullscreen ? '100vw' : width}" role="dialog" aria-modal="true" aria-label={title ?? 'Drawer'}>
+    <aside
+      bind:this={drawerEl}
+      class="drawer"
+      class:fullscreen
+      class:resizing
+      style="width: {effectiveWidth}"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title ?? 'Drawer'}
+    >
+      {#if !fullscreen}
+        <div
+          class="resize-handle"
+          onmousedown={startResize}
+          ondblclick={resetWidth}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize drawer (double-click to reset)"
+          title="Drag to resize · double-click to reset"
+        ></div>
+      {/if}
     {#if title}
       <header class="drawer-head">
         <h2>{title}</h2>
@@ -119,6 +188,26 @@
     flex-direction: column;
     animation: slideIn 220ms var(--ease-out);
   }
+  .drawer.resizing {
+    animation: none;
+    transition: none;
+    user-select: none;
+  }
+  .resize-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -3px;
+    width: 6px;
+    cursor: ew-resize;
+    z-index: 1;
+    background: transparent;
+    transition: background var(--motion-fast) var(--ease-out);
+  }
+  .resize-handle:hover,
+  .drawer.resizing .resize-handle {
+    background: var(--accent-soft);
+  }
   .drawer-head {
     display: flex;
     align-items: center;
@@ -164,5 +253,6 @@
   @keyframes slideIn { from { transform: translateX(100%) } to { transform: translateX(0) } }
   @media (max-width: 520px) {
     .drawer { width: 100% !important; }
+    .resize-handle { display: none; }
   }
 </style>

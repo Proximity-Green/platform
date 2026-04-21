@@ -5,6 +5,7 @@ import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$lib/server/env'
 export const handle: Handle = async ({ event, resolve }) => {
   const supabaseUrl = PUBLIC_SUPABASE_URL
   const supabaseAnonKey = PUBLIC_SUPABASE_ANON_KEY
+  const isHttps = event.url.protocol === 'https:'
 
   event.locals.supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
@@ -14,7 +15,7 @@ export const handle: Handle = async ({ event, resolve }) => {
           event.cookies.set(name, value, {
             ...options,
             path: '/',
-            secure: true,
+            secure: isHttps,            // only require HTTPS in production
             httpOnly: true,
             sameSite: 'lax'
           })

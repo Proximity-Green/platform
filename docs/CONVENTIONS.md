@@ -128,6 +128,8 @@ When a user action needs more than one DB write to be atomic, or needs to coordi
 - App-side events go through `lib/services/system-log.service.ts` (`log(...)`). Surfaces in `/system-logs`.
 - DB changes are auto-logged by triggers to `change_log`. Surfaces in `/changelog`.
 - For user-facing operational status (mailgun/trigger/supabase), use the source/via tags already in `system-logs`.
+- **Every server-action failure goes through `logFail` from `lib/services/action-log.service.ts`.** Never `return fail(400, { error })` directly — use `return await logFail(userId, 'items.create', err, { ...details })`. The toast surfaces the error to the user; `logFail` additionally writes to `system_logs` so the failure is discoverable after the toast disappears.
+- **Every new table gets a `changelog_<table>` trigger in the same migration that creates it.** Triggers are not automatic — the per-table `CREATE TRIGGER ... EXECUTE FUNCTION public.change_log_trigger()` must be added alongside the `CREATE TABLE`. Skip only for log/meta tables (`change_log`, `system_logs`, `audit_log`, `schema_migrations`). Migration `030_changelog_all_tables.sql` is the backstop that retroactively attaches triggers to any table that slipped through.
 
 ## Deployment
 
