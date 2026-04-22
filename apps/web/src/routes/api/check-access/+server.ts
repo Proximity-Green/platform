@@ -6,7 +6,9 @@ const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 function keyFingerprint(k: string): string {
   if (!k) return 'EMPTY'
-  return `len=${k.length} head=${k.slice(0, 12)} tail=${k.slice(-8)}`
+  const dots = (k.match(/\./g) || []).length
+  const nonPrintable = Array.from(k).filter(c => c.charCodeAt(0) < 32 || c.charCodeAt(0) > 126).length
+  return `len=${k.length} dots=${dots} nonPrintable=${nonPrintable} head=${k.slice(0, 40)} mid=${k.slice(60, 120)} tail=${k.slice(-20)}`
 }
 
 export const POST = async ({ request }) => {
