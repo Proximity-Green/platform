@@ -400,9 +400,9 @@
   --surface-tint:   #f3efe9;
   --surface-hover:  #eeeeee;   /* WSM .hover-highlight:hover */
 
-  --text:         #808285;     /* WSM @grey */
-  --text-muted:   #9a9c9f;
-  --text-subtle:  #bcbebf;
+  --text:         #474a54;     /* body — darker than WSM @grey for readability */
+  --text-muted:   #5f6670;     /* secondary text — still muted but AA-contrast */
+  --text-subtle:  #7a8189;     /* tertiary — dates, hints */
   --text-inverse: #ffffff;
 
   --border:        #dee2e6;    /* Bootstrap border used in WSM */
@@ -478,11 +478,54 @@
 }
 [data-theme='w17'] :global(table tbody td.muted),
 [data-theme='w17'] :global(table tbody td .muted) {
-  color: #808285 !important;
+  color: #5f6670 !important;
 }
 [data-theme='w17'] :global(table tbody .name) {
   color: #0c2643 !important;
   font-weight: 400 !important;
+}
+
+/* Secondary bits inside cells shouldn't be blown up to 1.35rem — they're
+   hints, chips, sub-times, badges etc. Scale them back to 0.9rem so dates and
+   pills stay readable next to the big primary row text. */
+[data-theme='w17'] :global(table tbody td) :global(.date-time),
+[data-theme='w17'] :global(table tbody td) :global(.table-chip),
+[data-theme='w17'] :global(table tbody td) :global(.badge),
+[data-theme='w17'] :global(table tbody td) :global(.chip),
+[data-theme='w17'] :global(table tbody td) :global(.small) {
+  font-size: 0.9rem !important;
+}
+[data-theme='w17'] :global(table tbody td) :global(.date-time) {
+  color: #7a8189 !important;
+}
+
+/* Badges in W17 — the soft tone backgrounds are very light cream-toned, so
+   the matching coloured text (--info / --warning / --success / --danger) ends
+   up low-contrast. Deepen the ink per tone while keeping the soft bg. */
+[data-theme='w17'] :global(.badge[data-tone='default']) {
+  color: #1c2330 !important;
+  background: #d8d3c9 !important;
+}
+[data-theme='w17'] :global(.badge[data-tone='info']) {
+  color: #2f4c7a !important;
+  background: rgba(120, 151, 205, 0.22) !important;
+}
+[data-theme='w17'] :global(.badge[data-tone='success']) {
+  color: #2f6a45 !important;
+  background: rgba(89, 163, 112, 0.22) !important;
+}
+[data-theme='w17'] :global(.badge[data-tone='warning']) {
+  color: #8a3a1f !important;
+  background: rgba(214, 102, 69, 0.22) !important;
+}
+[data-theme='w17'] :global(.badge[data-tone='danger']) {
+  color: #7a2e2e !important;
+  background: rgba(182, 77, 77, 0.22) !important;
+}
+[data-theme='w17'] :global(.badge),
+[data-theme='w17'] :global(.pill),
+[data-theme='w17'] :global(.chip) {
+  font-weight: 500 !important;
 }
 
 /* ---------- Night variant (kept for completeness, unused by default) ---------- */

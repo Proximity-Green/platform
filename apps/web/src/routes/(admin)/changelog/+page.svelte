@@ -1,5 +1,6 @@
 <script lang="ts">
   import { permStore, canDo } from '$lib/stores/permissions'
+  import { invalidateAll } from '$app/navigation'
   import {
     PageHead,
     Toast,
@@ -22,8 +23,47 @@
     created_at: string
   }
 
+  type BulkAction = {
+    id: string
+    action: string
+    performed_by: string | null
+    performed_by_email: string
+    performed_at: string
+    params: Record<string, any>
+    affected_count: number
+    notes: string | null
+    undone_at: string | null
+    undone_by: string | null
+    undone_by_email: string | null
+  }
+
   let { data, form } = $props()
   let expandedId = $state<string | null>(null)
+  let undoingId = $state<string | null>(null)
+  let undoError = $state<string | null>(null)
+  let activeTab = $state<'single' | 'bulk'>('single')
+
+  async function undoBulk(id: string) {
+    if (undoingId) return
+    undoingId = id
+    undoError = null
+    try {
+      const res = await fetch('/api/admin/bulk-undo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bulk_action_id: id })
+      })
+      if (!res.ok) {
+        const t = await res.text().catch(() => '')
+        throw new Error(t || `HTTP ${res.status}`)
+      }
+      await invalidateAll()
+    } catch (e: any) {
+      undoError = e?.message ?? String(e)
+    } finally {
+      undoingId = null
+    }
+  }
 
   let perms = $state({ role: null as string | null, permissions: [] as any, loaded: false })
   permStore.subscribe(v => { perms = v })
@@ -79,12 +119,81 @@
     { key: 'delete', label: 'Delete', test: e => e.action === 'DELETE' },
     { key: 'restore', label: 'Restore', test: e => e.action === 'RESTORE' }
   ]
+
+  const bulkColumns: Column<BulkAction>[] = [
+    { key: 'action', label: 'Action', sortable: true, width: '16%' },
+    { key: 'params', label: 'Params', width: '22%', muted: true, mono: true, ellipsis: true, get: b => JSON.stringify(b.params) },
+    { key: 'affected_count', label: 'Affected', sortable: true, width: '8%', mono: true, align: 'right' },
+    { key: 'performed_by_email', label: 'By', sortable: true, width: '18%', muted: true, ellipsis: true },
+    { key: 'performed_at', label: 'When', sortable: true, width: '12%', date: true },
+    { key: 'undone_at', label: 'Status', width: '14%', sortable: true, get: b => b.undone_at ? 'Undone' : 'Applied' }
+  ]
+
+  const bulkFilters: Filter<BulkAction>[] = [
+    { key: 'all', label: 'All' },
+    { key: 'applied', label: 'Applied', test: b => !b.undone_at },
+    { key: 'undone', label: 'Undone', test: b => !!b.undone_at }
+  ]
 </script>
 
 <PageHead title="Change Log" lede="Every database change, with who and when. Click a row to inspect field-by-field." />
 
 <Toast error={form?.error} success={form?.success} message={form?.message} />
 
+<div class="tabs-bar" role="tablist">
+  <button type="button" role="tab" class="tab" class:active={activeTab === 'single'} aria-selected={activeTab === 'single'} onclick={() => (activeTab = 'single')}>
+    Single records
+    <span class="tab-count">{data.entries?.length ?? 0}</span>
+  </button>
+  <button type="button" role="tab" class="tab" class:active={activeTab === 'bulk'} aria-selected={activeTab === 'bulk'} onclick={() => (activeTab = 'bulk')}>
+    Bulk actions
+    <span class="tab-count">{data.bulkActions?.length ?? 0}</span>
+  </button>
+</div>
+
+{#if activeTab === 'bulk'}
+  <DataTable
+    data={data.bulkActions as BulkAction[]}
+    columns={bulkColumns}
+    filters={bulkFilters}
+    table="changelog_bulk"
+    title="Bulk actions"
+    lede="Multi-record operations grouped as one user action — undo restores every affected row in one go."
+    searchFields={['action', 'performed_by_email']}
+    searchPlaceholder="Search action, user…"
+    csvFilename="bulk-actions"
+    empty="No bulk actions recorded yet."
+    actionsLabel=""
+  >
+    {#snippet row(b)}
+      <td><span class="table-chip">{b.action}</span></td>
+      <td class="muted mono ellipsis params-cell" title={JSON.stringify(b.params)}>{JSON.stringify(b.params)}</td>
+      <td class="mono align-right">{b.affected_count}</td>
+      <td class="muted mono ellipsis">{b.performed_by_email}</td>
+      <td class="date">
+        <div>{new Date(b.performed_at).toLocaleDateString()}</div>
+        <div class="date-time">{formatTimeMs(b.performed_at)}</div>
+      </td>
+      <td>
+        {#if b.undone_at}
+          <Badge tone="warning">Undone</Badge>
+          <div class="muted small" style="margin-top:2px">by {b.undone_by_email} · {formatTimeMs(b.undone_at)}</div>
+        {:else}
+          <Badge tone="success">Applied</Badge>
+        {/if}
+      </td>
+    {/snippet}
+    {#snippet actions(b)}
+      {#if !b.undone_at && can('bulk_actions', 'undo')}
+        <button type="button" class="undo-btn" onclick={() => undoBulk(b.id)} disabled={undoingId === b.id}>
+          {undoingId === b.id ? 'Undoing…' : 'Undo'}
+        </button>
+      {/if}
+    {/snippet}
+  </DataTable>
+{/if}
+
+{#if activeTab === 'single'}
 <DataTable
   data={data.entries as Entry[]}
   {columns}
@@ -190,6 +299,7 @@
     </div>
   {/snippet}
 </DataTable>
+{/if}
 
 <style>
   .record-label { font-weight: var(--weight-medium); color: var(--text); }
@@ -247,4 +357,59 @@
   }
   .restore-action { margin-top: var(--space-2); }
   .muted { color: var(--text-muted); font-size: var(--text-sm); margin: 0; }
+
+  .tabs-bar {
+    display: flex;
+    gap: 4px;
+    margin-bottom: var(--space-3);
+    border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    cursor: pointer;
+    margin-bottom: -1px;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active {
+    color: var(--text);
+    border-bottom-color: var(--accent);
+  }
+  .tab-count {
+    display: inline-flex;
+    padding: 1px 8px;
+    font-size: var(--text-xs);
+    font-weight: var(--weight-regular);
+    background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+    color: var(--text-muted);
+    border-radius: 999px;
+    font-variant-numeric: tabular-nums;
+  }
+  .tab.active .tab-count {
+    background: var(--accent);
+    color: white;
+  }
+  .empty-note { padding: 18px 0; text-align: center; }
+
+  .params-cell { font-size: var(--text-xs); }
+  .align-right { text-align: right; }
+  .undo-btn {
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font-size: var(--text-xs);
+    cursor: pointer;
+  }
+  .undo-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+  .undo-btn:disabled { opacity: 0.6; cursor: wait; }
+  .small { font-size: var(--text-xs); }
 </style>

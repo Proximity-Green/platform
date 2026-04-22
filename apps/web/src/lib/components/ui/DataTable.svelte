@@ -56,6 +56,10 @@
     onActivate?: (row: T) => void
     /** Fires when a row is clicked (not buttons or form controls inside it) */
     onRowClick?: (row: T) => void
+    /** Fires whenever the post-filter/post-search list changes. Receives the
+        full filtered list (not paginated). Useful for bulk-action toolbars
+        that need "Select found set". */
+    onFilteredChange?: (rows: T[]) => void
     /** Field used for type-to-jump (defaults to first searchField) */
     typeAheadField?: string
     /** Returns true for rows that should render their `expanded` snippet below */
@@ -86,6 +90,7 @@
     isActiveRow,
     onActivate,
     onRowClick,
+    onFilteredChange,
     typeAheadField,
     isExpandedRow,
     row,
@@ -98,11 +103,12 @@
 
   function handleRowClick(e: MouseEvent, item: T, i: number) {
     selectedIndex = i
-    if (!onRowClick) return
+    const handler = onRowClick ?? onActivate
+    if (!handler) return
     // Don't treat clicks on interactive controls as row clicks.
     const target = e.target as HTMLElement
     if (target.closest('button, a, input, select, textarea, label, .actions-col')) return
-    onRowClick(item)
+    handler(item)
   }
 
   const ts = createTableState({ table })
@@ -171,6 +177,11 @@
       }
     }
     return list
+  })
+
+  // Emit filtered list to the parent (for bulk "Select found" UIs, etc.)
+  $effect(() => {
+    if (onFilteredChange) onFilteredChange(filtered)
   })
 
   const totalPages = $derived(Math.max(1, Math.ceil(filtered.length / p.size)))
@@ -417,7 +428,7 @@
           <tr
             class:is-active={isActiveRow?.(item)}
             class:is-selected={i === selectedIndex}
-            class:clickable={!!onRowClick}
+            class:clickable={!!(onRowClick ?? onActivate)}
             onclick={(e) => handleRowClick(e, item, i)}
           >
             {#if isExpandedRow}

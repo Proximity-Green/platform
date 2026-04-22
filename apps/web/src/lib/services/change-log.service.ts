@@ -2,14 +2,51 @@ import { supabase } from '$lib/services/permissions.service'
 
 export type ServiceResult = { ok: true; message?: string } | { ok: false; error: string }
 
-export async function listAll() {
-  const { data: entries } = await supabase
-    .from('change_log')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(10000)
+function withTimeout<T>(p: PromiseLike<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    Promise.resolve(p).then(
+      (v) => { clearTimeout(t); resolve(v) },
+      (e) => { clearTimeout(t); reject(e) }
+    )
+  })
+}
 
-  const userIds = [...new Set(entries?.map(e => e.changed_by).filter(Boolean) ?? [])]
+export async function listAll() {
+  const [changeRes, bulkRes] = await Promise.allSettled([
+    // No timeout on change_log — it's the core log and can be large. The
+    // bulk_actions query has a shorter timeout because it's supplementary.
+    supabase
+      .from('change_log')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(10000),
+    withTimeout(
+      supabase
+        .from('bulk_actions')
+        .select('*')
+        .order('performed_at', { ascending: false })
+        .limit(500),
+      4000,
+      'bulk_actions'
+    )
+  ])
+
+  const entries = changeRes.status === 'fulfilled' ? (changeRes.value.data ?? []) : []
+  if (changeRes.status === 'rejected') console.warn('[change-log] change_log query failed', changeRes.reason)
+  else if (changeRes.value.error) console.warn('[change-log] change_log returned error', changeRes.value.error)
+  console.log(`[change-log] loaded ${entries.length} change_log rows`)
+
+  const bulkRows = bulkRes.status === 'fulfilled' ? (bulkRes.value.data ?? []) : []
+  if (bulkRes.status === 'rejected') console.warn('[change-log] bulk_actions query failed (migration 034 applied?)', bulkRes.reason)
+  else if (bulkRes.value.error) console.warn('[change-log] bulk_actions returned error', bulkRes.value.error)
+
+  const userIds = [
+    ...new Set([
+      ...(entries?.map(e => e.changed_by).filter(Boolean) ?? []),
+      ...(bulkRows?.flatMap(b => [b.performed_by, b.undone_by].filter(Boolean)) ?? [])
+    ])
+  ]
   const userMap: Record<string, string> = {}
   if (userIds.length > 0) {
     const { data: { users: authUsers } } = await supabase.auth.admin.listUsers({ perPage: 1000 })
@@ -22,7 +59,13 @@ export async function listAll() {
     record_label: labelFor(e)
   })) ?? []
 
-  return { entries: enriched }
+  const bulkActions = (bulkRows ?? []).map(b => ({
+    ...b,
+    performed_by_email: b.performed_by ? userMap[b.performed_by] ?? b.performed_by : 'system',
+    undone_by_email: b.undone_by ? userMap[b.undone_by] ?? b.undone_by : null
+  }))
+
+  return { entries: enriched, bulkActions }
 }
 
 function labelFor(entry: any): string {

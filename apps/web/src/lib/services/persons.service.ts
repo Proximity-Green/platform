@@ -31,7 +31,31 @@ export async function listPersons() {
     .from('persons')
     .select('*')
     .order('created_at', { ascending: false })
-  return data ?? []
+  const persons = data ?? []
+
+  // Resolve role_name per person via users.role_id → roles.name. Two lookups,
+  // joined in memory — avoids PostgREST nested-join schema-cache quirks.
+  const userIds = Array.from(new Set(persons.map((p: any) => p.user_id).filter(Boolean)))
+  if (userIds.length === 0) return persons.map((p: any) => ({ ...p, role_name: null }))
+
+  // Roles live in the user_roles junction (setUserRole writes here). One row
+  // per user for now — we pick the first if there are multiples.
+  const { data: userRoles } = await supabase
+    .from('user_roles')
+    .select('user_id, role_id, roles(name)')
+    .in('user_id', userIds)
+
+  const roleByUserId = new Map<string, string>()
+  for (const ur of (userRoles ?? [])) {
+    const uid = (ur as any).user_id as string
+    const name = (ur as any).roles?.name as string | undefined
+    if (uid && name && !roleByUserId.has(uid)) roleByUserId.set(uid, name)
+  }
+
+  return persons.map((p: any) => ({
+    ...p,
+    role_name: p.user_id ? (roleByUserId.get(p.user_id) ?? null) : null
+  }))
 }
 
 export async function createPerson(input: PersonInput): Promise<ServiceResult> {

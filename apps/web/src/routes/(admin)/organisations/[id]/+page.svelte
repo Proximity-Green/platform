@@ -82,9 +82,10 @@
     { key: 'attachments',   label: 'Attachments' },
     { key: 'members',       label: 'Members' },
     { key: 'invoices',      label: 'Invoices' },
+    { key: 'lifecycle',     label: 'Lifecycle' },
     { key: 'printing',      label: 'Printing' },
     { key: 'parking',       label: 'Parking' },
-    { key: 'crm',           label: 'CRM' }
+    { key: 'crm',           label: 'CRM ↗' }
   ] as const
 
   const activeTab = $derived(($page.url.searchParams.get('tab') ?? 'properties'))
@@ -922,8 +923,43 @@
       {/snippet}
     </DataTable>
 
+  {:else if activeTab === 'lifecycle'}
+    <!-- LIFECYCLE -->
+    <Card padding="lg">
+      <h3 class="pane-title">Organisation lifecycle</h3>
+      <p class="pane-sub">Sign-ups, onboarding milestones, engagement signals, renewals, churn risk. Lives here so the CRM (external, ERPNext) can stay focused on leads + sales while operational health stays in-platform.</p>
+      <div class="placeholder">
+        <div class="placeholder-icon">✶</div>
+        <div>
+          <div class="placeholder-title">Lifecycle — coming soon</div>
+          <p class="placeholder-body">
+            Planned: join date, active licence count, last invoice, last check-in,
+            subscription-value trend, churn-risk score, renewal window, NPS.
+          </p>
+        </div>
+      </div>
+    </Card>
+
+  {:else if activeTab === 'crm'}
+    <!-- CRM — external (ERPNext) -->
+    <Card padding="lg">
+      <h3 class="pane-title">CRM</h3>
+      <p class="pane-sub">Leads, sales pipeline, and contact history live in the external CRM (ERPNext). This tab deep-links into the matching customer record.</p>
+      <div class="placeholder">
+        <div class="placeholder-icon">↗</div>
+        <div>
+          <div class="placeholder-title">ERPNext integration — coming soon</div>
+          <p class="placeholder-body">
+            Once the ERPNext base URL and API key are configured, this tab will
+            show a summary card (stage, open opportunities, last activity) and an
+            "Open in ERPNext" button that lands on the mapped customer record.
+          </p>
+        </div>
+      </div>
+    </Card>
+
   {:else}
-    <!-- Placeholder tabs (Banking, Attachments, Printing, Parking, CRM) -->
+    <!-- Placeholder tabs (Banking, Attachments, Printing, Parking) -->
     <Card padding="lg">
       <div class="empty-box">Coming soon.</div>
     </Card>
@@ -1165,6 +1201,46 @@
     padding: var(--space-3); background: var(--surface-sunk);
     border-radius: var(--radius-sm); color: var(--text-muted);
     font-size: var(--text-sm); text-align: center;
+  }
+  .pane-title {
+    font-size: var(--text-lg);
+    font-weight: var(--weight-bold);
+    margin: 0 0 var(--space-1);
+    color: var(--text);
+  }
+  .pane-sub {
+    margin: 0 0 var(--space-4);
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    max-width: 640px;
+  }
+  .placeholder {
+    display: flex;
+    gap: var(--space-3);
+    align-items: flex-start;
+    padding: var(--space-4);
+    background: var(--surface-sunk);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-muted);
+  }
+  .placeholder-icon {
+    font-size: 22px;
+    color: var(--accent);
+    opacity: 0.6;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .placeholder-title {
+    font-weight: var(--weight-semibold);
+    color: var(--text);
+    font-size: var(--text-sm);
+    margin-bottom: 4px;
+  }
+  .placeholder-body {
+    margin: 0;
+    font-size: var(--text-sm);
+    line-height: 1.5;
   }
   .empty-box.sm { padding: var(--space-2); }
   .simple-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }

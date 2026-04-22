@@ -9,7 +9,7 @@
   type Perms = { role: string | null; permissions: any; loaded: boolean }
 
   type IconName = 'admin' | 'building' | 'user' | 'globe' | 'coins' | 'sliders'
-  type Leaf = { href: string; label: string; guard?: string }
+  type Leaf = { href: string; label: string; guard?: string; after?: string }
   type Section = { heading?: string; items: Leaf[] }
   type Group = { label: string; icon: IconName; sections: Section[]; primary?: boolean }
 
@@ -38,7 +38,7 @@
             { href: '/locations',  label: 'Locations',      guard: 'locations' },
             { href: '/spaces',     label: 'Spaces',         guard: 'locations' },
             { href: '/items',      label: 'Items',          guard: 'items' },
-            { href: '/item-types', label: 'Item Types',     guard: 'items' },
+            { href: '/item-types', label: 'Item Types',     guard: 'items', after: '/items' },
             { href: '/licenses',   label: 'Licences',       guard: 'subscriptions' }
           ]
         },
@@ -76,15 +76,42 @@
   }
 
   // Keep section headings (Catalog / Finance / System); sort items
-  // alphabetically within each section.
+  // alphabetically within each section, but pin any leaf with `after: <parentHref>`
+  // directly beneath its parent so child items stay visually attached.
+  function sortSection(items: Leaf[]): Leaf[] {
+    const allowed_ = items.filter(allowed)
+    const byParent = new Map<string, Leaf[]>()
+    const free: Leaf[] = []
+    for (const leaf of allowed_) {
+      if (leaf.after) {
+        if (!byParent.has(leaf.after)) byParent.set(leaf.after, [])
+        byParent.get(leaf.after)!.push(leaf)
+      } else {
+        free.push(leaf)
+      }
+    }
+    free.sort((a, b) => a.label.localeCompare(b.label))
+    for (const children of byParent.values()) {
+      children.sort((a, b) => a.label.localeCompare(b.label))
+    }
+    const out: Leaf[] = []
+    for (const leaf of free) {
+      out.push(leaf)
+      const children = byParent.get(leaf.href)
+      if (children) out.push(...children)
+    }
+    // Orphaned children (parent not in this section) fall to the bottom.
+    for (const [parentHref, children] of byParent) {
+      if (!free.some(f => f.href === parentHref)) out.push(...children)
+    }
+    return out
+  }
+
   const visibleGroups = $derived(
     GROUPS.map(g => ({
       ...g,
       sections: g.sections
-        .map(s => ({
-          ...s,
-          items: s.items.filter(allowed).slice().sort((a, b) => a.label.localeCompare(b.label))
-        }))
+        .map(s => ({ ...s, items: sortSection(s.items) }))
         .filter(s => s.items.length > 0)
     })).filter(g => g.sections.length > 0)
   )
@@ -197,7 +224,15 @@
                   <div class="dropdown-heading">{section.heading}</div>
                 {/if}
                 {#each section.items as leaf (leaf.href)}
-                  <a href={leaf.href} class="dropdown-link" class:is-active={isActive(leaf.href)} role="menuitem" onclick={closeAll}>
+                  <a
+                    href={leaf.href}
+                    class="dropdown-link"
+                    class:is-active={isActive(leaf.href)}
+                    class:is-nested={!!leaf.after}
+                    role="menuitem"
+                    onclick={closeAll}
+                  >
+                    {#if leaf.after}<span class="nested-bar" aria-hidden="true"></span>{/if}
                     {leaf.label}
                   </a>
                 {/each}
@@ -373,6 +408,21 @@
   .dropdown-link:hover { background: var(--nav-dropdown-hover, var(--nav-selected-bg)); }
   .dropdown-link.is-active { background: var(--nav-dropdown-hover, var(--nav-selected-bg)); font-weight: var(--weight-semibold); }
   .dropdown-link.as-btn { font-family: inherit; }
+  .dropdown-link.is-nested {
+    padding-left: 44px;
+    position: relative;
+    font-size: 0.88rem;
+    color: color-mix(in srgb, var(--nav-item-color) 80%, transparent);
+  }
+  .dropdown-link.is-nested .nested-bar {
+    position: absolute;
+    left: 32px;
+    top: 50%;
+    width: 6px;
+    height: 1px;
+    background: currentColor;
+    opacity: 0.4;
+  }
   .dropdown-heading {
     padding: 14px 22px 4px;
     font-size: 11px;

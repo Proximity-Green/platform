@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { KpiCard, PageHead, Badge, Button } from '$lib/components/ui'
+  import { KpiCard, PageHead, Badge, Button, Workshop17Logo } from '$lib/components/ui'
   import { buildStats } from '$lib/generated/build-stats'
   import { marked } from 'marked'
 
@@ -130,6 +130,12 @@
   <div class="hero-glow hero-glow-a" aria-hidden="true"></div>
   <div class="hero-glow hero-glow-b" aria-hidden="true"></div>
 
+  <div class="hero-topright">
+    <div class="hero-logo-top"><Workshop17Logo /></div>
+    <p class="hero-tagline">Human design, <span class="ai-mark">AI</span> built and enabled.</p>
+    <p class="hero-version">version 26.1 · day {daysBuilding}</p>
+  </div>
+
   <div class="hero-inner">
     <div class="hero-top">
       <div class="hero-chip">
@@ -143,11 +149,6 @@
         {buildStats.commitCount} commits
       </div>
     </div>
-
-    <h1 class="hero-title">
-      Proximity Green <span class="accent-word">platform</span>
-    </h1>
-    <p class="hero-lede">Built in public. Shipped in increments. Day {daysBuilding}.</p>
 
     <div class="hero-stats">
       <div class="hero-stat">
@@ -166,21 +167,22 @@
         <div class="hero-stat-value">{buildStats.migrations}</div>
         <div class="hero-stat-label">migrations</div>
       </div>
-      <div class="hero-spark">
-        <svg viewBox="0 0 160 48" preserveAspectRatio="none" aria-hidden="true">
-          <defs>
-            <linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%"   stop-color="#9fe8a7" stop-opacity="0.9" />
-              <stop offset="100%" stop-color="#9fe8a7" stop-opacity="0.1" />
-            </linearGradient>
-          </defs>
-          {#each Array(24) as _, i}
-            {@const x = 3 + i * 6.5}
-            {@const h = 6 + (Math.sin(i * 0.55) * 0.5 + 0.5) * 36}
-            <rect x={x} y={48 - h} width="4" height={h} rx="2" fill="url(#sparkFill)" />
-          {/each}
-        </svg>
-      </div>
+    </div>
+
+    <div class="hero-spark" aria-hidden="true">
+      <svg viewBox="0 0 320 48" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stop-color="#9fe8a7" stop-opacity="0.9" />
+            <stop offset="100%" stop-color="#9fe8a7" stop-opacity="0.08" />
+          </linearGradient>
+        </defs>
+        {#each Array(48) as _, i}
+          {@const x = 2 + i * 6.6}
+          {@const h = 5 + (Math.sin(i * 0.55) * 0.5 + 0.5) * 40}
+          <rect x={x} y={48 - h} width="4" height={h} rx="2" fill="url(#sparkFill)" />
+        {/each}
+      </svg>
     </div>
   </div>
 </div>
@@ -319,8 +321,9 @@
   .hero {
     position: relative;
     overflow: hidden;
-    padding: var(--space-6) var(--space-6) var(--space-5);
+    padding: var(--space-7, 40px) var(--space-7, 40px) var(--space-6);
     margin-bottom: var(--space-6);
+    min-height: 200px;
     background: linear-gradient(135deg, #0f1f14 0%, #16301c 40%, #1d4128 100%);
     border-radius: 18px;
     box-shadow:
@@ -382,7 +385,7 @@
     display: flex;
     gap: var(--space-2);
     flex-wrap: wrap;
-    margin-bottom: var(--space-4);
+    margin-bottom: var(--space-6);
   }
   .hero-chip {
     display: inline-flex;
@@ -420,14 +423,40 @@
     50%      { transform: scale(1.2); opacity: 0.6; }
   }
 
-  .hero-title {
-    font-size: clamp(2rem, 4.2vw, 3.4rem);
-    font-weight: var(--weight-bold);
-    line-height: 1.02;
-    letter-spacing: -0.025em;
+  .hero-topright {
+    position: absolute;
+    top: var(--space-5);
+    right: var(--space-6);
+    z-index: 2;
+    max-width: 340px;
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    pointer-events: none;
+  }
+  .hero-logo-top {
     color: #f7f2dd;
-    margin: 0 0 var(--space-2);
-    text-shadow: 0 2px 20px rgba(0,0,0,0.25);
+    opacity: 0.92;
+    filter: drop-shadow(0 2px 16px rgba(159,232,167,0.2));
+  }
+  .hero-logo-top :global(svg) {
+    height: clamp(22px, 2.4vw, 32px);
+    width: auto;
+    display: block;
+  }
+  .hero-topright .hero-tagline { margin: 0; }
+  .hero-topright .hero-version { margin: 0; }
+
+  @media (max-width: 720px) {
+    .hero-topright {
+      position: static;
+      max-width: none;
+      align-items: flex-start;
+      text-align: left;
+      margin-bottom: var(--space-4);
+    }
   }
   .accent-word {
     background: linear-gradient(135deg, #9fe8a7 0%, #d9f59d 50%, #f0d97a 100%);
@@ -438,11 +467,29 @@
     font-style: italic;
   }
 
-  .hero-lede {
+  .hero-tagline {
+    margin: var(--space-2) 0 var(--space-1);
+    color: rgba(242,235,213,0.92);
+    font-size: clamp(1rem, 1.4vw, 1.25rem);
+    font-weight: var(--weight-medium);
+    letter-spacing: -0.005em;
+  }
+  .ai-mark {
+    background: linear-gradient(135deg, #9fe8a7 0%, #f0d97a 100%);
+    -webkit-background-clip: text;
+            background-clip: text;
+    -webkit-text-fill-color: transparent;
+            color: transparent;
+    font-weight: var(--weight-bold);
+    font-style: italic;
+  }
+  .hero-version {
     margin: 0 0 var(--space-5);
-    color: rgba(242,235,213,0.7);
-    font-size: var(--text-base);
-    max-width: 520px;
+    color: rgba(242,235,213,0.5);
+    font-size: 12px;
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
   }
 
   .hero-stats {
@@ -472,15 +519,14 @@
     font-weight: var(--weight-semibold);
   }
   .hero-spark {
-    flex: 1;
-    min-width: 160px;
-    max-width: 280px;
-    margin-left: auto;
-    align-self: center;
+    margin-top: var(--space-5);
+    width: 100%;
+    max-width: 560px;
+    opacity: 0.9;
   }
   .hero-spark svg {
     width: 100%;
-    height: 48px;
+    height: 42px;
     display: block;
   }
 
