@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="graphite">
+<html lang="en" data-theme="w17" data-mode="light">
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -16,20 +16,23 @@
 			(function () {
 				var root = document.documentElement;
 				try {
-					var storedMode = localStorage.getItem('pg.theme.mode');
-					var mode = storedMode === 'light' || storedMode === 'dark'
-						? storedMode
-						: (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
-					root.setAttribute('data-mode', mode);
-
 					var storedLook = localStorage.getItem('pg.theme.look');
-					var look = (storedLook === 'neon' || storedLook === 'w17') ? storedLook : 'graphite';
+					var look = (storedLook === 'neon' || storedLook === 'w17' || storedLook === 'graphite') ? storedLook : 'w17';
 					root.setAttribute('data-theme', look);
-					// W17 is a light-only theme
-					if (look === 'w17') root.setAttribute('data-mode', 'light');
+
+					// W17 is a light-only theme — force light mode
+					if (look === 'w17') {
+						root.setAttribute('data-mode', 'light');
+					} else {
+						var storedMode = localStorage.getItem('pg.theme.mode');
+						var mode = storedMode === 'light' || storedMode === 'dark'
+							? storedMode
+							: (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+						root.setAttribute('data-mode', mode);
+					}
 				} catch (e) {
-					root.setAttribute('data-mode', 'dark');
-					root.setAttribute('data-theme', 'graphite');
+					root.setAttribute('data-mode', 'light');
+					root.setAttribute('data-theme', 'w17');
 				}
 			})();
 		</script>

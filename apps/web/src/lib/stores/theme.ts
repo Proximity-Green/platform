@@ -12,18 +12,20 @@ export function usesTopNav(look: Look): boolean { return TOP_NAV_LOOKS.includes(
 const MODE_KEY = 'pg.theme.mode'
 const LOOK_KEY = 'pg.theme.look'
 
+function readLook(): Look {
+  if (!browser) return 'w17'
+  const stored = localStorage.getItem(LOOK_KEY) as Look | null
+  if (stored === 'neon' || stored === 'w17' || stored === 'graphite') return stored
+  return 'w17'
+}
+
 function readMode(): Mode {
-  if (!browser) return 'dark'
+  if (!browser) return 'light'
+  // W17 is light-only — override any stored mode
+  if (readLook() === 'w17') return 'light'
   const stored = localStorage.getItem(MODE_KEY) as Mode | null
   if (stored === 'dark' || stored === 'light') return stored
   return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
-}
-
-function readLook(): Look {
-  if (!browser) return 'graphite'
-  const stored = localStorage.getItem(LOOK_KEY) as Look | null
-  if (stored === 'neon' || stored === 'w17') return stored
-  return 'graphite'
 }
 
 export const mode = writable<Mode>(readMode())
