@@ -42,9 +42,10 @@ function replaceVariables(template: string, vars: Record<string, string>): strin
 
 async function getSupabase() {
   const { createClient } = await import('@supabase/supabase-js')
+  const clean = (v: string | undefined) => (v ?? '').replace(/\s+/g, '')
   return createClient(
-    process.env.PUBLIC_SUPABASE_URL || '',
-    process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+    clean(process.env.PUBLIC_SUPABASE_URL),
+    clean(process.env.SUPABASE_SERVICE_ROLE_KEY)
   )
 }
 
