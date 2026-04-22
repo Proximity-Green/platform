@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.6
 FROM node:20-alpine AS build
 WORKDIR /app
 ENV PUBLIC_SUPABASE_URL=https://db.poc.proximity.green
@@ -6,7 +7,9 @@ ENV SUPABASE_SERVICE_ROLE_KEY=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzd
 # ANTHROPIC_API_KEY is set at runtime via Coolify env vars (the whitespace-strip
 # in $lib/server/env.ts heals any Coolify paste corruption).
 COPY package*.json ./
-RUN npm ci
+# BuildKit cache mount keeps the npm cache across builds — skips re-downloading
+# packages on every deploy. Requires DOCKER_BUILDKIT=1 (default in Coolify).
+RUN --mount=type=cache,target=/root/.npm npm ci
 COPY . .
 RUN npm run build
 
