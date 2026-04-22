@@ -4,49 +4,48 @@ import { PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from '$lib/server/env'
 
 const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
+function keyFingerprint(k: string): string {
+  if (!k) return 'EMPTY'
+  return `len=${k.length} head=${k.slice(0, 12)} tail=${k.slice(-8)}`
+}
+
 export const POST = async ({ request }) => {
   const { userId, email } = await request.json()
 
+  const debug: Record<string, unknown> = {
+    url: PUBLIC_SUPABASE_URL || 'EMPTY',
+    serviceKey: keyFingerprint(SUPABASE_SERVICE_ROLE_KEY)
+  }
+
   if (!email) {
-    console.log('[check-access] denied: no email')
-    return json({ allowed: false })
+    return json({ allowed: false, reason: 'no email', debug })
   }
 
   const domain = email.split('@')[1]
+  debug.domain = domain
 
-  // Check 1: Is the domain approved?
   const { data: approvedDomain, error: domainErr } = await supabase
     .from('approved_domains')
     .select('id')
     .eq('domain', domain)
     .maybeSingle()
 
-  if (domainErr) {
-    console.log('[check-access] domain query error:', domainErr.message)
-  }
+  debug.domainQuery = domainErr ? { error: domainErr.message } : { rowFound: !!approvedDomain }
 
   if (approvedDomain) {
-    console.log(`[check-access] allowed: ${email} (domain ${domain} whitelisted)`)
-    return json({ allowed: true })
+    return json({ allowed: true, reason: 'domain whitelisted', debug })
   }
 
-  // Check 2: Was the user invited? Use getUserById (not listUsers — which paginates)
   const { data: userData, error: userErr } = await supabase.auth.admin.getUserById(userId)
+  debug.getUserById = userErr ? { error: userErr.message } : { invitedAt: userData?.user?.invited_at ?? null }
 
   if (userErr) {
-    console.log('[check-access] getUserById error:', userErr.message)
-    return json({ allowed: false })
+    return json({ allowed: false, reason: 'getUserById failed', debug })
   }
 
   if (userData?.user?.invited_at) {
-    console.log(`[check-access] allowed: ${email} (invited at ${userData.user.invited_at})`)
-    return json({ allowed: true })
+    return json({ allowed: true, reason: 'invited', debug })
   }
 
-  // Not allowed — deny silently. (Previously deleted the user here, which caused
-  // a cascade: every retry re-created the user, re-checked, re-deleted. Now we just
-  // sign them out client-side and leave the auth row alone so an admin can inspect.)
-  console.log(`[check-access] denied: ${email} (no matching whitelist or invite) — user NOT deleted`)
-
-  return json({ allowed: false })
+  return json({ allowed: false, reason: 'no whitelist or invite', debug })
 }

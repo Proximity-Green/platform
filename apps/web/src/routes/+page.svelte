@@ -53,7 +53,7 @@
       body: JSON.stringify({ userId: s.user.id, email: s.user.email })
     })
     const result = await res.json()
-    debugInfo = `[check-access] status=${res.status} body=${JSON.stringify(result)} email=${s.user.email}`
+    debugInfo = `[check-access] status=${res.status} email=${s.user.email}\n${JSON.stringify(result, null, 2)}`
     console.log(debugInfo)
 
     if (result.allowed) {
@@ -109,7 +109,7 @@
       {/if}
 
       {#if debugInfo}
-        <div class="debug">{debugInfo}</div>
+        <pre class="debug">{debugInfo}</pre>
       {/if}
 
       <button onclick={signInWithGoogle} class="google-btn">Sign in with Google</button>
@@ -190,5 +190,21 @@
     opacity: 0.9;
     color: #5a7060;
     border-color: #5a7060;
+  }
+
+  .debug {
+    background: #f1eee6;
+    color: #3a4a3c;
+    border: 1px solid #c8deca;
+    border-radius: 6px;
+    padding: 0.6rem 0.75rem;
+    margin-bottom: 1rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.72rem;
+    text-align: left;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 320px;
+    overflow: auto;
   }
 </style>
