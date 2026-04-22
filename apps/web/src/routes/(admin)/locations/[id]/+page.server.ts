@@ -1,6 +1,7 @@
 import { fail, error } from '@sveltejs/kit'
 import { requirePermission, getUserIdFromRequest, supabase } from '$lib/services/permissions.service'
 import * as locationsService from '$lib/services/locations.service'
+import { invalidateItemLookups } from '$lib/services/item-lookups.service'
 
 const blank = (data: FormData, k: string): string | null => {
   const v = data.get(k)
@@ -146,6 +147,7 @@ export const actions = {
       is_primary: isPrimary
     })
     if (insErr) return fail(400, { error: insErr.message })
+    invalidateItemLookups()
     return { success: true, message: 'Tracking code added' }
   },
 
@@ -172,6 +174,7 @@ export const actions = {
       .eq('id', id)
     if (promoteErr) return fail(400, { error: promoteErr.message })
 
+    invalidateItemLookups()
     return { success: true, message: 'Primary tracking code updated' }
   },
 
@@ -189,6 +192,7 @@ export const actions = {
       .update({ active: !active })
       .eq('id', id)
     if (upErr) return fail(400, { error: upErr.message })
+    invalidateItemLookups()
     return { success: true, message: 'Tracking code updated' }
   },
 
@@ -216,6 +220,7 @@ export const actions = {
       })
       .eq('id', id)
     if (upErr) return fail(400, { error: upErr.message })
+    invalidateItemLookups()
     return { success: true, message: 'Tracking code updated' }
   },
 
@@ -229,6 +234,7 @@ export const actions = {
 
     const { error: delErr } = await supabase.from('tracking_codes').delete().eq('id', id)
     if (delErr) return fail(400, { error: delErr.message })
+    invalidateItemLookups()
     return { success: true, message: 'Tracking code deleted' }
   }
 }

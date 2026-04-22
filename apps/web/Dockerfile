@@ -3,6 +3,8 @@ WORKDIR /app
 ENV PUBLIC_SUPABASE_URL=https://db.poc.proximity.green
 ENV PUBLIC_SUPABASE_ANON_KEY=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc3NjUyMjk2MCwiZXhwIjo0OTMyMTk2NTYwLCJyb2xlIjoiYW5vbiJ9.A51K0FeE-rdQ64HiREX0bnOiNlMJx_ajhdD6jFApwmM
 ENV SUPABASE_SERVICE_ROLE_KEY=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc3NjUyMjk2MCwiZXhwIjo0OTMyMTk2NTYwLCJyb2xlIjoic2VydmljZV9yb2xlIn0.SlTs1ypSyFvbAPNaGleSaJW47THPM7PFhPEkldiwG-A
+# ANTHROPIC_API_KEY is set at runtime via Coolify env vars (the whitespace-strip
+# in $lib/server/env.ts heals any Coolify paste corruption).
 COPY package*.json ./
 RUN npm ci
 COPY . .
@@ -22,5 +24,7 @@ ENV TRIGGER_API_URL=https://jobs.poc.proximity.green
 ENV PUBLIC_SUPABASE_URL=https://db.poc.proximity.green
 ENV PUBLIC_SUPABASE_ANON_KEY=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc3NjUyMjk2MCwiZXhwIjo0OTMyMTk2NTYwLCJyb2xlIjoiYW5vbiJ9.A51K0FeE-rdQ64HiREX0bnOiNlMJx_ajhdD6jFApwmM
 ENV SUPABASE_SERVICE_ROLE_KEY=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc3NjUyMjk2MCwiZXhwIjo0OTMyMTk2NTYwLCJyb2xlIjoic2VydmljZV9yb2xlIn0.SlTs1ypSyFvbAPNaGleSaJW47THPM7PFhPEkldiwG-A
+# ANTHROPIC_API_KEY is set at runtime via Coolify env vars (the whitespace-strip
+# in $lib/server/env.ts heals any Coolify paste corruption).
 EXPOSE 3000
 CMD ["node", "build"]

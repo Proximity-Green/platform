@@ -16,3 +16,4 @@ export const PUBLIC_APP_URL            = clean(publicEnv.PUBLIC_APP_URL, 'PUBLIC
 
 export const SUPABASE_SERVICE_ROLE_KEY = clean(privateEnv.SUPABASE_SERVICE_ROLE_KEY, 'SUPABASE_SERVICE_ROLE_KEY')
 export const MAILGUN_API_KEY           = clean(privateEnv.MAILGUN_API_KEY, 'MAILGUN_API_KEY')
+export const ANTHROPIC_API_KEY         = clean(privateEnv.ANTHROPIC_API_KEY, 'ANTHROPIC_API_KEY')

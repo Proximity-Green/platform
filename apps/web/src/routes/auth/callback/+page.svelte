@@ -11,7 +11,7 @@
     if (code) {
       const { data, error } = await supabase.auth.exchangeCodeForSession(code)
       if (data.session) {
-        window.location.href = '/people'
+        window.location.href = '/admin'
         return
       }
       // If exchange failed, the code might have been consumed already
@@ -27,7 +27,7 @@
       if (accessToken && refreshToken) {
         const { data } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
         if (data.session) {
-          window.location.href = '/people'
+          window.location.href = '/admin'
           return
         }
       }
@@ -36,7 +36,7 @@
     // Maybe session already exists from cookies
     const { data: { session } } = await supabase.auth.getSession()
     if (session) {
-      window.location.href = '/people'
+      window.location.href = '/admin'
       return
     }
 
@@ -44,7 +44,7 @@
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
         subscription.unsubscribe()
-        window.location.href = '/people'
+        window.location.href = '/admin'
       }
     })
 

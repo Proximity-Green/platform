@@ -57,7 +57,7 @@
     console.log(debugInfo)
 
     if (result.allowed) {
-      window.location.href = '/people'
+      window.location.href = '/admin'
     } else {
       accessDenied = true
       await supabase.auth.signOut()

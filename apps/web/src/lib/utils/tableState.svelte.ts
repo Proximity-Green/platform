@@ -22,9 +22,10 @@ export type TableStateOptions = {
 }
 
 export function createTableState(opts: TableStateOptions) {
-  const prefSizeKey = `table.${opts.table}.size`
-  const prefSortKey = `table.${opts.table}.sort`
-  const prefDirKey  = `table.${opts.table}.dir`
+  const prefSizeKey   = `table.${opts.table}.size`
+  const prefSortKey   = `table.${opts.table}.sort`
+  const prefDirKey    = `table.${opts.table}.dir`
+  const prefFilterKey = `table.${opts.table}.filter`
 
   // hardDef = the baseline used for URL diffing (so the URL always reflects
   // explicit user choices, even when they match saved prefs).
@@ -39,6 +40,7 @@ export function createTableState(opts: TableStateOptions) {
   // def = the effective default for initial state, pulling from user prefs.
   const def: TableParams = {
     ...hardDef,
+    filter: getPref<string>(prefFilterKey, hardDef.filter),
     sort: getPref<string>(prefSortKey, hardDef.sort),
     dir: getPref<SortDir>(prefDirKey, hardDef.dir),
     size: getPref<number>(prefSizeKey, hardDef.size)
@@ -90,7 +92,12 @@ export function createTableState(opts: TableStateOptions) {
   return {
     get params() { return state },
     setQ(v: string) { state.q = v; state.page = 1; writeToUrl() },
-    setFilter(v: string) { state.filter = v; state.page = 1; writeToUrl(true) },
+    setFilter(v: string) {
+      state.filter = v
+      state.page = 1
+      setPref(prefFilterKey, v)
+      writeToUrl(true)
+    },
     toggleSort(key: string, initialDir: SortDir = 'asc') {
       if (state.sort === key) state.dir = state.dir === 'asc' ? 'desc' : 'asc'
       else { state.sort = key; state.dir = initialDir }
