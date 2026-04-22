@@ -8,7 +8,19 @@ function keyFingerprint(k: string): string {
   if (!k) return 'EMPTY'
   const dots = (k.match(/\./g) || []).length
   const nonPrintable = Array.from(k).filter(c => c.charCodeAt(0) < 32 || c.charCodeAt(0) > 126).length
-  return `len=${k.length} dots=${dots} nonPrintable=${nonPrintable} head=${k.slice(0, 40)} mid=${k.slice(60, 120)} tail=${k.slice(-20)}`
+  const hasSpace = k.includes(' ')
+  const parts = k.split('.')
+  let payloadDecoded = 'n/a'
+  try {
+    if (parts[1]) {
+      const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+      payloadDecoded = Buffer.from(b64, 'base64').toString('utf8')
+    }
+  } catch (e) {
+    payloadDecoded = `decode-error: ${(e as Error).message}`
+  }
+  const charCodes = Array.from(k.slice(115, 125)).map(c => c.charCodeAt(0)).join(',')
+  return `len=${k.length} dots=${dots} nonPrintable=${nonPrintable} hasSpace=${hasSpace} | head=${k.slice(0, 40)} | mid115-125-codes=[${charCodes}] | tail=${k.slice(-20)} | payload=${payloadDecoded}`
 }
 
 export const POST = async ({ request }) => {
