@@ -13,6 +13,7 @@
     Badge,
     Copyable
   } from '$lib/components/ui'
+  import { fmtMoney, fmtMoneyWithCurrency } from '$lib/utils/money'
 
   let { data, form } = $props()
 
@@ -48,14 +49,8 @@
     const d = new Date(v); if (isNaN(d.getTime())) return ''
     return d.toISOString().slice(0, 10)
   }
-  function money(n: number | null | undefined, c: string): string {
-    if (n == null) return '—'
-    try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: c, currencyDisplay: 'code' }).format(Number(n)) }
-    catch { return `${c} ${Number(n).toFixed(2)}` }
-  }
-  function num(n: number | null | undefined): string {
-    return Number(n ?? 0).toFixed(2)
-  }
+  const money = (n: number | null | undefined, c: string) => fmtMoneyWithCurrency(n, c)
+  const num = (n: number | null | undefined) => fmtMoney(n ?? 0)
 
   function statusTone(s: string): 'default' | 'success' | 'warning' | 'info' | 'danger' {
     if (s === 'paid') return 'success'

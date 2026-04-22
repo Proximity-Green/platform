@@ -5,6 +5,7 @@ export type ItemType = {
   slug: string
   name: string
   description: string | null
+  family: string | null
   requires_license: boolean
   sellable_ad_hoc: boolean
   sellable_recurring: boolean
@@ -17,6 +18,7 @@ export type ItemTypeInput = {
   slug: string
   name: string
   description?: string | null
+  family?: string | null
   requires_license?: boolean
   sellable_ad_hoc?: boolean
   sellable_recurring?: boolean

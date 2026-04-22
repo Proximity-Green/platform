@@ -10,6 +10,8 @@
     onClose: () => void
     children?: any
     footer?: any
+    /** Extra buttons rendered in the header, left of the full-screen + close icons */
+    headerActions?: any
   }
   let {
     open,
@@ -19,7 +21,8 @@
     storageKey = 'drawer-width',
     onClose,
     children,
-    footer
+    footer,
+    headerActions
   }: Props = $props()
 
   let drawerEl: HTMLElement | undefined = $state()
@@ -142,6 +145,9 @@
       <header class="drawer-head">
         <h2>{title}</h2>
         <div class="head-actions">
+          {#if headerActions}
+            <div class="head-actions-custom">{@render headerActions()}</div>
+          {/if}
           <button class="icon-btn" onclick={() => fullscreen = !fullscreen} aria-label={fullscreen ? 'Exit full screen' : 'Full screen'} type="button" title={fullscreen ? 'Exit full screen (Esc)' : 'Full screen'}>
             {#if fullscreen}
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
@@ -222,7 +228,8 @@
     color: var(--heading-color);
     margin: 0;
   }
-  .head-actions { display: inline-flex; align-items: center; gap: 2px; }
+  .head-actions { display: inline-flex; align-items: center; gap: var(--space-2); }
+  .head-actions-custom { display: inline-flex; align-items: center; gap: var(--space-2); }
   .icon-btn {
     background: none;
     border: none;

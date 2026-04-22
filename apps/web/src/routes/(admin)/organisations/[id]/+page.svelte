@@ -7,6 +7,7 @@
     Button,
     PageHead,
     Toast,
+    Notice,
     DataTable,
     Card,
     KpiCard,
@@ -18,6 +19,7 @@
     Copyable
   } from '$lib/components/ui'
   import type { Column, Filter } from '$lib/components/ui/DataTable.svelte'
+  import { fmtMoney, fmtMoneyWithCurrency } from '$lib/utils/money'
 
   let { data, form } = $props()
 
@@ -109,19 +111,8 @@
     return d.toISOString().slice(0, 10)
   }
 
-  function money(value: number | null | undefined, currency: string): string {
-    if (value == null) return '—'
-    try {
-      return new Intl.NumberFormat(undefined, { style: 'currency', currency, currencyDisplay: 'code' }).format(Number(value))
-    } catch {
-      return `${currency} ${Number(value).toFixed(2)}`
-    }
-  }
-
-  function num(value: number | null | undefined): string {
-    if (value == null) return '0.00'
-    return Number(value).toFixed(2)
-  }
+  const money = (value: number | null | undefined, currency: string) => fmtMoneyWithCurrency(value, currency)
+  const num = (value: number | null | undefined) => fmtMoney(value ?? 0)
 
   function orgStatusTone(s: string): 'default' | 'success' | 'warning' | 'info' | 'danger' {
     if (s === 'active') return 'success'
@@ -198,6 +189,17 @@
 
   // Derived currency from org or first location
   const currency = $derived(org.billing_currency ?? (data.locations?.[0] as any)?.currency ?? 'ZAR')
+
+  const homeLocationShort = $derived(
+    homeLocation
+      ? ((data.locations as any[]).find(l => l.id === homeLocation.id)?.short_name ?? homeLocation.name)
+      : null
+  )
+  const pageLede = $derived(
+    homeLocationShort
+      ? `${org.short_name ?? org.name} at ${homeLocationShort}`
+      : (org.short_name ?? '')
+  )
 
   // ---------- option arrays ----------
 
@@ -348,8 +350,11 @@
   let confirmDelete = $state(false)
 </script>
 
-<PageHead title={org.name} lede={org.legal_name ?? org.short_name ?? ''}>
+<PageHead title={`Organisation: ${org.name}`} lede={pageLede}>
   <Button variant="ghost" size="sm" href="/organisations">← Back</Button>
+  {#if activeTab === 'properties' && can('organisations', 'update')}
+    <Button type="submit" form="update-form" size="sm" loading={saving}>{saving ? 'Saving…' : 'Save Changes'}</Button>
+  {/if}
   {#if can('organisations', 'delete')}
     <Button variant="danger" size="sm" onclick={() => confirmDelete = true}>Delete</Button>
   {/if}
@@ -357,8 +362,23 @@
 
 <Toast error={form?.error} success={form?.success} message={form?.message} />
 
+{#if org.status === 'prospect'}
+  <Notice tone="warning">
+    {#snippet children()}
+      <strong>Please Note:</strong> Organisation is a prospect and cannot be onboarded until it is set to pending.
+    {/snippet}
+    {#snippet action()}
+      <form method="POST" action="?/setStatus" use:enhance>
+        <input type="hidden" name="status" value="pending" />
+        <button type="submit" class="btn-set-status">Set to Pending</button>
+      </form>
+    {/snippet}
+  </Notice>
+{/if}
 {#if org.hidden}
-  <div class="org-banner">Please Note: Organisation is Hidden.</div>
+  <Notice tone="danger">
+    {#snippet children()}<strong>Please Note:</strong> Organisation is Hidden.{/snippet}
+  </Notice>
 {/if}
 
 <nav class="tabs" aria-label="Organisation sections">
@@ -458,9 +478,6 @@
       </FieldGrid>
 
       {#snippet actions()}
-        {#if can('organisations', 'update')}
-          <Button type="submit" size="sm" loading={saving}>{saving ? 'Saving…' : 'Save Changes'}</Button>
-        {/if}
         <span class="meta-info">
           <Badge tone={orgStatusTone(org.status)}>{org.status}</Badge>
           <Badge tone="info">{org.type}</Badge>
@@ -928,25 +945,28 @@
 {/if}
 
 <style>
-  .org-banner {
-    background: var(--info-soft, rgba(59, 130, 246, 0.1));
-    color: var(--info, #3b82f6);
-    text-align: center;
-    padding: var(--space-2);
-    font-size: var(--text-sm);
-    border-radius: var(--radius-sm);
-    margin-bottom: var(--space-2);
+  .btn-set-status {
+    background: var(--accent, #59a370);
+    color: #ffffff;
+    border: 1px solid var(--accent, #59a370);
+    padding: 0.4rem 1rem;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: var(--radius-sm, 4px);
+  }
+  .btn-set-status:hover {
+    background: var(--accent-hover, #4e9363);
+    border-color: var(--accent-hover, #4e9363);
   }
 
   .tabs {
     display: flex;
+    flex-wrap: wrap;
     gap: 2px;
     border-bottom: 1px solid var(--border);
     margin-bottom: var(--space-4);
-    overflow-x: auto;
-    scrollbar-width: none;
   }
-  .tabs::-webkit-scrollbar { display: none; }
   .tab {
     padding: var(--space-2) var(--space-3);
     font-size: var(--text-sm);

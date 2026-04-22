@@ -3,12 +3,13 @@ import { resolve } from 'node:path'
 import { marked } from 'marked'
 
 const DOCS_DIR = resolve(process.cwd(), '../../docs')
-const PAGES = ['ARCHITECTURE.md', 'CONVENTIONS.md', 'MIGRATION.md', 'BENCHMARK.md'] as const
-type DocSlug = 'architecture' | 'conventions' | 'migration' | 'benchmark'
+const PAGES = ['ARCHITECTURE.md', 'CONVENTIONS.md', 'CATALOG.md', 'MIGRATION.md', 'BENCHMARK.md'] as const
+type DocSlug = 'architecture' | 'conventions' | 'catalog' | 'migration' | 'benchmark'
 
 const FILE_BY_SLUG: Record<DocSlug, (typeof PAGES)[number]> = {
   architecture: 'ARCHITECTURE.md',
   conventions: 'CONVENTIONS.md',
+  catalog: 'CATALOG.md',
   migration: 'MIGRATION.md',
   benchmark: 'BENCHMARK.md'
 }
@@ -31,6 +32,7 @@ export const load = async ({ url }) => {
     pages: [
       { slug: 'architecture', label: 'Architecture' },
       { slug: 'conventions', label: 'Conventions' },
+      { slug: 'catalog', label: 'Catalog & Tracking' },
       { slug: 'migration', label: 'Migration' },
       { slug: 'benchmark', label: 'Benchmark' }
     ]

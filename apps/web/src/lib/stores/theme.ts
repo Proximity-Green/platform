@@ -3,7 +3,11 @@ import { browser } from '$app/environment'
 import { setPref } from './prefs'
 
 export type Mode = 'dark' | 'light'
-export type Look = 'graphite' | 'neon'
+export type Look = 'graphite' | 'neon' | 'w17'
+
+/** Looks whose layout shell is the horizontal top nav (WSM-style). */
+export const TOP_NAV_LOOKS: Look[] = ['w17']
+export function usesTopNav(look: Look): boolean { return TOP_NAV_LOOKS.includes(look) }
 
 const MODE_KEY = 'pg.theme.mode'
 const LOOK_KEY = 'pg.theme.look'
@@ -18,7 +22,8 @@ function readMode(): Mode {
 function readLook(): Look {
   if (!browser) return 'graphite'
   const stored = localStorage.getItem(LOOK_KEY) as Look | null
-  return stored === 'neon' ? 'neon' : 'graphite'
+  if (stored === 'neon' || stored === 'w17') return stored
+  return 'graphite'
 }
 
 export const mode = writable<Mode>(readMode())
@@ -38,10 +43,18 @@ if (browser) {
   look.subscribe(v => {
     document.documentElement.setAttribute('data-theme', v)
     localStorage.setItem(LOOK_KEY, v)
+    // W17 is fundamentally a light theme (cream body, sage nav) — force light
+    // mode when entering it so users don't land on an unintended dark variant.
+    if (v === 'w17') mode.set('light')
     if (initLook) { initLook = false; return }
     setPref('global.look', v)
   })
 }
 
 export function toggleMode() { mode.update(m => (m === 'dark' ? 'light' : 'dark')) }
-export function toggleLook() { look.update(l => (l === 'graphite' ? 'neon' : 'graphite')) }
+export function cycleLook() {
+  look.update(l => (l === 'graphite' ? 'neon' : l === 'neon' ? 'w17' : 'graphite'))
+}
+export function setLook(l: Look) { look.set(l) }
+// Back-compat with the old boolean toggle.
+export const toggleLook = cycleLook

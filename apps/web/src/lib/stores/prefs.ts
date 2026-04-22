@@ -65,7 +65,7 @@ function hydrateThemeFromPrefs(prefs: Prefs) {
     localStorage.setItem(MODE_KEY, remoteMode)
     document.documentElement.setAttribute('data-mode', remoteMode)
   }
-  if (!localStorage.getItem(LOOK_KEY) && (remoteLook === 'graphite' || remoteLook === 'neon')) {
+  if (!localStorage.getItem(LOOK_KEY) && (remoteLook === 'graphite' || remoteLook === 'neon' || remoteLook === 'w17')) {
     localStorage.setItem(LOOK_KEY, remoteLook)
     document.documentElement.setAttribute('data-theme', remoteLook)
   }

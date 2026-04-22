@@ -100,6 +100,7 @@
   {/snippet}
 </DataTable>
 
+
 <style>
   .name { font-weight: var(--weight-medium); color: var(--text); }
   .slug {

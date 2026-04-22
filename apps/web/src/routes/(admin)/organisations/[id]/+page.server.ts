@@ -1,5 +1,6 @@
 import { fail, error, redirect } from '@sveltejs/kit'
 import { requirePermission, getUserIdFromRequest, supabase } from '$lib/services/permissions.service'
+import { logFail } from '$lib/services/action-log.service'
 import * as walletsService from '$lib/services/wallets.service'
 import * as subsService from '$lib/services/subscription-lines.service'
 import * as invoicesService from '$lib/services/invoices.service'
@@ -277,6 +278,23 @@ export const actions = {
     return { success: true, message: 'Accounting customer linked' }
   },
 
+  setStatus: async ({ request, params, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
+    if (userId) await requirePermission(userId, 'organisations', 'update')
+
+    const data = await request.formData()
+    const status = blank(data, 'status')
+    if (!status) return fail(400, { error: 'status required' })
+
+    const { error: upErr } = await supabase
+      .from('organisations')
+      .update({ status })
+      .eq('id', params.id)
+    if (upErr) return logFail(userId, 'organisations.setStatus', upErr, { status, id: params.id })
+
+    return { success: true, message: `Status set to ${status}` }
+  },
+
   addWalletTransaction: async ({ request, cookies, locals }) => {
     const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'wallets', 'update')
@@ -397,8 +415,8 @@ export const actions = {
       .from('subscription_lines')
       .select(`
         id, organisation_id, location_id, currency, base_rate, quantity, item_id, license_id,
-        items(name, accounting_gl_code, accounting_item_code, accounting_tax_code, accounting_tracking_codes),
-        licenses(items(name, accounting_gl_code, accounting_item_code, accounting_tax_code, accounting_tracking_codes))
+        items(name, accounting_gl_code, accounting_item_code, accounting_tax_code, item_tracking_codes(tracking_codes(code))),
+        licenses(items(name, accounting_gl_code, accounting_item_code, accounting_tax_code, item_tracking_codes(tracking_codes(code))))
       `)
       .in('id', subIds)
     if (subErr || !subs?.length) return fail(400, { error: subErr?.message ?? 'No subs found' })
@@ -438,7 +456,12 @@ export const actions = {
         accounting_gl_code: meta?.accounting_gl_code,
         accounting_item_code: meta?.accounting_item_code,
         accounting_tax_code: meta?.accounting_tax_code,
-        accounting_tracking_codes: meta?.accounting_tracking_codes
+        accounting_tracking_codes: (() => {
+          const codes = ((meta?.item_tracking_codes ?? []) as any[])
+            .map(l => l.tracking_codes?.code)
+            .filter((c: string | null | undefined): c is string => !!c)
+          return codes.length ? codes : null
+        })()
       })
     }
 

@@ -1,33 +1,25 @@
+import { fail, error } from '@sveltejs/kit'
 import { requirePermission, getUserIdFromRequest, supabase } from '$lib/services/permissions.service'
 import * as itemsService from '$lib/services/items.service'
 import * as lookups from '$lib/services/item-lookups.service'
 import { logFail } from '$lib/services/action-log.service'
 
-function blankStr(data: FormData, key: string): string | null {
-  const v = data.get(key)
+function blankStr(data: FormData, k: string): string | null {
+  const v = data.get(k)
   return v == null || v === '' ? null : (v as string)
 }
 
-function blankNum(data: FormData, key: string): number | null {
-  const v = data.get(key)
+function blankNum(data: FormData, k: string): number | null {
+  const v = data.get(k)
   if (v == null || v === '') return null
   const n = Number(String(v).replace(/,/g, ''))
   return Number.isFinite(n) ? n : null
 }
 
-function blankBool(data: FormData, key: string, fallback = false): boolean {
-  const v = data.get(key)
+function blankBool(data: FormData, k: string, fallback = false): boolean {
+  const v = data.get(k)
   if (v == null || v === '') return fallback
   return v === 'true' || v === 'on' || v === '1'
-}
-
-function csvArray(data: FormData, key: string): string[] | null {
-  const v = data.get(key)
-  if (v == null || v === '') return null
-  return (v as string)
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean)
 }
 
 function trackingCodeIds(data: FormData): string[] {
@@ -35,23 +27,14 @@ function trackingCodeIds(data: FormData): string[] {
 }
 
 async function replaceItemTrackingCodes(itemId: string, ids: string[]): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { error: delErr } = await supabase
-    .from('item_tracking_codes')
-    .delete()
-    .eq('item_id', itemId)
+  const { error: delErr } = await supabase.from('item_tracking_codes').delete().eq('item_id', itemId)
   if (delErr) return { ok: false, error: delErr.message }
-
   if (ids.length === 0) return { ok: true }
-
   const rows = ids.map(tracking_code_id => ({ item_id: itemId, tracking_code_id }))
   const { error: insErr } = await supabase.from('item_tracking_codes').insert(rows)
   if (insErr) return { ok: false, error: insErr.message }
   return { ok: true }
 }
-
-// ────────────────────────────────────────────────────────────────────────
-// Family-based detail tables
-// ────────────────────────────────────────────────────────────────────────
 
 type Family = 'space' | 'membership' | 'product' | 'service' | 'art' | 'asset'
 type ColType = 'text' | 'number' | 'integer' | 'boolean' | 'date'
@@ -63,6 +46,28 @@ const FAMILY_TABLES: Record<Family, string> = {
   service: 'service_details',
   art: 'art_details',
   asset: 'asset_details'
+}
+
+async function getFamily(itemTypeId: string): Promise<Family | null> {
+  const { data } = await supabase.from('item_types').select('family').eq('id', itemTypeId).single()
+  const f = (data as { family: string } | null)?.family
+  return (f && (f in FAMILY_TABLES)) ? (f as Family) : null
+}
+
+function coerceDetailValue(raw: FormDataEntryValue | null, type: ColType): unknown {
+  if (type === 'boolean') return raw === 'true' || raw === 'on' || raw === '1'
+  if (raw == null || raw === '') return null
+  const s = String(raw).trim()
+  if (s === '') return null
+  if (type === 'number') {
+    const n = Number(s.replace(/,/g, ''))
+    return Number.isFinite(n) ? n : null
+  }
+  if (type === 'integer') {
+    const n = parseInt(s.replace(/,/g, ''), 10)
+    return Number.isFinite(n) ? n : null
+  }
+  return s
 }
 
 const FAMILY_COLUMNS: Record<Family, { name: string; type: ColType }[]> = {
@@ -154,119 +159,85 @@ const FAMILY_COLUMNS: Record<Family, { name: string; type: ColType }[]> = {
   ]
 }
 
-async function getFamily(itemTypeId: string): Promise<Family | null> {
-  const { data } = await supabase
-    .from('item_types')
-    .select('family')
-    .eq('id', itemTypeId)
-    .single()
-  const f = (data as { family: string } | null)?.family
-  return (f && (f in FAMILY_TABLES)) ? (f as Family) : null
-}
-
-function coerceDetailValue(raw: FormDataEntryValue | null, type: ColType): unknown {
-  if (type === 'boolean') {
-    return raw === 'true' || raw === 'on' || raw === '1'
-  }
-  if (raw == null || raw === '') return null
-  const s = String(raw).trim()
-  if (s === '') return null
-  if (type === 'number') {
-    const n = Number(s.replace(/,/g, ''))
-    return Number.isFinite(n) ? n : null
-  }
-  if (type === 'integer') {
-    const n = parseInt(s.replace(/,/g, ''), 10)
-    return Number.isFinite(n) ? n : null
-  }
-  // text, date → pass through as string
-  return s
-}
-
-async function upsertDetails(
-  itemId: string,
-  family: Family | null,
-  data: FormData
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (!family) return { ok: true }
+async function upsertDetails(itemId: string, family: Family | null, data: FormData) {
+  if (!family) return { ok: true as const }
   const table = FAMILY_TABLES[family]
   const cols = FAMILY_COLUMNS[family]
   const row: Record<string, unknown> = { item_id: itemId, updated_at: new Date().toISOString() }
   for (const c of cols) {
     const value = coerceDetailValue(data.get(`detail_${c.name}`), c.type)
-    // Omit nulls so NOT NULL defaults apply on insert, and so updates don't
-    // overwrite existing values with null for fields the user didn't touch.
-    // Booleans always send because their "absent" state is a valid `false`.
     if (value === null && c.type !== 'boolean') continue
     row[c.name] = value
   }
   const { error } = await supabase.from(table).upsert(row, { onConflict: 'item_id' })
-  if (error) return { ok: false, error: error.message }
-  return { ok: true }
+  if (error) return { ok: false as const, error: error.message }
+  return { ok: true as const }
 }
 
-export const load = async ({ cookies, locals }) => {
+export const load = async ({ params, cookies, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)
   if (userId) await requirePermission(userId, 'items', 'read')
 
-  // Items is the primary data — await it so the table has rows immediately.
-  // Lookups come from the shared cache; item-tracking-code link map streams.
-  const [items, itemTypes, locations, trackingCodes] = await Promise.all([
-    itemsService.listAll(),
-    lookups.listItemTypes(),
-    lookups.listLocationsLite(),
-    lookups.listActiveTrackingCodes()
-  ])
+  const id = params.id
+
+  // Await only the item itself — this drives the page header and the form
+  // identity. Everything else streams in as unawaited promises so the shell
+  // paints immediately.
+  const itemRes = await supabase
+    .from('items')
+    .select('*, item_types(slug, name, family), locations(name, short_name)')
+    .eq('id', id)
+    .single()
+  if (itemRes.error || !itemRes.data) throw error(404, 'Item not found')
+
+  const item = itemRes.data as any
+  const family = (item.item_types?.family ?? null) as Family | null
+
+  // Family details depend on the item's family, but we can also stream them.
+  const detailsPromise: Promise<Record<string, unknown> | null> =
+    family && FAMILY_TABLES[family]
+      ? supabase.from(FAMILY_TABLES[family]).select('*').eq('item_id', id).maybeSingle()
+          .then(r => (r.data ?? null) as Record<string, unknown> | null)
+      : Promise.resolve(null)
 
   const linksPromise = supabase
     .from('item_tracking_codes')
-    .select('item_id, tracking_code_id')
-    .then(res => {
-      const map: Record<string, string[]> = {}
-      for (const link of (res.data ?? []) as { item_id: string; tracking_code_id: string }[]) {
-        if (!map[link.item_id]) map[link.item_id] = []
-        map[link.item_id].push(link.tracking_code_id)
-      }
-      return map
-    })
+    .select('tracking_code_id')
+    .eq('item_id', id)
+    .then(r => (r.data ?? []).map((l: any) => l.tracking_code_id as string))
 
-  // Ids of items that have at least one currently-signed subscription line.
-  // Used to drive the "On active subs" filter on the list.
-  const activeSubItemIdsPromise = supabase
+  const subscriptionsPromise = supabase
     .from('subscription_lines')
-    .select('item_id')
-    .eq('status', 'signed')
-    .not('item_id', 'is', null)
-    .then(res => {
-      const ids = new Set<string>()
-      for (const row of (res.data ?? []) as { item_id: string }[]) ids.add(row.item_id)
-      return [...ids]
-    })
+    .select('id, status, base_rate, currency, quantity, started_at, ended_at, organisation_id, organisations(name)')
+    .eq('item_id', id)
+    .order('started_at', { ascending: false })
+    .then(r => r.data ?? [])
 
   return {
-    items,
-    itemTypes,
-    locations,
-    trackingCodes,
+    item,
+    family,
+    // Streamed — awaited on the client inside {#await}
+    itemTypes: lookups.listItemTypes(),
+    locations: lookups.listLocationsLite(),
+    trackingCodes: lookups.listActiveTrackingCodes(),
     itemTrackingCodeIds: linksPromise,
-    activeSubItemIds: activeSubItemIdsPromise
+    itemDetails: detailsPromise,
+    subscriptions: subscriptionsPromise
   }
 }
 
 export const actions = {
-  create: async ({ request, cookies, locals }) => {
+  update: async ({ request, params, cookies, locals }) => {
     const userId = await getUserIdFromRequest(locals, cookies)
-    if (userId) await requirePermission(userId, 'items', 'create')
+    if (userId) await requirePermission(userId, 'items', 'update')
 
     const data = await request.formData()
-    const item_type_id = data.get('item_type_id') as string
-    const name = (data.get('name') as string ?? '').trim()
-    if (!item_type_id || !name) return await logFail(userId, 'items.create', 'Item type and name are required', { item_type_id, name })
+    const newItemTypeId = data.get('item_type_id') as string
 
-    const insert = {
-      item_type_id,
+    const result = await itemsService.update(params.id, {
+      item_type_id: newItemTypeId,
       location_id: blankStr(data, 'location_id'),
-      name,
+      name: (data.get('name') as string ?? '').trim(),
       description: blankStr(data, 'description'),
       sku: blankStr(data, 'sku'),
       base_price: blankNum(data, 'base_price'),
@@ -276,35 +247,24 @@ export const actions = {
       accounting_tax_percentage: blankNum(data, 'accounting_tax_percentage'),
       accounting_description: blankStr(data, 'accounting_description'),
       active: blankBool(data, 'active', true)
-    }
+    })
+    if (!result.ok) return await logFail(userId, 'items.update', result.error, { id: params.id })
 
-    const { data: inserted, error } = await supabase
-      .from('items')
-      .insert(insert)
-      .select('id')
-      .single()
-    if (error || !inserted) return await logFail(userId, 'items.create', error?.message ?? 'Failed to create item', { insert })
+    const linkResult = await replaceItemTrackingCodes(params.id, trackingCodeIds(data))
+    if (!linkResult.ok) return await logFail(userId, 'items.update.tracking_codes', linkResult.error, { id: params.id })
 
-    const linkResult = await replaceItemTrackingCodes(inserted.id, trackingCodeIds(data))
-    if (!linkResult.ok) return await logFail(userId, 'items.create.tracking_codes', linkResult.error, { item_id: inserted.id })
+    const family = await getFamily(newItemTypeId)
+    const detailsResult = await upsertDetails(params.id, family, data)
+    if (!detailsResult.ok) return await logFail(userId, 'items.update.details', detailsResult.error, { id: params.id, family })
 
-    const family = await getFamily(item_type_id)
-    const detailsResult = await upsertDetails(inserted.id, family, data)
-    if (!detailsResult.ok) return await logFail(userId, 'items.create.details', detailsResult.error, { item_id: inserted.id, family })
-
-    return { success: true, message: 'Item created' }
+    return { success: true, message: 'Item updated' }
   },
 
-  delete: async ({ request, cookies, locals }) => {
+  delete: async ({ params, cookies, locals }) => {
     const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'items', 'delete')
-
-    const data = await request.formData()
-    const id = data.get('id') as string
-    if (!id) return await logFail(userId, 'items.delete', 'Missing id')
-
-    const result = await itemsService.remove(id)
-    if (!result.ok) return await logFail(userId, 'items.delete', result.error, { id })
+    const result = await itemsService.remove(params.id)
+    if (!result.ok) return await logFail(userId, 'items.delete', result.error, { id: params.id })
     return { success: true, message: 'Item deleted' }
   }
 }

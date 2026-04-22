@@ -21,12 +21,43 @@
     slug: string
     name: string
     description: string | null
+    family: string | null
     requires_license: boolean
     sellable_ad_hoc: boolean
     sellable_recurring: boolean
     metadata: Record<string, any> | null
     created_at: string
     updated_at: string
+  }
+
+  // Mirror of FAMILY_FIELDS from /items/[id]/+page.svelte — kept here so the
+  // Item Types table can preview which attributes each family exposes.
+  const FAMILY_FIELD_LABELS: Record<string, string[]> = {
+    space: ['Floor area','Capacity','Aesthetic','Aesthetic impact','Safety margin','Start price per m²','Number available','Private','Default layout','Price per day','Price per user / day','Business case'],
+    membership: ['Occupancy type','Seats included','Cost per extra member','Billing cadence','Space credits / month','Credits — full day','Credits — half day','Stuff credits / month','Print credits / month','Marketing description'],
+    product: ['Volume / pack size','Member discount %','Price customisable','Pro-rata billing','Self-service purchase','Supplier name','Supplier SKU'],
+    service: ['Duration (min)','Billable unit','Requires booking','Capacity'],
+    art: ['Artist','Medium','Height','Width','Year created','Framed','Insurance value','List price','Status'],
+    asset: ['Kind','Make','Model','Serial #','Registration','Acquired','Status','Rate / hour','Rate / day','Notes']
+  }
+
+  const FAMILY_OPTIONS = [
+    { value: '', label: '— (none)' },
+    { value: 'space',      label: 'space' },
+    { value: 'membership', label: 'membership' },
+    { value: 'product',    label: 'product' },
+    { value: 'service',    label: 'service' },
+    { value: 'art',        label: 'art' },
+    { value: 'asset',      label: 'asset' }
+  ]
+
+  function familyFieldCount(family: string | null | undefined): number {
+    if (!family) return 0
+    return (FAMILY_FIELD_LABELS[family] ?? []).length
+  }
+  function familyFieldList(family: string | null | undefined): string {
+    if (!family) return ''
+    return (FAMILY_FIELD_LABELS[family] ?? []).join(', ')
   }
 
   let { data, form } = $props()
@@ -48,12 +79,14 @@
   ]
 
   const columns: Column<ItemType>[] = [
-    { key: 'slug', label: 'Slug', sortable: true, width: '16%', mono: true },
-    { key: 'name', label: 'Name', sortable: true, width: '20%' },
-    { key: 'description', label: 'Description', width: '30%', muted: true, ellipsis: true, render: t => t.description || '—' },
-    { key: 'requires_license', label: 'Licence', sortable: true, width: '10%' },
-    { key: 'sellable_ad_hoc', label: 'Ad-hoc', sortable: true, width: '10%' },
-    { key: 'sellable_recurring', label: 'Recurring', sortable: true, width: '10%' }
+    { key: 'slug', label: 'Slug', sortable: true, width: '12%', mono: true },
+    { key: 'name', label: 'Name', sortable: true, width: '14%' },
+    { key: 'family', label: 'Family', sortable: true, width: '10%', get: t => t.family ?? '' },
+    { key: 'fields', label: 'Fields', width: '8%', align: 'right', get: t => familyFieldCount(t.family) },
+    { key: 'description', label: 'Description', width: '24%', muted: true, ellipsis: true, render: t => t.description || '—' },
+    { key: 'requires_license', label: 'Licence', sortable: true, width: '8%' },
+    { key: 'sellable_ad_hoc', label: 'Ad-hoc', sortable: true, width: '8%' },
+    { key: 'sellable_recurring', label: 'Recurring', sortable: true, width: '8%' }
   ]
 </script>
 
@@ -78,6 +111,9 @@
       <FieldGrid cols={3}>
         <Field name="slug" label="Slug" required placeholder="e.g. meeting_room" />
         <Field name="name" label="Name" required placeholder="e.g. Meeting Room" />
+        <Field label="Family">
+          <Select name="family" value="" options={FAMILY_OPTIONS} />
+        </Field>
         <Field name="description" label="Description" />
         <Field label="Requires Licence">
           <Select name="requires_license" value="false" options={yesNo} />
@@ -112,6 +148,20 @@
   {#snippet row(it)}
     <td class="mono">{it.slug}</td>
     <td><span class="name">{it.name}</span></td>
+    <td>
+      {#if it.family}
+        <Badge tone="info">{it.family}</Badge>
+      {:else}
+        <span class="muted">—</span>
+      {/if}
+    </td>
+    <td class="mono right" title={familyFieldList(it.family)}>
+      {#if familyFieldCount(it.family) > 0}
+        {familyFieldCount(it.family)}
+      {:else}
+        <span class="muted">—</span>
+      {/if}
+    </td>
     <td class="muted ellipsis" title={it.description ?? ''}>{it.description ?? '—'}</td>
     <td>
       {#if it.requires_license}
@@ -186,9 +236,23 @@
         <Field name="slug" label="Slug" value={editing.slug} required />
         <Field name="name" label="Name" value={editing.name} required />
       </FieldGrid>
-      <FieldGrid cols={1}>
+      <FieldGrid cols={2}>
+        <Field label="Family">
+          <Select name="family" value={editing.family ?? ''} options={FAMILY_OPTIONS} />
+        </Field>
         <Field name="description" label="Description" value={editing.description ?? ''} />
       </FieldGrid>
+
+      {#if editing.family && FAMILY_FIELD_LABELS[editing.family]}
+        <div class="family-preview">
+          <span class="family-preview-label">Fields ({FAMILY_FIELD_LABELS[editing.family].length})</span>
+          <div class="family-preview-list">
+            {#each FAMILY_FIELD_LABELS[editing.family] as f}
+              <Badge tone="default">{f}</Badge>
+            {/each}
+          </div>
+        </div>
+      {/if}
 
       <h3 class="section-title">Policy</h3>
       <FieldGrid cols={3}>
@@ -253,4 +317,26 @@
     overflow-x: auto;
     margin: 0;
   }
+  .family-preview {
+    margin: var(--space-3) 0 var(--space-4);
+    padding: var(--space-2) var(--space-3);
+    background: #e9ecef;
+    border-radius: var(--radius-sm);
+  }
+  .family-preview-label {
+    display: block;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--label-color);
+    font-weight: var(--weight-semibold);
+    margin-bottom: var(--space-2);
+  }
+  .family-preview-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .right { text-align: right; }
+  .muted { color: var(--text-muted); }
 </style>

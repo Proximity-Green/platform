@@ -15,6 +15,7 @@
     SubmitButton
   } from '$lib/components/ui'
   import type { Column, Filter } from '$lib/components/ui/DataTable.svelte'
+  import { fmtMoneyWithCurrency } from '$lib/utils/money'
 
   type Wallet = {
     id: string
@@ -54,14 +55,7 @@
   permStore.subscribe(v => { perms = v })
   function can(resource: string, action: string = 'read') { return canDo(perms, resource, action) }
 
-  function money(value: number | null | undefined, currency: string): string {
-    if (value == null) return '—'
-    try {
-      return new Intl.NumberFormat(undefined, { style: 'currency', currency, currencyDisplay: 'code' }).format(Number(value))
-    } catch {
-      return `${currency} ${Number(value).toFixed(2)}`
-    }
-  }
+  const money = (value: number | null | undefined, currency: string) => fmtMoneyWithCurrency(value, currency)
 
   function txnKindTone(k: WalletTxn['kind']): 'default' | 'success' | 'warning' | 'info' | 'danger' {
     switch (k) {

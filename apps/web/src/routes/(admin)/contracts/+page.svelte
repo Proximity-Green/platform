@@ -15,6 +15,7 @@
     SubmitButton
   } from '$lib/components/ui'
   import type { Column, Filter } from '$lib/components/ui/DataTable.svelte'
+  import { fmtMoneyWithCurrency } from '$lib/utils/money'
 
   type Contract = {
     id: string
@@ -79,14 +80,7 @@
     }
   }
 
-  function money(value: number | null | undefined, currency: string): string {
-    if (value == null) return '—'
-    try {
-      return new Intl.NumberFormat(undefined, { style: 'currency', currency, currencyDisplay: 'code' }).format(Number(value))
-    } catch {
-      return `${currency} ${Number(value).toFixed(2)}`
-    }
-  }
+  const money = (value: number | null | undefined, currency: string) => fmtMoneyWithCurrency(value, currency)
 
   const contracts: Contract[] = data.contracts as Contract[]
 

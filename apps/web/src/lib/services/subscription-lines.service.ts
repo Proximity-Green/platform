@@ -159,8 +159,8 @@ export async function convertToInvoice(
     .select(`
       id, organisation_id, location_id, currency, base_rate, quantity,
       item_id, license_id, status,
-      items(name, accounting_gl_code, accounting_item_code, accounting_tax_code, accounting_tracking_codes),
-      licenses(item_id, items(name, accounting_gl_code, accounting_item_code, accounting_tax_code, accounting_tracking_codes))
+      items(name, accounting_gl_code, accounting_item_code, accounting_tax_code, item_tracking_codes(tracking_codes(code))),
+      licenses(item_id, items(name, accounting_gl_code, accounting_item_code, accounting_tax_code, item_tracking_codes(tracking_codes(code))))
     `)
     .eq('id', subscriptionLineId)
     .single()
@@ -218,7 +218,9 @@ export async function convertToInvoice(
     accounting_gl_code: itemMeta?.accounting_gl_code,
     accounting_item_code: itemMeta?.accounting_item_code,
     accounting_tax_code: itemMeta?.accounting_tax_code,
-    accounting_tracking_codes: itemMeta?.accounting_tracking_codes
+    accounting_tracking_codes: (itemMeta?.item_tracking_codes ?? [])
+      .map((l: any) => l.tracking_codes?.code)
+      .filter((c: string | null | undefined): c is string => !!c)
   })
 
   if (lineErr) {

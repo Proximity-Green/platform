@@ -1,0 +1,456 @@
+<script lang="ts">
+  import { page } from '$app/stores'
+  import { canDo } from '$lib/stores/permissions'
+  import { look, mode, toggleMode } from '$lib/stores/theme'
+  import ThemeToggle from './ThemeToggle.svelte'
+  import GlobalSearch from './GlobalSearch.svelte'
+  import Workshop17Logo from './Workshop17Logo.svelte'
+
+  type Perms = { role: string | null; permissions: any; loaded: boolean }
+
+  type IconName = 'admin' | 'building' | 'user' | 'globe' | 'coins' | 'sliders'
+  type Leaf = { href: string; label: string; guard?: string }
+  type Section = { heading?: string; items: Leaf[] }
+  type Group = { label: string; icon: IconName; sections: Section[]; primary?: boolean }
+
+  type Props = {
+    perms: Perms
+    email: string
+    role: string | null
+    onSignOut: () => void
+    search?: import('svelte').Snippet
+  }
+  let { perms, email, role, onSignOut, search }: Props = $props()
+
+  type PrimaryLeaf = Leaf & { icon: IconName }
+  const PRIMARY: PrimaryLeaf[] = [
+    { href: '/organisations', label: 'Organisations', guard: 'organisations', icon: 'building' },
+    { href: '/people',        label: 'Members',       guard: 'persons',       icon: 'user' }
+  ]
+
+  const GROUPS: Group[] = [
+    {
+      label: 'More', icon: 'globe',
+      sections: [
+        {
+          heading: 'Catalog',
+          items: [
+            { href: '/locations',  label: 'Locations',      guard: 'locations' },
+            { href: '/spaces',     label: 'Spaces',         guard: 'locations' },
+            { href: '/items',      label: 'Items',          guard: 'items' },
+            { href: '/item-types', label: 'Item Types',     guard: 'items' },
+            { href: '/licenses',   label: 'Licences',       guard: 'subscriptions' }
+          ]
+        },
+        {
+          heading: 'Finance',
+          items: [
+            { href: '/subs',      label: 'Subscriptions',  guard: 'subscriptions' },
+            { href: '/invoices',  label: 'Invoices',       guard: 'invoices' },
+            { href: '/contracts', label: 'Contracts',      guard: 'contracts' },
+            { href: '/wallets',   label: 'Wallets',        guard: 'wallets' }
+          ]
+        },
+        {
+          heading: 'System',
+          items: [
+            { href: '/users',       label: 'Users',       guard: 'users' },
+            { href: '/roles',       label: 'Roles',       guard: 'roles' },
+            { href: '/messages',    label: 'Messages',    guard: 'settings' },
+            { href: '/changelog',   label: 'Change Log',  guard: 'audit_log' },
+            { href: '/system-logs', label: 'System Logs', guard: 'system_logs' },
+            { href: '/docs',        label: 'Docs' }
+          ]
+        }
+      ]
+    }
+  ]
+
+  function allowed(leaf: Leaf): boolean {
+    if (!leaf.guard) return true
+    return canDo(perms, leaf.guard, 'read')
+  }
+
+  function isActive(href: string): boolean {
+    return $page.url.pathname === href || $page.url.pathname.startsWith(href + '/')
+  }
+
+  // Keep section headings (Catalog / Finance / System); sort items
+  // alphabetically within each section.
+  const visibleGroups = $derived(
+    GROUPS.map(g => ({
+      ...g,
+      sections: g.sections
+        .map(s => ({
+          ...s,
+          items: s.items.filter(allowed).slice().sort((a, b) => a.label.localeCompare(b.label))
+        }))
+        .filter(s => s.items.length > 0)
+    })).filter(g => g.sections.length > 0)
+  )
+  const visiblePrimary = $derived(PRIMARY.filter(allowed))
+
+  let openGroup = $state<string | null>(null)
+  let openAvatar = $state(false)
+
+  function toggleGroup(label: string) {
+    openGroup = openGroup === label ? null : label
+    openAvatar = false
+  }
+  function toggleAvatar() {
+    openAvatar = !openAvatar
+    openGroup = null
+  }
+  function closeAll() {
+    openGroup = null
+    openAvatar = false
+  }
+
+  // Click-outside close
+  function handleDocClick(e: MouseEvent) {
+    const target = e.target as HTMLElement
+    if (!target.closest('.topnav')) closeAll()
+  }
+  $effect(() => {
+    document.addEventListener('click', handleDocClick)
+    return () => document.removeEventListener('click', handleDocClick)
+  })
+</script>
+
+{#snippet navIcon(name: IconName)}
+  <span class="icon" aria-hidden="true">
+    {#if name === 'admin'}
+      <!-- Lucide: shield-check -->
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 13c0 5-3.5 7.5-7.7 8.9a1.7 1.7 0 0 1-1.1 0C7 20.5 3.5 18 3.5 13V6l8-3 8 3z"/>
+        <path d="m9 12 2 2 4-4"/>
+      </svg>
+    {:else if name === 'building'}
+      <!-- Lucide: building-2 -->
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/>
+        <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/>
+        <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/>
+        <path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/>
+      </svg>
+    {:else if name === 'user'}
+      <!-- Lucide: user-round -->
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="8" r="5"/>
+        <path d="M20 21a8 8 0 0 0-16 0"/>
+      </svg>
+    {:else if name === 'globe'}
+      <!-- Lucide: globe -->
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/>
+        <path d="M2 12h20"/>
+      </svg>
+    {:else if name === 'coins'}
+      <!-- Lucide: coins -->
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="8" cy="8" r="6"/>
+        <path d="M18.09 10.37A6 6 0 1 1 10.34 18"/>
+        <path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/>
+      </svg>
+    {:else if name === 'sliders'}
+      <!-- Lucide: sliders-horizontal -->
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/>
+        <line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/>
+        <line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/>
+        <line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/>
+      </svg>
+    {/if}
+  </span>
+{/snippet}
+
+<header class="topnav" role="navigation" aria-label="Primary">
+  <div class="nav-inner">
+    <a href="/admin" class="brand" onclick={closeAll} aria-label="Workshop17">
+      <span class="brand-mark"><Workshop17Logo /></span>
+    </a>
+
+    <nav class="nav-items">
+      <a href="/admin" class="nav-item" class:is-active={isActive('/admin')}>
+        {@render navIcon('admin')}
+        <span class="label">Admin</span>
+      </a>
+
+      {#each visiblePrimary as item (item.href)}
+        <a href={item.href} class="nav-item" class:is-active={isActive(item.href)}>
+          {@render navIcon(item.icon)}
+          <span class="label">{item.label}</span>
+        </a>
+      {/each}
+
+      {#each visibleGroups as group (group.label)}
+        <div class="nav-item dropdown icon-only" class:is-open={openGroup === group.label}>
+          <button type="button" class="dropdown-trigger" onclick={() => toggleGroup(group.label)} aria-expanded={openGroup === group.label} title={group.label}>
+            {@render navIcon(group.icon)}
+            <span class="chev" aria-hidden="true">▾</span>
+          </button>
+          {#if openGroup === group.label}
+            <div class="dropdown-panel" role="menu">
+              {#each group.sections as section}
+                {#if section.heading}
+                  <div class="dropdown-heading">{section.heading}</div>
+                {/if}
+                {#each section.items as leaf (leaf.href)}
+                  <a href={leaf.href} class="dropdown-link" class:is-active={isActive(leaf.href)} role="menuitem" onclick={closeAll}>
+                    {leaf.label}
+                  </a>
+                {/each}
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/each}
+    </nav>
+
+    <div class="nav-right">
+      {#if search}
+        {@render search()}
+      {:else}
+        <GlobalSearch />
+      {/if}
+
+      <div class="avatar-wrap" class:is-open={openAvatar}>
+        <button type="button" class="avatar-btn" onclick={toggleAvatar} aria-label="Account">
+          <span class="avatar-initials">{(email?.[0] ?? '?').toUpperCase()}</span>
+        </button>
+        {#if openAvatar}
+          <div class="dropdown-panel avatar-panel" role="menu">
+            <div class="avatar-meta">
+              <div class="avatar-email">{email}</div>
+              <div class="avatar-role">{role ?? 'no role'}</div>
+            </div>
+            <a href="/profile" class="dropdown-link" onclick={closeAll}>Profile</a>
+            <a href="/dev-changelog" class="dropdown-link" onclick={closeAll}>Changelog</a>
+            <div class="theme-chooser">
+              <div class="chooser-label">Theme</div>
+              <ThemeToggle />
+              {#if $look !== 'w17'}
+                <button type="button" class="dropdown-link as-btn mode-btn" onclick={toggleMode}>
+                  Mode: {$mode === 'dark' ? 'Dark' : 'Light'} (click to flip)
+                </button>
+              {/if}
+            </div>
+            <button class="dropdown-link as-btn" onclick={() => { closeAll(); onSignOut() }}>Sign out</button>
+          </div>
+        {/if}
+      </div>
+    </div>
+  </div>
+</header>
+
+<style>
+  :global(:root) { --topnav-height: 60px; }
+  .topnav {
+    position: sticky;
+    top: 0;
+    z-index: 500;
+    background: var(--nav-bg);
+    color: var(--nav-item-color);
+    box-shadow: var(--shadow-sm);
+  }
+  .nav-inner {
+    display: flex;
+    align-items: stretch;
+    gap: var(--space-2);
+    padding: 0 var(--space-5);
+    height: 60px;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    padding-right: var(--space-5);
+    color: var(--nav-item-color);
+    text-decoration: none;
+  }
+  .brand-mark {
+    display: inline-flex;
+    align-items: center;
+    color: #ffffff;
+  }
+  .brand-mark :global(svg) {
+    width: 168px;
+    height: auto;
+    display: block;
+    color: #ffffff;
+  }
+
+  @media (max-width: 720px) {
+    .brand-mark :global(svg) { width: 120px; }
+  }
+
+  .nav-items {
+    display: flex;
+    align-items: stretch;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .nav-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 var(--space-4);
+    font-size: 1rem;
+    font-weight: var(--weight-medium);
+    color: var(--nav-item-color);
+    text-decoration: none;
+    position: relative;
+    white-space: nowrap;
+    transition: background var(--motion-fast) var(--ease-out);
+  }
+  .nav-item .icon { width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; opacity: 0.95; }
+  .nav-item .icon svg { width: 100%; height: 100%; display: block; }
+  .dropdown.icon-only .dropdown-trigger { padding: 0 var(--space-3); font-size: 1rem; }
+  .dropdown.icon-only .icon { width: 18px; height: 18px; }
+  .nav-item:hover { background: var(--nav-selected-bg); }
+  .nav-item.is-active { background: var(--nav-selected-bg); }
+  .nav-item.is-active::after {
+    content: '';
+    position: absolute;
+    left: var(--space-3);
+    right: var(--space-3);
+    bottom: 0;
+    height: 2px;
+    background: var(--nav-selected-accent);
+    border-radius: 1px;
+  }
+  .icon { font-size: 14px; opacity: 0.95; }
+  .label { line-height: 1; }
+
+  .dropdown { position: relative; padding: 0; }
+  .dropdown-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 var(--space-3);
+    height: 100%;
+    background: transparent;
+    border: none;
+    color: var(--nav-item-color);
+    font: inherit;
+    font-weight: var(--weight-medium);
+    cursor: pointer;
+  }
+  .dropdown-trigger:hover { background: var(--nav-selected-bg); }
+  .dropdown.is-open .dropdown-trigger { background: var(--nav-selected-bg); }
+  .chev { font-size: 10px; opacity: 0.8; }
+
+  .dropdown-panel {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 240px;
+    background: var(--nav-dropdown-bg, var(--nav-bg));
+    color: var(--nav-item-color);
+    box-shadow: var(--shadow-md);
+    display: flex;
+    flex-direction: column;
+    padding: 8px 0 10px;
+    z-index: 10020;
+  }
+  .dropdown-link {
+    display: block;
+    padding: 9px 22px 9px 28px;
+    font-size: 0.95rem;
+    color: var(--nav-item-color);
+    text-decoration: none;
+    background: transparent;
+    border: none;
+    text-align: left;
+    width: 100%;
+    cursor: pointer;
+    line-height: 1.2;
+  }
+  .dropdown-link:hover { background: var(--nav-dropdown-hover, var(--nav-selected-bg)); }
+  .dropdown-link.is-active { background: var(--nav-dropdown-hover, var(--nav-selected-bg)); font-weight: var(--weight-semibold); }
+  .dropdown-link.as-btn { font-family: inherit; }
+  .dropdown-heading {
+    padding: 14px 22px 4px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: rgba(255, 255, 255, 0.55);
+    font-weight: 600;
+  }
+  .dropdown-heading:first-child { padding-top: 6px; }
+
+  .nav-right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-left: auto;
+    padding-left: var(--space-3);
+  }
+
+  .avatar-wrap { position: relative; }
+  .avatar-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.18);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    font-weight: var(--weight-semibold);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .avatar-btn:hover { background: rgba(255, 255, 255, 0.28); }
+  .avatar-initials { font-size: 13px; letter-spacing: 0.5px; }
+
+  .avatar-panel { right: 0; left: auto; min-width: 220px; }
+  .avatar-meta {
+    padding: var(--space-2) var(--space-4);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .avatar-email { font-size: var(--text-xs); opacity: 0.85; word-break: break-all; }
+  .avatar-role { font-size: 11px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 2px; }
+
+  .theme-chooser {
+    padding: var(--space-2) var(--space-4);
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .chooser-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    opacity: 0.6;
+  }
+  .chooser-row { display: flex; gap: 4px; flex-wrap: wrap; }
+  .chooser-chip {
+    background: rgba(255, 255, 255, 0.1);
+    color: inherit;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: var(--radius-sm);
+    padding: 4px 10px;
+    font-size: 11px;
+    cursor: pointer;
+    font: inherit;
+  }
+  .chooser-chip:hover { background: rgba(255, 255, 255, 0.2); }
+  .chooser-chip.is-active {
+    background: #ffffff;
+    color: #2b3431;
+    border-color: #ffffff;
+    font-weight: var(--weight-semibold);
+  }
+  .mode-btn { font-size: 11px; padding: 4px 0; opacity: 0.8; }
+
+  @media (max-width: 720px) {
+    .nav-item .label { display: none; }
+    .dropdown-trigger .label { display: none; }
+  }
+</style>

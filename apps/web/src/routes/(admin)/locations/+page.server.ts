@@ -73,8 +73,6 @@ function readLocationInput(data: FormData): locationsService.LocationInput {
     accounting_gl_code: blank(data, 'accounting_gl_code'),
     accounting_item_code: blank(data, 'accounting_item_code'),
     accounting_tax_code: blank(data, 'accounting_tax_code'),
-    accounting_tracking_code: blank(data, 'accounting_tracking_code'),
-    accounting_tracking_name: blank(data, 'accounting_tracking_name'),
     accounting_stationery_id: blank(data, 'accounting_stationery_id'),
     accounting_branding_theme: blank(data, 'accounting_branding_theme'),
     accounting_tax_type: blank(data, 'accounting_tax_type'),

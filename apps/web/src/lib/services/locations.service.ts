@@ -49,8 +49,6 @@ export type LocationInput = {
   accounting_gl_code?: string | null
   accounting_item_code?: string | null
   accounting_tax_code?: string | null
-  accounting_tracking_code?: string | null
-  accounting_tracking_name?: string | null
   accounting_stationery_id?: string | null
   accounting_branding_theme?: string | null
   accounting_tax_type?: string | null

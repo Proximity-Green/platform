@@ -1,9 +1,70 @@
 import { fail, error } from '@sveltejs/kit'
 import { requirePermission, getUserIdFromRequest, supabase } from '$lib/services/permissions.service'
+import * as locationsService from '$lib/services/locations.service'
 
 const blank = (data: FormData, k: string): string | null => {
   const v = data.get(k)
   return v == null || v === '' ? null : (v as string)
+}
+
+function numOrNull(data: FormData, k: string): number | null {
+  const v = data.get(k)
+  if (v == null || v === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+function boolFromCheckbox(data: FormData, k: string): boolean {
+  const v = data.get(k)
+  return v === 'on' || v === 'true' || v === '1'
+}
+
+function readLocationInput(data: FormData): locationsService.LocationInput {
+  const status = (data.get('status') as string) || 'active'
+  return {
+    name: (data.get('name') as string) ?? '',
+    slug: (data.get('slug') as string) ?? '',
+    short_name: blank(data, 'short_name'),
+    description: blank(data, 'description'),
+    legal_entity_id: blank(data, 'legal_entity_id'),
+    address_line_1: blank(data, 'address_line_1'),
+    address_line_2: blank(data, 'address_line_2'),
+    suburb: blank(data, 'suburb'),
+    city: blank(data, 'city'),
+    postal_code: blank(data, 'postal_code'),
+    country_code: blank(data, 'country_code'),
+    latitude: numOrNull(data, 'latitude'),
+    longitude: numOrNull(data, 'longitude'),
+    email: blank(data, 'email'),
+    phone: blank(data, 'phone'),
+    website: blank(data, 'website'),
+    timezone: blank(data, 'timezone') ?? 'Africa/Johannesburg',
+    currency: blank(data, 'currency') ?? 'ZAR',
+    logo_url: blank(data, 'logo_url'),
+    hero_image_url: blank(data, 'hero_image_url'),
+    map_image_url: blank(data, 'map_image_url'),
+    map_link: blank(data, 'map_link'),
+    background_colour: blank(data, 'background_colour'),
+    access_instructions: blank(data, 'access_instructions'),
+    community_manager_person_id: blank(data, 'community_manager_person_id'),
+    banking_account_number: blank(data, 'banking_account_number'),
+    banking_bank_code: blank(data, 'banking_bank_code'),
+    accounting_external_tenant_id: blank(data, 'accounting_external_tenant_id'),
+    accounting_gl_code: blank(data, 'accounting_gl_code'),
+    accounting_item_code: blank(data, 'accounting_item_code'),
+    accounting_tax_code: blank(data, 'accounting_tax_code'),
+    accounting_stationery_id: blank(data, 'accounting_stationery_id'),
+    accounting_branding_theme: blank(data, 'accounting_branding_theme'),
+    accounting_tax_type: blank(data, 'accounting_tax_type'),
+    commercial_tax_percentage: numOrNull(data, 'commercial_tax_percentage'),
+    commercial_app_discount_percentage: numOrNull(data, 'commercial_app_discount_percentage'),
+    area_unit: blank(data, 'area_unit') ?? 'sqm',
+    billing_date_pattern: blank(data, 'billing_date_pattern') ?? 'advance_dated',
+    status: status as locationsService.LocationStatus,
+    headquarters: boolFromCheckbox(data, 'headquarters'),
+    started_at: blank(data, 'started_at'),
+    closed_at: blank(data, 'closed_at')
+  }
 }
 
 export const load = async ({ params, cookies, locals }) => {
@@ -12,29 +73,46 @@ export const load = async ({ params, cookies, locals }) => {
 
   const id = params.id
 
-  const { data: location, error: locErr } = await supabase
-    .from('locations')
-    .select('*')
-    .eq('id', id)
-    .single()
+  const [
+    locationRes,
+    trackingCodesRes,
+    legalEntitiesRes,
+    personsRes
+  ] = await Promise.all([
+    supabase.from('locations').select('*').eq('id', id).single(),
+    supabase
+      .from('tracking_codes')
+      .select('*')
+      .eq('location_id', id)
+      .order('category', { ascending: true, nullsFirst: false })
+      .order('is_primary', { ascending: false })
+      .order('code', { ascending: true }),
+    supabase.from('legal_entities').select('id, name').order('name'),
+    supabase.from('persons').select('id, first_name, last_name').order('first_name')
+  ])
 
-  if (locErr || !location) throw error(404, 'Location not found')
-
-  const { data: trackingCodes } = await supabase
-    .from('tracking_codes')
-    .select('*')
-    .eq('location_id', id)
-    .order('category', { ascending: true, nullsFirst: false })
-    .order('is_primary', { ascending: false })
-    .order('code', { ascending: true })
+  if (locationRes.error || !locationRes.data) throw error(404, 'Location not found')
 
   return {
-    location,
-    trackingCodes: trackingCodes ?? []
+    location: locationRes.data,
+    trackingCodes: trackingCodesRes.data ?? [],
+    legalEntities: legalEntitiesRes.data ?? [],
+    persons: personsRes.data ?? []
   }
 }
 
 export const actions = {
+  update: async ({ request, params, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
+    if (userId) await requirePermission(userId, 'locations', 'update')
+
+    const data = await request.formData()
+    const input = readLocationInput(data)
+    const result = await locationsService.updateLocation(params.id, input)
+    if (!result.ok) return fail(400, { error: result.error })
+    return { success: true, message: 'Location updated' }
+  },
+
   addTrackingCode: async ({ request, params, cookies, locals }) => {
     const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'locations', 'update')

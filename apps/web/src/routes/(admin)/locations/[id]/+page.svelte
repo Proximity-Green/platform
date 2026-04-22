@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from '$app/stores'
   import { enhance } from '$app/forms'
+  import { goto } from '$app/navigation'
   import { permStore, canDo } from '$lib/stores/permissions'
   import {
     Button,
@@ -29,10 +30,88 @@
 
   const TABS = [
     { key: 'properties', label: 'Properties' },
+    { key: 'contact',    label: 'Contact' },
+    { key: 'accounting', label: 'Accounting' },
+    { key: 'stationery', label: 'Stationery' },
     { key: 'tracking',   label: 'Tracking Codes' }
   ] as const
 
+  const statusOptions = [
+    { value: 'active',   label: 'Active' },
+    { value: 'paused',   label: 'Paused' },
+    { value: 'closed',   label: 'Closed' },
+    { value: 'planned',  label: 'Planned' },
+    { value: 'inactive', label: 'Inactive' }
+  ]
+  const currencyOptions = [
+    { value: 'ZAR', label: 'ZAR' },
+    { value: 'USD', label: 'USD' },
+    { value: 'EUR', label: 'EUR' },
+    { value: 'GBP', label: 'GBP' },
+    { value: 'KES', label: 'KES' },
+    { value: 'NGN', label: 'NGN' }
+  ]
+  const areaUnitOptions = [
+    { value: 'sqm', label: 'Square metres' },
+    { value: 'sqft', label: 'Square feet' }
+  ]
+  const billingDatePatternOptions = [
+    { value: 'advance_dated', label: 'Advance-dated (1st of month)' },
+    { value: 'arrears', label: 'Arrears (end of month)' }
+  ]
+  const timezoneOptions = [
+    { value: 'Africa/Johannesburg', label: 'Africa/Johannesburg' },
+    { value: 'Africa/Nairobi', label: 'Africa/Nairobi' },
+    { value: 'Africa/Lagos', label: 'Africa/Lagos' },
+    { value: 'Europe/London', label: 'Europe/London' },
+    { value: 'UTC', label: 'UTC' }
+  ]
+
+  function toDateInput(v: string | null): string {
+    if (!v) return ''
+    const d = new Date(v)
+    if (isNaN(d.getTime())) return ''
+    return d.toISOString().slice(0, 10)
+  }
+
   const activeTab = $derived(($page.url.searchParams.get('tab') ?? 'properties'))
+
+  // Keyboard navigation:
+  //   ⌘/Ctrl+Enter — save the form (anywhere, even inside an input)
+  //   →             — next tab (when not in a text input)
+  //   ←             — previous tab, or back to list at the first tab
+  $effect(() => {
+    function onKey(e: KeyboardEvent) {
+      // ⌘/Ctrl+Enter: save from anywhere — don't skip when focus is in a field
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        const form = document.getElementById('update-form') as HTMLFormElement | null
+        if (form) { e.preventDefault(); form.requestSubmit() }
+        return
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+      const ae = document.activeElement as HTMLElement | null
+      if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable)) return
+      if (document.querySelector('[role="dialog"]')) return
+
+      const idx = TABS.findIndex(t => t.key === activeTab)
+      if (e.key === 'ArrowRight') {
+        if (idx >= 0 && idx < TABS.length - 1) {
+          e.preventDefault()
+          goto(tabHref(TABS[idx + 1].key), { replaceState: true, noScroll: true, keepFocus: true })
+        }
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        if (idx > 0) {
+          goto(tabHref(TABS[idx - 1].key), { replaceState: true, noScroll: true, keepFocus: true })
+        } else {
+          goto('/locations')
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
 
   function tabHref(key: string): string {
     const u = new URL($page.url)
@@ -91,8 +170,11 @@
   }
 </script>
 
-<PageHead title={loc.name} lede={loc.short_name ?? loc.slug ?? ''}>
-  <Button variant="ghost" size="sm" href="/locations">← Back to Locations</Button>
+<PageHead title={`Location: ${loc.name}`} lede={loc.short_name ?? loc.slug ?? ''}>
+  <Button variant="ghost" size="sm" href="/locations">← Back</Button>
+  {#if activeTab !== 'tracking' && can('locations', 'update')}
+    <Button type="submit" form="update-form" size="sm" loading={saving}>{saving ? 'Saving…' : 'Save Changes'}</Button>
+  {/if}
 </PageHead>
 
 <Toast error={form?.error} success={form?.success} message={form?.message} />
@@ -104,24 +186,150 @@
 </nav>
 
 <div class="tab-body">
-  {#if activeTab === 'properties'}
-    <Card padding="md">
-      <FieldGrid cols={2}>
-        <Field label="Name"><div class="ro-input">{loc.name}</div></Field>
-        <Field label="Short Name"><div class="ro-input">{loc.short_name ?? '—'}</div></Field>
-        <Field label="Slug"><div class="ro-input mono">{loc.slug}</div></Field>
-        <Field label="Status">
-          <div class="ro-input"><Badge tone={statusTone(loc.status)}>{loc.status}</Badge></div>
-        </Field>
-        <Field label="Currency"><div class="ro-input mono">{loc.currency ?? '—'}</div></Field>
-        <Field label="Country"><div class="ro-input">{loc.country_code ?? '—'}</div></Field>
-        <Field label="City"><div class="ro-input">{loc.city ?? '—'}</div></Field>
-        <Field label="Started"><div class="ro-input">{fmtDate(loc.started_at)}</div></Field>
-        <Field label="Headquarters">
-          <div class="ro-input">{loc.headquarters ? 'Yes' : 'No'}</div>
-        </Field>
-      </FieldGrid>
-    </Card>
+  {#if activeTab !== 'tracking'}
+    <form
+      method="POST"
+      action="?/update"
+      id="update-form"
+      autocomplete="off"
+      use:enhance={() => {
+        saving = true
+        return async ({ update }) => {
+          await update({ reset: false })
+          saving = false
+        }
+      }}
+    >
+      <!-- ── PROPERTIES ── -->
+      <div class="pane" class:is-active={activeTab === 'properties'}>
+        <h3 class="section-title">Identity</h3>
+        <FieldGrid cols={2}>
+          <Field name="name" label="Name" value={loc.name} required />
+          <Field name="slug" label="Slug" value={loc.slug} required />
+          <Field name="short_name" label="Short Name" value={loc.short_name ?? ''} />
+          <Field label="Legal Entity">
+            <Select name="legal_entity_id" value={loc.legal_entity_id ?? ''}
+              placeholder="None"
+              options={[{ value: '', label: 'None' }, ...(data.legalEntities as any[]).map(e => ({ value: e.id, label: e.name }))]} />
+          </Field>
+        </FieldGrid>
+        <FieldGrid cols={1}>
+          <Field name="description" label="Description" value={loc.description ?? ''} />
+        </FieldGrid>
+
+        <h3 class="section-title">Commercial</h3>
+        <FieldGrid cols={2}>
+          <Field label="Area Unit">
+            <Select name="area_unit" value={loc.area_unit ?? 'sqm'} options={areaUnitOptions} />
+          </Field>
+          <Field name="commercial_tax_percentage" label="Tax %" value={loc.commercial_tax_percentage != null ? String(loc.commercial_tax_percentage) : ''} />
+          <Field name="commercial_app_discount_percentage" label="App Discount %" value={loc.commercial_app_discount_percentage != null ? String(loc.commercial_app_discount_percentage) : ''} />
+          <Field label="Billing Date Pattern">
+            <Select name="billing_date_pattern" value={loc.billing_date_pattern ?? 'advance_dated'} options={billingDatePatternOptions} />
+          </Field>
+        </FieldGrid>
+
+        <h3 class="section-title">Lifecycle</h3>
+        <FieldGrid cols={2}>
+          <Field label="Status">
+            <Select name="status" value={loc.status ?? 'active'} options={statusOptions} />
+          </Field>
+          <label class="checkbox-field">
+            <input type="checkbox" name="headquarters" checked={loc.headquarters} />
+            <span>Headquarters</span>
+          </label>
+          <Field name="started_at" label="Started" type="date" value={toDateInput(loc.started_at)} />
+          <Field name="closed_at" label="Closed" type="date" value={toDateInput(loc.closed_at)} />
+        </FieldGrid>
+      </div>
+
+      <!-- ── CONTACT ── -->
+      <div class="pane" class:is-active={activeTab === 'contact'}>
+        <h3 class="section-title">Location Manager</h3>
+        <FieldGrid cols={2}>
+          <Field label="Community Manager">
+            <Select name="community_manager_person_id" value={loc.community_manager_person_id ?? ''}
+              placeholder="None"
+              options={[{ value: '', label: 'None' }, ...(data.persons as any[]).map(p => ({ value: p.id, label: `${p.first_name} ${p.last_name}` }))]} />
+          </Field>
+        </FieldGrid>
+
+        <h3 class="section-title">Emails &amp; Phones</h3>
+        <FieldGrid cols={2}>
+          <Field name="email" label="Email" type="email" value={loc.email ?? ''} />
+          <Field name="phone" label="Phone" value={loc.phone ?? ''} />
+          <Field name="website" label="Website" value={loc.website ?? ''} />
+        </FieldGrid>
+
+        <h3 class="section-title">Address</h3>
+        <FieldGrid cols={2}>
+          <Field name="address_line_1" label="Address Line 1" value={loc.address_line_1 ?? ''} />
+          <Field name="address_line_2" label="Address Line 2" value={loc.address_line_2 ?? ''} />
+          <Field name="suburb" label="Suburb" value={loc.suburb ?? ''} />
+          <Field name="city" label="City" value={loc.city ?? ''} />
+          <Field name="postal_code" label="Postal Code" value={loc.postal_code ?? ''} />
+          <Field name="country_code" label="Country Code" value={loc.country_code ?? ''} placeholder="e.g. ZA" />
+          <Field name="latitude" label="Latitude" value={loc.latitude != null ? String(loc.latitude) : ''} />
+          <Field name="longitude" label="Longitude" value={loc.longitude != null ? String(loc.longitude) : ''} />
+          <Field label="Timezone">
+            <Select name="timezone" value={loc.timezone ?? 'Africa/Johannesburg'} options={timezoneOptions} />
+          </Field>
+        </FieldGrid>
+
+        <h3 class="section-title">Access</h3>
+        <FieldGrid cols={1}>
+          <Field name="access_instructions" label="Access Instructions" value={loc.access_instructions ?? ''} />
+        </FieldGrid>
+      </div>
+
+      <!-- ── ACCOUNTING ── -->
+      <div class="pane" class:is-active={activeTab === 'accounting'}>
+        <h3 class="section-title">External Tenant</h3>
+        <FieldGrid cols={2}>
+          <Field
+            name="accounting_external_tenant_id"
+            label="Accounting External Tenant ID"
+            value={loc.accounting_external_tenant_id ?? ''}
+            placeholder="e.g. Xero tenant id"
+          />
+          <Field label="Currency">
+            <Select name="currency" value={loc.currency ?? 'ZAR'} options={currencyOptions} />
+          </Field>
+          <Field name="accounting_tax_type" label="Tax Type" value={loc.accounting_tax_type ?? ''} />
+        </FieldGrid>
+
+        <h3 class="section-title">Codes</h3>
+        <FieldGrid cols={2}>
+          <Field name="accounting_gl_code" label="GL Code" value={loc.accounting_gl_code ?? ''} />
+          <Field name="accounting_item_code" label="Item Code" value={loc.accounting_item_code ?? ''} />
+          <Field name="accounting_tax_code" label="Tax Code" value={loc.accounting_tax_code ?? ''} />
+        </FieldGrid>
+
+        <h3 class="section-title">Banking</h3>
+        <FieldGrid cols={2}>
+          <Field name="banking_account_number" label="Banking Account #" value={loc.banking_account_number ?? ''} />
+          <Field name="banking_bank_code" label="Bank Code" value={loc.banking_bank_code ?? ''} />
+        </FieldGrid>
+      </div>
+
+      <!-- ── STATIONERY ── -->
+      <div class="pane" class:is-active={activeTab === 'stationery'}>
+        <h3 class="section-title">Invoice Branding</h3>
+        <FieldGrid cols={2}>
+          <Field name="accounting_stationery_id" label="Stationery ID" value={loc.accounting_stationery_id ?? ''} />
+          <Field name="accounting_branding_theme" label="Branding Theme" value={loc.accounting_branding_theme ?? ''} />
+        </FieldGrid>
+
+        <h3 class="section-title">Imagery</h3>
+        <FieldGrid cols={2}>
+          <Field name="logo_url" label="Logo URL" value={loc.logo_url ?? ''} />
+          <Field name="hero_image_url" label="Hero Image URL" value={loc.hero_image_url ?? ''} />
+          <Field name="map_image_url" label="Map Image URL" value={loc.map_image_url ?? ''} />
+          <Field name="map_link" label="Map Link" value={loc.map_link ?? ''} />
+          <Field name="background_colour" label="Background Colour" value={loc.background_colour ?? ''} placeholder="#hex or css" />
+        </FieldGrid>
+      </div>
+    </form>
 
   {:else if activeTab === 'tracking'}
     <section class="tc-section">
@@ -332,6 +540,25 @@
   }
 
   .tab-body { display: flex; flex-direction: column; gap: var(--space-4); }
+
+  .pane { display: none; }
+  .pane.is-active { display: block; }
+  .pane + .pane { margin-top: 0; }
+
+  .section-title {
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-wide, 0.08em);
+    text-transform: uppercase;
+    color: var(--label-color);
+    margin: var(--space-4) 0 var(--space-2);
+  }
+  .section-title:first-child { margin-top: 0; }
+  .checkbox-field {
+    display: inline-flex; align-items: center; gap: var(--space-2);
+    font-size: var(--text-sm); color: var(--text); margin-top: var(--space-2);
+  }
+  .checkbox-field input { width: 16px; height: 16px; accent-color: var(--accent); }
 
   .ro-input {
     padding: 0.4rem 0.6rem;

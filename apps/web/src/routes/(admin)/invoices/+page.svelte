@@ -16,6 +16,7 @@
     SubmitButton
   } from '$lib/components/ui'
   import type { Column, Filter } from '$lib/components/ui/DataTable.svelte'
+  import { fmtMoneyWithCurrency } from '$lib/utils/money'
 
   type Invoice = {
     id: string
@@ -107,18 +108,7 @@
     return `${y}-${m}-${day}T${h}:${min}`
   }
 
-  function money(value: number | null | undefined, currency: string): string {
-    if (value == null) return '—'
-    try {
-      return new Intl.NumberFormat(undefined, {
-        style: 'currency',
-        currency,
-        currencyDisplay: 'code'
-      }).format(Number(value))
-    } catch {
-      return `${currency} ${Number(value).toFixed(2)}`
-    }
-  }
+  const money = (value: number | null | undefined, currency: string) => fmtMoneyWithCurrency(value, currency)
 
   function statusTone(s: Invoice['status']): 'default' | 'success' | 'warning' | 'info' | 'danger' {
     switch (s) {

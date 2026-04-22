@@ -239,19 +239,16 @@
         selectedIndex = p.size - 1
       }
       scrollSelectedIntoView()
-    } else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-      if (onActivate && paged[selectedIndex]) {
-        e.preventDefault()
-        onActivate(paged[selectedIndex])
-      }
+    } else if (e.key === 'Enter' && paged[selectedIndex]) {
+      const row = paged[selectedIndex]
+      e.preventDefault()
+      if (onRowClick) onRowClick(row)
+      else if (onActivate) onActivate(row)
     } else if (e.key === 'ArrowRight' && paged[selectedIndex]) {
       const row = paged[selectedIndex]
-      if (onRowClick && isExpandedRow) {
-        if (!isExpandedRow(row)) { e.preventDefault(); onRowClick(row) }
-      } else if (onActivate) {
-        e.preventDefault()
-        onActivate(row)
-      }
+      e.preventDefault()
+      if (onRowClick) onRowClick(row)
+      else if (onActivate) onActivate(row)
     } else if (e.key === 'ArrowLeft' && onRowClick && isExpandedRow && paged[selectedIndex]) {
       const row = paged[selectedIndex]
       if (isExpandedRow(row)) {
@@ -601,7 +598,7 @@
   table {
     width: 100%;
     border-collapse: collapse;
-    font-size: var(--text-sm);
+    font-size: 1.05rem;
     table-layout: fixed;
   }
   thead {
@@ -610,7 +607,7 @@
   th {
     text-align: left;
     padding: var(--space-3) var(--space-3);
-    font-size: var(--text-xs);
+    font-size: 0.9rem;
     font-weight: var(--weight-semibold);
     text-transform: uppercase;
     letter-spacing: var(--label-letter-spacing, 0.1em);

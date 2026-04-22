@@ -2,6 +2,7 @@
   import { permStore, canDo } from '$lib/stores/permissions'
   import { enhance } from '$app/forms'
   import { goto } from '$app/navigation'
+  import { page } from '$app/stores'
   import {
     Button,
     PageHead,
@@ -63,8 +64,6 @@
     accounting_gl_code: string | null
     accounting_item_code: string | null
     accounting_tax_code: string | null
-    accounting_tracking_code: string | null
-    accounting_tracking_name: string | null
     accounting_stationery_id: string | null
     accounting_branding_theme: string | null
     accounting_tax_type: string | null
@@ -94,11 +93,18 @@
 
   let { data, form } = $props()
   let showCreate = $state(false)
-  let editing = $state<Location | null>(null)
-  let saving = $state(false)
 
   $effect(() => {
-    if (form?.success) { editing = null; showCreate = false }
+    if (form?.success) { showCreate = false }
+  })
+
+  // Deep-link: ?id=<location-id> redirects to the location detail page
+  // (global search hook). Locations use detail pages with tabs, not drawers.
+  $effect(() => {
+    const urlId = $page.url.searchParams.get('id')
+    if (!urlId) return
+    const exists = (data.locations as Location[]).some(l => l.id === urlId)
+    if (exists) goto(`/locations/${urlId}?tab=properties`, { replaceState: true })
   })
 
   let perms = $state({ role: null as string | null, permissions: [] as any, loaded: false })
@@ -247,7 +253,13 @@
   {/snippet}
   {#snippet actions(location)}
     {#if can('locations', 'update')}
-      <Button variant="ghost" size="sm" onclick={() => editing = location}>Edit</Button>
+      <a
+        class="open-arrow"
+        href={`/locations/${location.id}?tab=properties`}
+        onclick={(e) => e.stopPropagation()}
+        aria-label="Open location"
+        title="Open location"
+      >→</a>
     {/if}
     {#if can('locations', 'delete')}
       <SubmitButton
@@ -267,166 +279,33 @@
   {/snippet}
 </DataTable>
 
-<Drawer open={!!editing} title="Edit Location" formId="edit-form" width="640px" onClose={() => editing = null}>
-  {#if editing}
-    <form
-      method="POST"
-      action="?/update"
-      id="edit-form"
-      autocomplete="off"
-      use:enhance={() => {
-        saving = true
-        return async ({ update }) => {
-          await update({ reset: false })
-          saving = false
-        }
-      }}
-    >
-      <input type="hidden" name="id" value={editing.id} />
-
-      <h3 class="section-title">Identity</h3>
-      <FieldGrid cols={2}>
-        <Field name="name" label="Name" value={editing.name} required />
-        <Field name="slug" label="Slug" value={editing.slug} required />
-        <Field name="short_name" label="Short Name" value={editing.short_name ?? ''} />
-        <Field label="Legal Entity">
-          <Select
-            name="legal_entity_id"
-            value={editing.legal_entity_id ?? ''}
-            placeholder="None"
-            options={[{ value: '', label: 'None' }, ...data.legalEntities.map((e: any) => ({ value: e.id, label: e.name }))]}
-          />
-        </Field>
-      </FieldGrid>
-      <FieldGrid cols={1}>
-        <Field name="description" label="Description" value={editing.description ?? ''} />
-      </FieldGrid>
-
-      <h3 class="section-title">Address</h3>
-      <FieldGrid cols={2}>
-        <Field name="address_line_1" label="Address Line 1" value={editing.address_line_1 ?? ''} />
-        <Field name="address_line_2" label="Address Line 2" value={editing.address_line_2 ?? ''} />
-        <Field name="suburb" label="Suburb" value={editing.suburb ?? ''} />
-        <Field name="city" label="City" value={editing.city ?? ''} />
-        <Field name="postal_code" label="Postal Code" value={editing.postal_code ?? ''} />
-        <Field name="country_code" label="Country Code" value={editing.country_code ?? ''} placeholder="e.g. ZA" />
-        <Field name="latitude" label="Latitude" value={editing.latitude != null ? String(editing.latitude) : ''} />
-        <Field name="longitude" label="Longitude" value={editing.longitude != null ? String(editing.longitude) : ''} />
-        <Field label="Timezone">
-          <Select
-            name="timezone"
-            value={editing.timezone ?? 'Africa/Johannesburg'}
-            options={timezoneOptions}
-          />
-        </Field>
-      </FieldGrid>
-
-      <h3 class="section-title">Contact</h3>
-      <FieldGrid cols={2}>
-        <Field name="email" label="Email" type="email" value={editing.email ?? ''} />
-        <Field name="phone" label="Phone" value={editing.phone ?? ''} />
-        <Field name="website" label="Website" value={editing.website ?? ''} />
-      </FieldGrid>
-
-      <h3 class="section-title">Branding</h3>
-      <FieldGrid cols={2}>
-        <Field name="logo_url" label="Logo URL" value={editing.logo_url ?? ''} />
-        <Field name="hero_image_url" label="Hero Image URL" value={editing.hero_image_url ?? ''} />
-        <Field name="map_image_url" label="Map Image URL" value={editing.map_image_url ?? ''} />
-        <Field name="map_link" label="Map Link" value={editing.map_link ?? ''} />
-        <Field name="background_colour" label="Background Colour" value={editing.background_colour ?? ''} placeholder="#hex or css" />
-      </FieldGrid>
-
-      <h3 class="section-title">Operations</h3>
-      <FieldGrid cols={2}>
-        <Field label="Community Manager">
-          <Select
-            name="community_manager_person_id"
-            value={editing.community_manager_person_id ?? ''}
-            placeholder="None"
-            options={[{ value: '', label: 'None' }, ...data.persons.map((p: any) => ({ value: p.id, label: `${p.first_name} ${p.last_name}` }))]}
-          />
-        </Field>
-        <Field name="banking_account_number" label="Banking Account #" value={editing.banking_account_number ?? ''} />
-        <Field name="banking_bank_code" label="Bank Code" value={editing.banking_bank_code ?? ''} />
-      </FieldGrid>
-      <FieldGrid cols={1}>
-        <Field name="access_instructions" label="Access Instructions" value={editing.access_instructions ?? ''} />
-      </FieldGrid>
-
-      <h3 class="section-title">Accounting</h3>
-      <FieldGrid cols={2}>
-        <Field
-          name="accounting_external_tenant_id"
-          label="Accounting External Tenant ID"
-          value={editing.accounting_external_tenant_id ?? ''}
-          placeholder="e.g. Xero tenant id"
-        />
-        <Field name="accounting_gl_code" label="GL Code" value={editing.accounting_gl_code ?? ''} />
-        <Field name="accounting_item_code" label="Item Code" value={editing.accounting_item_code ?? ''} />
-        <Field name="accounting_tax_code" label="Tax Code" value={editing.accounting_tax_code ?? ''} />
-        <Field name="accounting_tracking_code" label="Tracking Code" value={editing.accounting_tracking_code ?? ''} />
-        <Field name="accounting_tracking_name" label="Tracking Name" value={editing.accounting_tracking_name ?? ''} />
-        <Field name="accounting_stationery_id" label="Stationery ID" value={editing.accounting_stationery_id ?? ''} />
-        <Field name="accounting_branding_theme" label="Branding Theme" value={editing.accounting_branding_theme ?? ''} />
-        <Field name="accounting_tax_type" label="Tax Type" value={editing.accounting_tax_type ?? ''} />
-      </FieldGrid>
-
-      <h3 class="section-title">Commercial</h3>
-      <FieldGrid cols={2}>
-        <Field label="Currency">
-          <Select
-            name="currency"
-            value={editing.currency ?? 'ZAR'}
-            options={currencyOptions}
-          />
-        </Field>
-        <Field label="Area Unit">
-          <Select
-            name="area_unit"
-            value={editing.area_unit ?? 'sqm'}
-            options={areaUnitOptions}
-          />
-        </Field>
-        <Field name="commercial_tax_percentage" label="Tax %" value={editing.commercial_tax_percentage != null ? String(editing.commercial_tax_percentage) : ''} />
-        <Field name="commercial_app_discount_percentage" label="App Discount %" value={editing.commercial_app_discount_percentage != null ? String(editing.commercial_app_discount_percentage) : ''} />
-        <Field label="Billing Date Pattern">
-          <Select
-            name="billing_date_pattern"
-            value={editing.billing_date_pattern ?? 'advance_dated'}
-            options={billingDatePatternOptions}
-          />
-        </Field>
-      </FieldGrid>
-
-      <h3 class="section-title">Lifecycle</h3>
-      <FieldGrid cols={2}>
-        <Field label="Status">
-          <Select
-            name="status"
-            value={editing.status ?? 'active'}
-            options={statusOptions}
-          />
-        </Field>
-        <label class="checkbox-field">
-          <input type="checkbox" name="headquarters" checked={editing.headquarters} />
-          <span>Headquarters</span>
-        </label>
-        <Field name="started_at" label="Started" type="date" value={toDateInput(editing.started_at)} />
-        <Field name="closed_at" label="Closed" type="date" value={toDateInput(editing.closed_at)} />
-      </FieldGrid>
-    </form>
-  {/if}
-  {#snippet footer()}
-    <Button variant="ghost" size="sm" onclick={() => editing = null} disabled={saving}>Cancel</Button>
-    <Button type="submit" form="edit-form" size="sm" loading={saving}>{saving ? 'Saving…' : 'Save'}</Button>
-  {/snippet}
-</Drawer>
 
 <style>
   .create-wrap { margin-bottom: var(--space-6); }
   .name-cell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .name { font-weight: var(--weight-medium); color: var(--text); }
+  .open-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    color: var(--accent);
+    font-size: 1.1rem;
+    line-height: 1;
+    text-decoration: none;
+    transition: background 120ms ease, transform 120ms ease, color 120ms ease;
+  }
+  .open-arrow:hover {
+    background: var(--accent-soft);
+    color: var(--accent-hover, var(--accent));
+    transform: translateX(2px);
+  }
+  .open-arrow:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
   .slug {
     font-family: var(--font-mono);
     font-size: var(--text-xs);

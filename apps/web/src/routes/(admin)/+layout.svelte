@@ -1,10 +1,11 @@
 <script lang="ts">
   import { supabase } from '$lib/supabase'
   import { onMount } from 'svelte'
-  import { page } from '$app/stores'
+  import { page, navigating } from '$app/stores'
   import { permStore, loadPermissions, canDo } from '$lib/stores/permissions'
   import { loadPrefs } from '$lib/stores/prefs'
-  import { Badge, Button, ModeToggle, ThemeToggle, Workshop17Logo } from '$lib/components/ui'
+  import { look, usesTopNav } from '$lib/stores/theme'
+  import { Badge, Button, ModeToggle, ThemeToggle, TopNav, Workshop17Logo } from '$lib/components/ui'
 
   let { children, data } = $props()
   // Trust the server-provided session — +layout.server.ts has already gated
@@ -88,6 +89,18 @@
   ]
 </script>
 
+{#if $navigating}
+  <div class="nav-overlay" role="status" aria-live="polite">
+    <div class="nav-overlay-card">
+      <svg class="nav-overlay-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <circle cx="12" cy="12" r="9" opacity="0.2"/>
+        <path d="M21 12a9 9 0 0 0-9-9"/>
+      </svg>
+      <div class="nav-overlay-label">Opening…</div>
+    </div>
+  </div>
+{/if}
+
 {#if checking}
   <div class="center-state">Loading…</div>
 {:else if session}
@@ -101,6 +114,20 @@
     </div>
   {/if}
 
+  {#if usesTopNav($look)}
+    <!-- W17 theme: horizontal top nav, content below -->
+    <TopNav {perms} email={session.user.email ?? ''} role={perms.role} onSignOut={signOut} />
+    <main class="content topnav-content">
+      {#if !perms.role && perms.loaded}
+        <div class="no-access">
+          <h2>No role assigned</h2>
+          <p>Your account has no role. Contact an administrator for access.</p>
+        </div>
+      {:else}
+        {@render children()}
+      {/if}
+    </main>
+  {:else}
   <div class="shell">
     <aside class="sidebar">
       <div class="brand">
@@ -189,6 +216,7 @@
       {/if}
     </main>
   </div>
+  {/if}
 {:else}
   <div class="center-state">
     <p>You need to sign in.</p>
@@ -317,6 +345,18 @@
     padding: var(--space-6) var(--space-8);
     min-width: 0;
   }
+  /* W17: content below the horizontal top-nav, full-width with padding */
+  .topnav-content {
+    padding: var(--space-6) var(--space-8);
+    min-width: 0;
+    background: var(--surface);
+    min-height: calc(100vh - 56px);
+  }
+  .topnav-content > :global(*) {
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+  }
   .content > :global(*) {
     max-width: 1200px;
     margin-left: 0;
@@ -371,4 +411,29 @@
   }
   .no-access h2 { color: var(--warning); margin-bottom: var(--space-2); }
   .no-access p { color: var(--text-muted); }
+
+  .nav-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(2px);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 900;
+    animation: navOverlayIn 120ms ease-out;
+  }
+  .nav-overlay-card {
+    display: inline-flex; align-items: center; gap: 12px;
+    padding: 14px 22px;
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+    color: #474a54;
+    font-size: 0.95rem;
+  }
+  .nav-overlay-spinner {
+    width: 22px; height: 22px; color: #59a370;
+    animation: navOverlaySpin 0.8s linear infinite;
+  }
+  .nav-overlay-label { font-weight: 500; color: #2b3431; }
+  @keyframes navOverlaySpin { to { transform: rotate(360deg); } }
+  @keyframes navOverlayIn { from { opacity: 0 } to { opacity: 1 } }
 </style>

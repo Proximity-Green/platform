@@ -13,7 +13,6 @@ export type Item = {
   accounting_item_code: string | null
   accounting_tax_code: string | null
   accounting_tax_percentage: number | null
-  accounting_tracking_codes: string[] | null
   accounting_description: string | null
   active: boolean
   metadata: Record<string, any> | null
@@ -38,7 +37,6 @@ export type ItemInput = {
   accounting_item_code?: string | null
   accounting_tax_code?: string | null
   accounting_tax_percentage?: number | null
-  accounting_tracking_codes?: string[] | null
   accounting_description?: string | null
   active?: boolean
 }

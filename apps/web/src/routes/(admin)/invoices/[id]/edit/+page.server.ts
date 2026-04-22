@@ -38,7 +38,7 @@ export const load = async ({ params, cookies, locals }) => {
     supabase.from('invoice_lines').select('*, subscription_lines(id), items(name, accounting_tax_percentage, location_id)').eq('invoice_id', id).order('created_at'),
     supabase.from('organisations').select('id, name').order('name'),
     supabase.from('locations').select('id, name, short_name, currency').order('name'),
-    supabase.from('items').select('id, name, location_id, base_price, accounting_tax_percentage, accounting_gl_code, accounting_item_code, accounting_tax_code, accounting_tracking_codes, item_types(slug, requires_license, sellable_ad_hoc)').eq('active', true).order('name')
+    supabase.from('items').select('id, name, location_id, base_price, accounting_tax_percentage, accounting_gl_code, accounting_item_code, accounting_tax_code, item_tracking_codes(tracking_codes(code)), item_types(slug, requires_license, sellable_ad_hoc)').eq('active', true).order('name')
   ])
 
   if (invRes.error || !invRes.data) throw error(404, 'Invoice not found')
@@ -121,7 +121,11 @@ export const actions = {
     const item_id = blank(data, 'item_id')
     if (!item_id) return fail(400, { error: 'Pick an item' })
 
-    const { data: item } = await supabase.from('items').select('*').eq('id', item_id).single()
+    const { data: item } = await supabase
+      .from('items')
+      .select('*, item_tracking_codes(tracking_codes(code))')
+      .eq('id', item_id)
+      .single()
     if (!item) return fail(400, { error: 'Item not found' })
 
     const { data: inv } = await supabase.from('invoices').select('currency').eq('id', params.id).single()
@@ -132,6 +136,10 @@ export const actions = {
     const taxPct = Number((item as any).accounting_tax_percentage ?? 15)
     const sub = quantity * unit_price - discount
     const tax_amount = sub * (taxPct / 100)
+
+    const trackingCodes = ((item as any).item_tracking_codes ?? [])
+      .map((l: any) => l.tracking_codes?.code)
+      .filter((c: string | null | undefined): c is string => !!c)
 
     const { error: insErr } = await supabase.from('invoice_lines').insert({
       invoice_id: params.id,
@@ -147,7 +155,7 @@ export const actions = {
       accounting_gl_code: (item as any).accounting_gl_code,
       accounting_item_code: (item as any).accounting_item_code,
       accounting_tax_code: (item as any).accounting_tax_code,
-      accounting_tracking_codes: (item as any).accounting_tracking_codes
+      accounting_tracking_codes: trackingCodes.length ? trackingCodes : null
     })
     if (insErr) return fail(400, { error: insErr.message })
 

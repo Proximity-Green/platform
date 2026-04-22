@@ -7,6 +7,8 @@
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500&display=swap" />
+		<!-- roc-grotesk via Adobe Typekit — WSM-native font for the W17 theme -->
+		<link rel="stylesheet" href="https://use.typekit.net/nex7gqz.css" />
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
@@ -21,8 +23,10 @@
 					root.setAttribute('data-mode', mode);
 
 					var storedLook = localStorage.getItem('pg.theme.look');
-					var look = storedLook === 'neon' ? 'neon' : 'graphite';
+					var look = (storedLook === 'neon' || storedLook === 'w17') ? storedLook : 'graphite';
 					root.setAttribute('data-theme', look);
+					// W17 is a light-only theme
+					if (look === 'w17') root.setAttribute('data-mode', 'light');
 				} catch (e) {
 					root.setAttribute('data-mode', 'dark');
 					root.setAttribute('data-theme', 'graphite');

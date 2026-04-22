@@ -32,7 +32,7 @@
 <style>
   .toast-slot {
     position: fixed;
-    top: var(--space-4);
+    top: calc(var(--topnav-height, 0px) + 12px);
     left: 50%;
     transform: translateX(-50%);
     z-index: 20000;
