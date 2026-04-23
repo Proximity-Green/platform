@@ -3,15 +3,17 @@ import { resolve } from 'node:path'
 import { marked } from 'marked'
 
 const DOCS_DIR = resolve(process.cwd(), '../../docs')
-const PAGES = ['ARCHITECTURE.md', 'CONVENTIONS.md', 'CATALOG.md', 'MIGRATION.md', 'BENCHMARK.md'] as const
-type DocSlug = 'architecture' | 'conventions' | 'catalog' | 'migration' | 'benchmark'
+const PAGES = ['ARCHITECTURE.md', 'CONVENTIONS.md', 'CATALOG.md', 'MIGRATION.md', 'BENCHMARK.md', 'SAGE_MEETING.md', 'PLATFORM_SCHOOL.md'] as const
+type DocSlug = 'architecture' | 'conventions' | 'catalog' | 'migration' | 'benchmark' | 'sage-meeting' | 'platform-school'
 
 const FILE_BY_SLUG: Record<DocSlug, (typeof PAGES)[number]> = {
   architecture: 'ARCHITECTURE.md',
   conventions: 'CONVENTIONS.md',
   catalog: 'CATALOG.md',
   migration: 'MIGRATION.md',
-  benchmark: 'BENCHMARK.md'
+  benchmark: 'BENCHMARK.md',
+  'sage-meeting': 'SAGE_MEETING.md',
+  'platform-school': 'PLATFORM_SCHOOL.md'
 }
 
 export const load = async ({ url }) => {
@@ -34,7 +36,9 @@ export const load = async ({ url }) => {
       { slug: 'conventions', label: 'Conventions' },
       { slug: 'catalog', label: 'Catalog & Tracking' },
       { slug: 'migration', label: 'Migration' },
-      { slug: 'benchmark', label: 'Benchmark' }
+      { slug: 'benchmark', label: 'Benchmark' },
+      { slug: 'sage-meeting', label: 'Sage Meeting' },
+      { slug: 'platform-school', label: 'Platform School' }
     ]
   }
 }
