@@ -14,7 +14,41 @@
   }
 
   let { data } = $props()
+  let entries = $state<Entry[]>(data.entries as Entry[])
+  let counts = $state({ ...data.counts })
   let expandedId = $state<string | null>(null)
+
+  // Build a user-id → email map from initial data so realtime rows (which
+  // only carry the UUID) can render a friendly email when the sender is
+  // someone we've already seen. Falls back to UUID otherwise.
+  const emailByUserId = new Map<string, string>()
+  for (const e of data.entries as Entry[]) {
+    if (e.created_by && e.created_by_email && e.created_by !== e.created_by_email) {
+      emailByUserId.set(e.created_by, e.created_by_email)
+    }
+  }
+
+  function onRealtimeInsert(raw: any) {
+    const userId = raw.created_by ?? null
+    const entry: Entry = {
+      id: raw.id,
+      level: raw.level,
+      category: raw.category,
+      message: raw.message,
+      created_by: userId,
+      created_by_email: userId ? (emailByUserId.get(userId) ?? userId) : 'system',
+      details: raw.details ?? null,
+      created_at: raw.created_at
+    }
+    entries = [entry, ...entries].slice(0, 1000)
+    counts = {
+      ...counts,
+      total: (counts.total ?? 0) + 1,
+      [entry.category]: (counts[entry.category as keyof typeof counts] ?? 0) + 1,
+      ...(entry.level === 'warning' ? { warning: (counts.warning ?? 0) + 1 } : {}),
+      ...(entry.level === 'error'   ? { error:   (counts.error   ?? 0) + 1 } : {})
+    }
+  }
 
   const levelTone: Record<string, 'success' | 'info' | 'warning' | 'danger' | 'default'> = {
     success: 'success',
@@ -65,16 +99,16 @@
 <PageHead title="System Logs" lede="Every side-effect: emails sent, auth events, background jobs. Click a row for details." />
 
 <div class="kpis">
-  <KpiCard label="Total" value={data.counts.total} />
-  <KpiCard label="Email" value={data.counts.email} />
-  <KpiCard label="Auth" value={data.counts.auth} />
-  <KpiCard label="System" value={data.counts.system} />
-  <KpiCard label="Warnings" value={data.counts.warning} tone="warning" />
-  <KpiCard label="Errors" value={data.counts.error} tone="danger" />
+  <KpiCard label="Total" value={counts.total} />
+  <KpiCard label="Email" value={counts.email} />
+  <KpiCard label="Auth" value={counts.auth} />
+  <KpiCard label="System" value={counts.system} />
+  <KpiCard label="Warnings" value={counts.warning} tone="warning" />
+  <KpiCard label="Errors" value={counts.error} tone="danger" />
 </div>
 
 <DataTable
-  data={data.entries as Entry[]}
+  data={entries}
   {columns}
   {filters}
   table="system-logs"
@@ -84,6 +118,8 @@
   searchPlaceholder="Search message, category, user…"
   csvFilename="system-logs"
   empty="No system logs yet."
+  realtimeTable="system_logs"
+  {onRealtimeInsert}
   isExpandedRow={(e) => e.id === expandedId}
   isActiveRow={(e) => e.id === expandedId}
   onActivate={(e) => expandedId = expandedId === e.id ? null : e.id}

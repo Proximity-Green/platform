@@ -38,10 +38,48 @@
   }
 
   let { data, form } = $props()
+  let entries = $state<Entry[]>(data.entries as Entry[])
   let expandedId = $state<string | null>(null)
   let undoingId = $state<string | null>(null)
   let undoError = $state<string | null>(null)
   let activeTab = $state<'single' | 'bulk'>('single')
+
+  const emailByUserId = new Map<string, string>()
+  for (const e of data.entries as Entry[]) {
+    if (e.changed_by && e.changed_by_email && e.changed_by !== e.changed_by_email) {
+      emailByUserId.set(e.changed_by, e.changed_by_email)
+    }
+  }
+
+  // Mirrors labelFor() in change-log.service.ts. The realtime payload
+  // already carries new_values / old_values, so we can compute the same
+  // label client-side — no extra fetch.
+  function labelFor(vals: Record<string, any> | null, recordId: string | null): string {
+    if (!vals) return recordId?.slice(0, 8) ?? '—'
+    if (vals.name) return vals.name
+    if (vals.first_name || vals.last_name) return `${vals.first_name ?? ''} ${vals.last_name ?? ''}`.trim()
+    if (vals.email) return vals.email
+    return recordId?.slice(0, 8) ?? '—'
+  }
+
+  function onRealtimeInsert(raw: any) {
+    const userId = raw.changed_by ?? null
+    const newVals = raw.new_values ?? null
+    const oldVals = raw.old_values ?? null
+    const entry: Entry = {
+      id: raw.id,
+      table_name: raw.table_name,
+      record_id: raw.record_id,
+      action: raw.action,
+      changed_by: userId,
+      changed_by_email: userId ? (emailByUserId.get(userId) ?? userId) : 'system',
+      record_label: labelFor(newVals ?? oldVals, raw.record_id),
+      old_values: oldVals,
+      new_values: newVals,
+      created_at: raw.created_at
+    }
+    entries = [entry, ...entries].slice(0, 1000)
+  }
 
   async function undoBulk(id: string) {
     if (undoingId) return
@@ -143,7 +181,7 @@
 <div class="tabs-bar" role="tablist">
   <button type="button" role="tab" class="tab" class:active={activeTab === 'single'} aria-selected={activeTab === 'single'} onclick={() => (activeTab = 'single')}>
     Single records
-    <span class="tab-count">{data.entries?.length ?? 0}</span>
+    <span class="tab-count">{entries.length}</span>
   </button>
   <button type="button" role="tab" class="tab" class:active={activeTab === 'bulk'} aria-selected={activeTab === 'bulk'} onclick={() => (activeTab = 'bulk')}>
     Bulk actions
@@ -195,7 +233,9 @@
 
 {#if activeTab === 'single'}
 <DataTable
-  data={data.entries as Entry[]}
+  data={entries}
+  realtimeTable="change_log"
+  {onRealtimeInsert}
   {columns}
   {filters}
   table="changelog"
@@ -360,6 +400,7 @@
 
   .tabs-bar {
     display: flex;
+    align-items: center;
     gap: 4px;
     margin-bottom: var(--space-3);
     border-bottom: 1px solid var(--border);

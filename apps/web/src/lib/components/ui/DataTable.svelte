@@ -25,6 +25,7 @@
 </script>
 
 <script lang="ts" generics="T extends Record<string, any>">
+  import { onDestroy } from 'svelte'
   import type { Snippet } from 'svelte'
   import Card from './Card.svelte'
   import Button from './Button.svelte'
@@ -34,6 +35,7 @@
   import { downloadCsv, type CsvColumn } from '$lib/utils/csv'
   import { showTimes } from '$lib/stores/ui'
   import { getPref, setPref } from '$lib/stores/prefs'
+  import { supabase } from '$lib/supabase'
 
   type Props = {
     data: T[]
@@ -72,6 +74,14 @@
     emptyState?: Snippet<[]>
     /** Rendered in a full-width sub-row when isExpandedRow returns true */
     expanded?: Snippet<[T]>
+    /** Opt-in Live updates: Supabase table name to subscribe to for INSERT events.
+        The table must be in the `supabase_realtime` publication. When Live is ON,
+        each incoming row is passed to onRealtimeInsert (if provided) so the caller
+        can enrich (e.g. resolve user IDs to emails) and mutate its own data state. */
+    realtimeTable?: string
+    /** Called on each realtime INSERT. Receives the raw row from postgres_changes.
+        Only fires when Live is toggled ON and the table is in the realtime publication. */
+    onRealtimeInsert?: (raw: any) => void
   }
   let {
     data,
@@ -98,8 +108,46 @@
     headActions,
     pageActions,
     emptyState,
-    expanded
+    expanded,
+    realtimeTable,
+    onRealtimeInsert
   }: Props = $props()
+
+  // Live updates via Supabase Realtime. Off by default; consumer opts in by
+  // passing `realtimeTable`. Only active while this tab is open.
+  let live = $state(false)
+  let liveError = $state<string | null>(null)
+  let liveChannel: ReturnType<typeof supabase.channel> | null = null
+
+  function startLive() {
+    if (liveChannel || !realtimeTable) return
+    liveError = null
+    liveChannel = supabase
+      .channel(`datatable-live-${realtimeTable}-${table}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: realtimeTable }, (payload) => {
+        onRealtimeInsert?.(payload.new)
+      })
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          liveError = `Realtime: ${status.toLowerCase().replace('_', ' ')}`
+        } else if (status === 'SUBSCRIBED') {
+          liveError = null
+        }
+      })
+  }
+
+  function stopLive() {
+    if (!liveChannel) return
+    supabase.removeChannel(liveChannel)
+    liveChannel = null
+  }
+
+  function toggleLive() {
+    live = !live
+    if (live) startLive(); else stopLive()
+  }
+
+  onDestroy(stopLive)
 
   function handleRowClick(e: MouseEvent, item: T, i: number) {
     selectedIndex = i
@@ -169,10 +217,21 @@
         list = [...list].sort((a, b) => {
           const av = col.get ? col.get(a) : a[col.key]
           const bv = col.get ? col.get(b) : b[col.key]
-          if (av == null && bv == null) return 0
-          if (av == null) return 1
-          if (bv == null) return -1
-          return av < bv ? -1 * dir : av > bv ? 1 * dir : 0
+          const primary =
+            av == null && bv == null ? 0 :
+            av == null ? 1 :
+            bv == null ? -1 :
+            av < bv ? -1 * dir :
+            av > bv ?  1 * dir : 0
+          if (primary !== 0) return primary
+          // Tie on the primary sort (e.g. same category) — stable secondary
+          // sort: newest first if rows carry created_at. Without this, rows
+          // streamed in via realtime appear in arbitrary places inside their
+          // group instead of at the top.
+          const ac = (a as any).created_at
+          const bc = (b as any).created_at
+          if (ac && bc) return ac > bc ? -1 : ac < bc ? 1 : 0
+          return 0
         })
       }
     }
@@ -358,6 +417,18 @@
         <button class="chip" class:is-on={p.filter === f.key} onclick={() => ts.setFilter(f.key)}>{f.label}</button>
       {/each}
     </div>
+  {/if}
+  {#if realtimeTable}
+    <button
+      type="button"
+      class="live-toggle"
+      class:is-on={live}
+      onclick={toggleLive}
+      title={live ? (liveError ?? 'Streaming new rows') : 'Stream new rows live'}
+    >
+      <span class="live-dot" class:is-on={live} aria-hidden="true"></span>
+      <span>Live</span>
+    </button>
   {/if}
   <div class="count">{filtered.length} of {data.length}</div>
   {#if timesToggle}
@@ -590,6 +661,42 @@
       color var(--motion-fast) var(--ease-out),
       border-color var(--motion-fast) var(--ease-out);
   }
+  .live-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    font-family: inherit;
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+    color: var(--text-muted);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: border-color 160ms, color 160ms, background 160ms;
+  }
+  .live-toggle:hover { color: var(--text); border-color: var(--text-muted); }
+  .live-toggle.is-on {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+  .live-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-subtle, var(--text-muted));
+  }
+  .live-dot.is-on {
+    background: var(--accent);
+    animation: live-pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes live-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 50%, transparent); }
+    50%      { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 0%, transparent); }
+  }
+
   .chip:hover { background: var(--surface-hover); color: var(--text); }
   .chip.is-on {
     background: var(--accent-soft);
