@@ -72,6 +72,37 @@ When a user action needs more than one DB write to be atomic, or needs to coordi
 - Function shape returns `{ ok: true, ...data }` or `{ ok: false, error: string }` for mutations; plain data for reads.
 - Heavy logic stays here, not in `+page.server.ts`.
 
+## Audit attribution on mutations
+
+**Every mutation that goes through the `change_log` trigger must use `sbForUser(userId)`**, not the shared `supabase` client.
+
+- `import { sbForUser } from '$lib/services/permissions.service'`
+- Service functions take `actorId: string | null = null` as the last parameter and build their client inline:
+  ```ts
+  export async function updatePerson(id: string, input: Partial<PersonInput>, userId: string | null = null) {
+    const { error } = await sbForUser(userId).from('persons').update(input).eq('id', id)
+    if (error) return { ok: false, error: error.message }
+    return { ok: true }
+  }
+  ```
+- Route actions thread the user ID through from `getUserIdFromRequest`:
+  ```ts
+  const result = await personsService.updatePerson(id, patch, userId)
+  ```
+
+*Why:* the `change_log` trigger reads `auth.uid()` first, then falls back to the `x-user-id` header. Service_role writes bypass `auth.uid()`, so without the header the row is logged as `changed_by = null` and the UI shows "system" for actions a real admin just performed (migration `036_changelog_user_header_fallback.sql`).
+
+Pass `null` only when the write is **genuinely systemic** (migrations, cron, unauthenticated webhooks) — that's the one case where "system" is the correct attribution.
+
+## Realtime — Live list pages and record-level toasts
+
+Tables in the `supabase_realtime` publication stream INSERT events to subscribed browsers. Two built-in patterns:
+
+- **List-page Live** — pass `realtimeTable="<name>"` and `onRealtimeInsert` to `DataTable`. The component renders a Live pill in the toolbar, opens a websocket when toggled on, and hands each event to the page for enrichment + state mutation. Used on `/system-logs` and `/changelog`.
+- **Record-level Live** — drop `<RecordLive tableName recordId viewerId label />` on a detail page. Subscribes to `change_log` filtered by `record_id`, ignores events where `changed_by === viewerId`, and shows a "Refresh?" pill when another user updates the record. Used on `/people/[id]` and `/organisations/[id]`.
+
+*Rule:* to enable Live on a new table, add it to `supabase_realtime` in a migration (`alter publication supabase_realtime add table public.<name>;`). RLS still governs who receives events, so no authz change.
+
 ## Server actions (`+page.server.ts`)
 
 - Always permission-check first:

@@ -1,5 +1,68 @@
 # Proximity Green — Development Changelog
 
+## Session 6 — 2026-04-23
+
+### Audit attribution — service_role writes now name the user
+
+**Problem.** Every domain mutation in the service layer ran as `service_role`, which bypasses Supabase auth, so `auth.uid()` inside the `change_log` trigger returned null. Every change_log row was logged as `changed_by = null` → the /changelog UI showed **"system"** for every edit, even ones a logged-in admin had just performed.
+
+**Fix.**
+- Migration `039_changelog_user_header_fallback.sql` — trigger now prefers `auth.uid()`, falls back to an `x-user-id` HTTP header forwarded by PostgREST. Null only for migrations, cron jobs, or unauthenticated code paths.
+- New helper `sbForUser(userId)` in `permissions.service.ts` — returns a service_role Supabase client with `x-user-id` set on every request. If `userId` is null, returns the shared client (preserves "system" for genuinely unattributed writes).
+- **Every mutation path rewired** through `sbForUser(userId)`:
+  - 14 service files (`persons`, `items`, `item-types`, `licenses`, `invoices`, `contracts`, `wallets`, `subscription-lines`, `locations`, `spaces`, `roles`, `messages`, `users.setUserRole`, `feature-requests`)
+  - 13 route files — every `+page.server.ts` action threads `userId` through to the service
+  - Inline mutations on `organisations/[id]`, `invoices/[id]/edit`, `locations/[id]` (tracking_codes), `people` (user_roles), `items` (item_tracking_codes + family detail upserts) all converted
+- Locked in as the canonical pattern — see `CONVENTIONS.md` § "Audit attribution on mutations".
+
+### Live realtime — stream new rows into list pages
+
+**DataTable primitive.** Two new props on `DataTable`:
+- `realtimeTable: string` — Supabase table to subscribe to for INSERTs
+- `onRealtimeInsert(raw)` — called per event so the page can enrich (e.g. resolve user IDs to emails) and mutate its own data state
+
+The Live toggle pill lives in the table toolbar; websocket closes on tab navigate-away. Tables must be in the `supabase_realtime` publication — migration `035_system_logs_realtime.sql` adds both `system_logs` and `change_log`.
+
+**Consumer code went from ~50 lines per page to ~20.** `/system-logs` and `/changelog` now just pass the two props and an enrichment callback. Any future table-backed page gets Live for free.
+
+### Record-level Live — detail pages notice foreign edits
+
+New `$lib/components/ui/RecordLive.svelte` component. Subscribes to `change_log` INSERTs server-filtered by `record_id=eq.<id>`, ignores events with `changed_by === viewerId` (your own edits), and on a foreign update shows a floating pill top-right:
+
+> This {label} was just updated by **mark@proximity.green** — [Refresh] [×]
+
+Refresh calls `invalidateAll()`; the pill dismisses. Name resolution is best-effort `persons.user_id` lookup client-side with an 8-char UUID fallback.
+
+Wired into `/people/[id]` and `/organisations/[id]` as pilots; other detail pages are one-line adds.
+
+### System logs — richer details, non-silent writes
+
+- `logFail` (`action-log.service.ts`) now normalises unknown errors — PostgrestError / Error / bare objects all produce readable messages with `error_code` / `error_hint` / truncated stack. No more `[object Object]` in system_logs.
+- `log()` (`system-log.service.ts`) now surfaces failed INSERTs to the dev console instead of silently dropping them (RLS / schema / creds problems were previously invisible).
+- Invite flow in `persons.service.ts` — added breadcrumb logs (`Invite flow started`, step-by-step error logs on `generateLink` / `persons.update` / `user_roles.insert`), `trigger_key_kind` (`dev`/`prod`/`unknown`/`missing`), `invite_url`, `duration_ms`, and `trigger_error_stack` when `tasks.trigger()` throws. Turned a silent "invite returns success but nothing happens" into a visible one-row diagnosis.
+
+### Trigger.dev routing fix
+
+Local dev worker ran fine but jobs never reached it. Root cause: Trigger.dev SDK reads `process.env.TRIGGER_SECRET_KEY`, but SvelteKit loads `.env` values into `$env/*` modules — not `process.env`. Fixed by exporting `TRIGGER_SECRET_KEY` / `TRIGGER_API_URL` from `lib/server/env.ts` and calling `configure({ secretKey, baseURL })` at module load in `persons.service.ts`.
+
+### Docs & nav polish
+
+- Added **Sage meeting prep** doc (`docs/SAGE.md`) — concepts primer (legal entity vs location vs organisation vs tracking code), SA legal-entity / location map (Refuel, BCT, Rozenhof, W17 Cradock + TBD HPC/CC/MZ), themed API questions, walkaway criteria, post-meeting checklist.
+- Rearranged `/docs` sidebar with an **Integrations** heading; `SAGE_MEETING.md` renamed to `SAGE.md`, label shortened to "Sage".
+- `Docs` nav item moved from the "More" dropdown to a right-aligned button next to the search (W17 theme).
+- Admin dashboard (`/admin`) grew a **Docs** section with grouped cards (Reference / Integrations).
+
+### DataTable sort tiebreaker
+
+When sorted by any non-date column, rows with identical primary values were tie-broken arbitrarily — streamed realtime rows landed in random places inside their group. Fixed: stable secondary sort on `created_at DESC` whenever rows carry it. New rows always float to the top of their group.
+
+### Migrations
+
+- `035_system_logs_realtime.sql` — `system_logs` + `change_log` added to `supabase_realtime` publication
+- `039_changelog_user_header_fallback.sql` — trigger reads `x-user-id` header fallback
+
+---
+
 ## Session 5 — 2026-04-20 / 2026-04-21
 
 ### Shared UI primitives — keyboard-first everywhere

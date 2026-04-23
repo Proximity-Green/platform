@@ -57,8 +57,24 @@ Browser  →  +page.server.ts  →  *.service.ts  →  Supabase / Trigger / Mail
 ## Audit & change tracking
 
 - Every domain table has an `AFTER INSERT/UPDATE/DELETE` trigger → writes to `change_log` with `old_values` / `new_values` jsonb.
+- **Attribution.** The trigger resolves `changed_by` in order: `auth.uid()` → `x-user-id` request header → `null`. The service layer runs on `service_role` (bypasses `auth.uid()`), so it uses the header — every mutation must be wrapped in `sbForUser(userId)` which sets the header on each request. `changed_by = null` is reserved for migrations, cron, and unauthenticated code paths; the UI renders that as "system". See `CONVENTIONS.md` § "Audit attribution on mutations".
 - The trigger honours a per-transaction flag `app.suppress_audit`. The `restore_record(p_table_name, p_record_id, p_new_values, p_changed_by)` RPC sets the flag, performs the UPDATE (which the trigger skips), then writes a single explicit `RESTORE` row. This is the canonical pattern — see `CONVENTIONS.md` § "Multi-step writes go in Postgres".
 - The `/changelog` page surfaces this via the shared DataTable with expandable rows showing the field-level diff.
+
+## Realtime — streaming updates to the browser
+
+Supabase Realtime delivers row-level INSERT / UPDATE / DELETE events to subscribed browsers over a websocket. Tables must be in the `supabase_realtime` publication; RLS still governs who sees what.
+
+Two built-in primitives use this:
+
+- **`DataTable` Live feed** — pass `realtimeTable="<name>"` and `onRealtimeInsert(raw)`. The component renders a Live toggle in the toolbar, opens/closes the websocket, and hands each event to the page for enrichment and state mutation. Used on `/system-logs` (streams `system_logs`) and `/changelog` (streams `change_log`). Consumer cost: two props plus an enrichment callback.
+- **`RecordLive`** — drop on any detail page: `<RecordLive tableName recordId viewerId label />`. Subscribes to `change_log` server-filtered by `record_id`, ignores events where `changed_by === viewerId`, and shows a floating "Updated by X — Refresh?" pill on foreign edits. Used on `/people/[id]` and `/organisations/[id]`; other detail pages are one-line adds.
+
+To enable a new table for Live, add it to the publication in a migration:
+
+```sql
+alter publication supabase_realtime add table public.<table>;
+```
 
 ## UI primitives — change once, applies everywhere
 
