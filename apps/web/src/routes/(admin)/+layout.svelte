@@ -69,6 +69,7 @@
 
   type NavItem = { href: string; label: string; guard?: string }
   const navItems: NavItem[] = [
+    { href: '/feature-requests', label: 'Feedback',  guard: 'feature_requests' },
     { href: '/people',        label: 'Members',       guard: 'persons' },
     { href: '/organisations', label: 'Organisations', guard: 'organisations' },
     { href: '/locations',     label: 'Locations',     guard: 'locations' },

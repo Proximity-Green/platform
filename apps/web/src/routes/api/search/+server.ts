@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit'
 import { supabase, getUserIdFromRequest } from '$lib/services/permissions.service'
 
 type Hit = {
-  kind: 'organisation' | 'person' | 'location' | 'item' | 'invoice' | 'subscription'
+  kind: 'organisation' | 'person' | 'location' | 'item' | 'invoice' | 'subscription' | 'feature_request' | 'note'
   id: string
   title: string
   subtitle: string | null
@@ -21,7 +21,7 @@ export const GET = async ({ url, cookies, locals }) => {
 
   const like = `%${q.replace(/[%_]/g, '\\$&')}%`
 
-  const [orgsRes, personsRes, locationsRes, itemsRes, invoicesRes, subsRes] = await Promise.all([
+  const [orgsRes, personsRes, locationsRes, itemsRes, invoicesRes, subsRes, frsRes] = await Promise.all([
     supabase
       .from('organisations')
       .select('id, name, short_name, slug')
@@ -55,7 +55,13 @@ export const GET = async ({ url, cookies, locals }) => {
       .from('subscription_lines')
       .select('id, notes, organisation_id')
       .ilike('notes', like)
-      .limit(LIMIT_PER_KIND)
+      .limit(LIMIT_PER_KIND),
+    supabase
+      .from('feature_requests')
+      .select('id, kind, title, summary, status')
+      .or(`title.ilike.${like},summary.ilike.${like}`)
+      .order('created_at', { ascending: false })
+      .limit(LIMIT_PER_KIND * 2)
   ])
 
   const hits: Hit[] = []
@@ -118,6 +124,19 @@ export const GET = async ({ url, cookies, locals }) => {
       title: s.notes ?? 'Subscription line',
       subtitle: null,
       href: `/organisations/${s.organisation_id}?tab=subscription`
+    })
+  }
+  for (const f of frsRes.data ?? []) {
+    const statusText = (f as any).status ? String((f as any).status).replace('_', ' ') : null
+    const snippet = (f as any).summary
+      ? String((f as any).summary).slice(0, 100)
+      : null
+    hits.push({
+      kind: (f as any).kind === 'note' ? 'note' : 'feature_request',
+      id: f.id,
+      title: (f as any).title,
+      subtitle: [statusText, snippet].filter(Boolean).join(' · ') || null,
+      href: `/feature-requests/${f.id}`
     })
   }
 

@@ -2,7 +2,7 @@
   import { goto } from '$app/navigation'
 
   type Hit = {
-    kind: 'organisation' | 'person' | 'location' | 'item' | 'invoice' | 'subscription'
+    kind: 'organisation' | 'person' | 'location' | 'item' | 'invoice' | 'subscription' | 'feature_request' | 'note'
     id: string
     title: string
     subtitle: string | null
@@ -17,12 +17,14 @@
   let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
   const kindIcon: Record<Hit['kind'], string> = {
-    organisation: 'Org',
-    person:       'Person',
-    location:     'Location',
-    item:         'Item',
-    invoice:      'Invoice',
-    subscription: 'Sub'
+    organisation:    'Org',
+    person:          'Person',
+    location:        'Location',
+    item:            'Item',
+    invoice:         'Invoice',
+    subscription:    'Sub',
+    feature_request: 'Request',
+    note:            'Note'
   }
 
   async function runSearch(query: string) {
