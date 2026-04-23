@@ -1,4 +1,4 @@
-import { requirePermission, getUserIdFromRequest, supabase } from '$lib/services/permissions.service'
+import { requirePermission, getUserIdFromRequest, supabase, sbForUser } from '$lib/services/permissions.service'
 import * as itemsService from '$lib/services/items.service'
 import * as lookups from '$lib/services/item-lookups.service'
 import { logFail } from '$lib/services/action-log.service'
@@ -34,8 +34,9 @@ function trackingCodeIds(data: FormData): string[] {
   return data.getAll('tracking_code_ids').map(v => String(v)).filter(Boolean)
 }
 
-async function replaceItemTrackingCodes(itemId: string, ids: string[]): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { error: delErr } = await supabase
+async function replaceItemTrackingCodes(itemId: string, ids: string[], actorId: string | null = null): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sb = sbForUser(actorId)
+  const { error: delErr } = await sb
     .from('item_tracking_codes')
     .delete()
     .eq('item_id', itemId)
@@ -44,7 +45,7 @@ async function replaceItemTrackingCodes(itemId: string, ids: string[]): Promise<
   if (ids.length === 0) return { ok: true }
 
   const rows = ids.map(tracking_code_id => ({ item_id: itemId, tracking_code_id }))
-  const { error: insErr } = await supabase.from('item_tracking_codes').insert(rows)
+  const { error: insErr } = await sb.from('item_tracking_codes').insert(rows)
   if (insErr) return { ok: false, error: insErr.message }
   return { ok: true }
 }
@@ -186,7 +187,8 @@ function coerceDetailValue(raw: FormDataEntryValue | null, type: ColType): unkno
 async function upsertDetails(
   itemId: string,
   family: Family | null,
-  data: FormData
+  data: FormData,
+  actorId: string | null = null
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!family) return { ok: true }
   const table = FAMILY_TABLES[family]
@@ -194,13 +196,10 @@ async function upsertDetails(
   const row: Record<string, unknown> = { item_id: itemId, updated_at: new Date().toISOString() }
   for (const c of cols) {
     const value = coerceDetailValue(data.get(`detail_${c.name}`), c.type)
-    // Omit nulls so NOT NULL defaults apply on insert, and so updates don't
-    // overwrite existing values with null for fields the user didn't touch.
-    // Booleans always send because their "absent" state is a valid `false`.
     if (value === null && c.type !== 'boolean') continue
     row[c.name] = value
   }
-  const { error } = await supabase.from(table).upsert(row, { onConflict: 'item_id' })
+  const { error } = await sbForUser(actorId).from(table).upsert(row, { onConflict: 'item_id' })
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
@@ -278,18 +277,18 @@ export const actions = {
       active: blankBool(data, 'active', true)
     }
 
-    const { data: inserted, error } = await supabase
+    const { data: inserted, error } = await sbForUser(userId)
       .from('items')
       .insert(insert)
       .select('id')
       .single()
     if (error || !inserted) return await logFail(userId, 'items.create', error?.message ?? 'Failed to create item', { insert })
 
-    const linkResult = await replaceItemTrackingCodes(inserted.id, trackingCodeIds(data))
+    const linkResult = await replaceItemTrackingCodes(inserted.id, trackingCodeIds(data), userId)
     if (!linkResult.ok) return await logFail(userId, 'items.create.tracking_codes', linkResult.error, { item_id: inserted.id })
 
     const family = await getFamily(item_type_id)
-    const detailsResult = await upsertDetails(inserted.id, family, data)
+    const detailsResult = await upsertDetails(inserted.id, family, data, userId)
     if (!detailsResult.ok) return await logFail(userId, 'items.create.details', detailsResult.error, { item_id: inserted.id, family })
 
     return { success: true, message: 'Item created' }
@@ -303,7 +302,7 @@ export const actions = {
     const id = data.get('id') as string
     if (!id) return await logFail(userId, 'items.delete', 'Missing id')
 
-    const result = await itemsService.remove(id)
+    const result = await itemsService.remove(id, userId)
     if (!result.ok) return await logFail(userId, 'items.delete', result.error, { id })
     return { success: true, message: 'Item deleted' }
   }

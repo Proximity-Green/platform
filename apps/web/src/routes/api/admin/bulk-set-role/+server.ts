@@ -2,7 +2,8 @@ import { error, json } from '@sveltejs/kit'
 import {
   requirePermission,
   getUserIdFromRequest,
-  supabase
+  supabase,
+  sbForUser
 } from '$lib/services/permissions.service'
 
 /**
@@ -106,7 +107,7 @@ export async function POST({ request, cookies, locals }) {
         emit({ phase: 'applying', role: roleName, targets: actionable.length })
 
         // 4. Atomic snapshot + swap via RPC.
-        const { data: bulkActionId, error: rpcErr } = await supabase.rpc('bulk_set_role_apply', {
+        const { data: bulkActionId, error: rpcErr } = await sbForUser(userId).rpc('bulk_set_role_apply', {
           p_user_ids: actionable,
           p_role_id: role_id,
           p_performed_by: userId

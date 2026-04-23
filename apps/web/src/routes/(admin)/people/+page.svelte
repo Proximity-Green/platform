@@ -373,14 +373,15 @@
 >
   {#snippet row(person, ctx)}
     <td class="name-cell">
-      <input
-        type="checkbox"
-        class="row-check"
-        checked={selectedIds.has(person.id)}
-        onclick={(e) => e.stopPropagation()}
-        onchange={(e) => toggleSelect(person.id, (e.currentTarget as HTMLInputElement).checked)}
-        aria-label={`Select ${person.first_name} ${person.last_name}`}
-      />
+      <label class="row-check-wrap" onclick={(e) => e.stopPropagation()}>
+        <input
+          type="checkbox"
+          class="row-check"
+          checked={selectedIds.has(person.id)}
+          onchange={(e) => toggleSelect(person.id, (e.currentTarget as HTMLInputElement).checked)}
+          aria-label={`Select ${person.first_name} ${person.last_name}`}
+        />
+      </label>
       <Copyable value={`${person.first_name} ${person.last_name}`}>
         <span class="name">{person.first_name} {person.last_name}</span>
         {#if person.user_id}<span class="user-dot" title="Has user account"></span>{/if}
@@ -745,6 +746,18 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  /* Generous hit area — the whole label is click-absorbent so mis-clicks near
+     the checkbox don't bubble up and open the row. DataTable.handleRowClick
+     bails on closest('label'). */
+  .row-check-wrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 10px;
+    margin: -8px -6px -8px -10px;
+    cursor: pointer;
+    flex-shrink: 0;
   }
   .row-check {
     width: 15px;

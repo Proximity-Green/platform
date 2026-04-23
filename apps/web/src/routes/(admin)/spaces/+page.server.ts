@@ -54,7 +54,7 @@ export const actions = {
     if (!input.location_id) return fail(400, { error: 'Location is required' })
     if (!input.name) return fail(400, { error: 'Name is required' })
 
-    const result = await spacesService.createSpace(input)
+    const result = await spacesService.createSpace(input, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Space created' }
   },
@@ -67,7 +67,7 @@ export const actions = {
     const id = data.get('id') as string
     if (!id) return fail(400, { error: 'Missing id' })
     const input = readSpaceInput(data)
-    const result = await spacesService.updateSpace(id, input)
+    const result = await spacesService.updateSpace(id, input, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Space updated' }
   },
@@ -77,7 +77,7 @@ export const actions = {
     if (userId) await requirePermission(userId, 'locations', 'delete')
 
     const data = await request.formData()
-    const result = await spacesService.deleteSpace(data.get('id') as string)
+    const result = await spacesService.deleteSpace(data.get('id') as string, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Space deleted' }
   }

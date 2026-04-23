@@ -1,4 +1,4 @@
-import { supabase } from '$lib/services/permissions.service'
+import { supabase, sbForUser } from '$lib/services/permissions.service'
 
 export type Item = {
   id: string
@@ -57,14 +57,14 @@ export async function listAll(): Promise<ItemEnriched[]> {
   })) as ItemEnriched[]
 }
 
-export async function create(input: ItemInput): Promise<ServiceResult> {
-  const { error } = await supabase.from('items').insert(input)
+export async function create(input: ItemInput, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('items').insert(input)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
 
-export async function update(id: string, input: Partial<ItemInput>): Promise<ServiceResult> {
-  const { error } = await supabase
+export async function update(id: string, input: Partial<ItemInput>, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId)
     .from('items')
     .update({ ...input, updated_at: new Date().toISOString() })
     .eq('id', id)
@@ -72,8 +72,8 @@ export async function update(id: string, input: Partial<ItemInput>): Promise<Ser
   return { ok: true }
 }
 
-export async function remove(id: string): Promise<ServiceResult> {
-  const { error } = await supabase.from('items').delete().eq('id', id)
+export async function remove(id: string, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('items').delete().eq('id', id)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }

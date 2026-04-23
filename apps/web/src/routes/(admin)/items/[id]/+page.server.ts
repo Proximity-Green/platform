@@ -1,5 +1,5 @@
 import { fail, error } from '@sveltejs/kit'
-import { requirePermission, getUserIdFromRequest, supabase } from '$lib/services/permissions.service'
+import { requirePermission, getUserIdFromRequest, supabase, sbForUser } from '$lib/services/permissions.service'
 import * as itemsService from '$lib/services/items.service'
 import * as lookups from '$lib/services/item-lookups.service'
 import { logFail } from '$lib/services/action-log.service'
@@ -26,12 +26,13 @@ function trackingCodeIds(data: FormData): string[] {
   return data.getAll('tracking_code_ids').map(v => String(v)).filter(Boolean)
 }
 
-async function replaceItemTrackingCodes(itemId: string, ids: string[]): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { error: delErr } = await supabase.from('item_tracking_codes').delete().eq('item_id', itemId)
+async function replaceItemTrackingCodes(itemId: string, ids: string[], actorId: string | null = null): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sb = sbForUser(actorId)
+  const { error: delErr } = await sb.from('item_tracking_codes').delete().eq('item_id', itemId)
   if (delErr) return { ok: false, error: delErr.message }
   if (ids.length === 0) return { ok: true }
   const rows = ids.map(tracking_code_id => ({ item_id: itemId, tracking_code_id }))
-  const { error: insErr } = await supabase.from('item_tracking_codes').insert(rows)
+  const { error: insErr } = await sb.from('item_tracking_codes').insert(rows)
   if (insErr) return { ok: false, error: insErr.message }
   return { ok: true }
 }
@@ -159,7 +160,7 @@ const FAMILY_COLUMNS: Record<Family, { name: string; type: ColType }[]> = {
   ]
 }
 
-async function upsertDetails(itemId: string, family: Family | null, data: FormData) {
+async function upsertDetails(itemId: string, family: Family | null, data: FormData, actorId: string | null = null) {
   if (!family) return { ok: true as const }
   const table = FAMILY_TABLES[family]
   const cols = FAMILY_COLUMNS[family]
@@ -169,7 +170,7 @@ async function upsertDetails(itemId: string, family: Family | null, data: FormDa
     if (value === null && c.type !== 'boolean') continue
     row[c.name] = value
   }
-  const { error } = await supabase.from(table).upsert(row, { onConflict: 'item_id' })
+  const { error } = await sbForUser(actorId).from(table).upsert(row, { onConflict: 'item_id' })
   if (error) return { ok: false as const, error: error.message }
   return { ok: true as const }
 }
@@ -247,14 +248,14 @@ export const actions = {
       accounting_tax_percentage: blankNum(data, 'accounting_tax_percentage'),
       accounting_description: blankStr(data, 'accounting_description'),
       active: blankBool(data, 'active', true)
-    })
+    }, userId)
     if (!result.ok) return await logFail(userId, 'items.update', result.error, { id: params.id })
 
-    const linkResult = await replaceItemTrackingCodes(params.id, trackingCodeIds(data))
+    const linkResult = await replaceItemTrackingCodes(params.id, trackingCodeIds(data), userId)
     if (!linkResult.ok) return await logFail(userId, 'items.update.tracking_codes', linkResult.error, { id: params.id })
 
     const family = await getFamily(newItemTypeId)
-    const detailsResult = await upsertDetails(params.id, family, data)
+    const detailsResult = await upsertDetails(params.id, family, data, userId)
     if (!detailsResult.ok) return await logFail(userId, 'items.update.details', detailsResult.error, { id: params.id, family })
 
     return { success: true, message: 'Item updated' }
@@ -263,7 +264,7 @@ export const actions = {
   delete: async ({ params, cookies, locals }) => {
     const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'items', 'delete')
-    const result = await itemsService.remove(params.id)
+    const result = await itemsService.remove(params.id, userId)
     if (!result.ok) return await logFail(userId, 'items.delete', result.error, { id: params.id })
     return { success: true, message: 'Item deleted' }
   }

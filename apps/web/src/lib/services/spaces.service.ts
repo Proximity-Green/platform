@@ -1,4 +1,4 @@
-import { supabase } from '$lib/services/permissions.service'
+import { supabase, sbForUser } from '$lib/services/permissions.service'
 
 export type SpaceInput = {
   location_id: string
@@ -24,20 +24,20 @@ export async function listSpaces() {
   return data ?? []
 }
 
-export async function createSpace(input: SpaceInput): Promise<ServiceResult> {
-  const { error } = await supabase.from('spaces').insert(input)
+export async function createSpace(input: SpaceInput, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('spaces').insert(input)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
 
-export async function updateSpace(id: string, input: Partial<SpaceInput>): Promise<ServiceResult> {
-  const { error } = await supabase.from('spaces').update(input).eq('id', id)
+export async function updateSpace(id: string, input: Partial<SpaceInput>, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('spaces').update(input).eq('id', id)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
 
-export async function deleteSpace(id: string): Promise<ServiceResult> {
-  const { error } = await supabase.from('spaces').delete().eq('id', id)
+export async function deleteSpace(id: string, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('spaces').delete().eq('id', id)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }

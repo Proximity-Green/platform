@@ -1,5 +1,5 @@
 import { fail, error } from '@sveltejs/kit'
-import { requirePermission, getUserIdFromRequest, supabase } from '$lib/services/permissions.service'
+import { requirePermission, getUserIdFromRequest, supabase, sbForUser } from '$lib/services/permissions.service'
 import * as locationsService from '$lib/services/locations.service'
 import { invalidateItemLookups } from '$lib/services/item-lookups.service'
 
@@ -109,7 +109,7 @@ export const actions = {
 
     const data = await request.formData()
     const input = readLocationInput(data)
-    const result = await locationsService.updateLocation(params.id, input)
+    const result = await locationsService.updateLocation(params.id, input, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Location updated' }
   },
@@ -128,8 +128,9 @@ export const actions = {
 
     // Promoting to primary: unset any existing primary for this location first
     // so the unique partial index doesn't reject the insert.
+    const sb = sbForUser(userId)
     if (isPrimary) {
-      const { error: unsetErr } = await supabase
+      const { error: unsetErr } = await sb
         .from('tracking_codes')
         .update({ is_primary: false })
         .eq('location_id', params.id)
@@ -137,7 +138,7 @@ export const actions = {
       if (unsetErr) return fail(400, { error: unsetErr.message })
     }
 
-    const { error: insErr } = await supabase.from('tracking_codes').insert({
+    const { error: insErr } = await sb.from('tracking_codes').insert({
       location_id: params.id,
       category: blank(data, 'category'),
       code,
@@ -161,14 +162,15 @@ export const actions = {
 
     // Two-step flip: the partial unique index WHERE is_primary = true rejects a
     // single UPDATE that leaves two rows true mid-statement, so demote first.
-    const { error: demoteErr } = await supabase
+    const sb = sbForUser(userId)
+    const { error: demoteErr } = await sb
       .from('tracking_codes')
       .update({ is_primary: false })
       .eq('location_id', params.id)
       .eq('is_primary', true)
     if (demoteErr) return fail(400, { error: demoteErr.message })
 
-    const { error: promoteErr } = await supabase
+    const { error: promoteErr } = await sb
       .from('tracking_codes')
       .update({ is_primary: true })
       .eq('id', id)
@@ -187,7 +189,7 @@ export const actions = {
     const active = data.get('active') === 'true'
     if (!id) return fail(400, { error: 'Missing id' })
 
-    const { error: upErr } = await supabase
+    const { error: upErr } = await sbForUser(userId)
       .from('tracking_codes')
       .update({ active: !active })
       .eq('id', id)
@@ -208,7 +210,7 @@ export const actions = {
     if (!code) return fail(400, { error: 'Code is required' })
     if (!name) return fail(400, { error: 'Name is required' })
 
-    const { error: upErr } = await supabase
+    const { error: upErr } = await sbForUser(userId)
       .from('tracking_codes')
       .update({
         category: blank(data, 'category'),
@@ -232,7 +234,7 @@ export const actions = {
     const id = blank(data, 'id')
     if (!id) return fail(400, { error: 'Missing id' })
 
-    const { error: delErr } = await supabase.from('tracking_codes').delete().eq('id', id)
+    const { error: delErr } = await sbForUser(userId).from('tracking_codes').delete().eq('id', id)
     if (delErr) return fail(400, { error: delErr.message })
     invalidateItemLookups()
     return { success: true, message: 'Tracking code deleted' }

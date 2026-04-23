@@ -55,7 +55,7 @@ export const actions = {
       started_at: blank(data, 'started_at'),
       ended_at: blank(data, 'ended_at'),
       status: (blank(data, 'status') ?? 'draft') as contractsService.ContractStatus
-    })
+    }, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Contract created' }
   },
@@ -80,7 +80,7 @@ export const actions = {
       ended_at: blank(data, 'ended_at'),
       status: blank(data, 'status') as contractsService.ContractStatus,
       notes: blank(data, 'notes')
-    })
+    }, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Contract updated' }
   },
@@ -90,7 +90,7 @@ export const actions = {
     if (userId) await requirePermission(userId, 'contracts', 'delete')
 
     const data = await request.formData()
-    const result = await contractsService.remove(data.get('id') as string)
+    const result = await contractsService.remove(data.get('id') as string, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Contract deleted' }
   }

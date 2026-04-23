@@ -1,4 +1,4 @@
-import { supabase } from '$lib/services/permissions.service'
+import { supabase, sbForUser } from '$lib/services/permissions.service'
 
 export type ItemType = {
   id: string
@@ -34,14 +34,14 @@ export async function listAll(): Promise<ItemType[]> {
   return data ?? []
 }
 
-export async function create(input: ItemTypeInput): Promise<ServiceResult> {
-  const { error } = await supabase.from('item_types').insert(input)
+export async function create(input: ItemTypeInput, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('item_types').insert(input)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
 
-export async function update(id: string, input: Partial<ItemTypeInput>): Promise<ServiceResult> {
-  const { error } = await supabase
+export async function update(id: string, input: Partial<ItemTypeInput>, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId)
     .from('item_types')
     .update({ ...input, updated_at: new Date().toISOString() })
     .eq('id', id)
@@ -49,8 +49,8 @@ export async function update(id: string, input: Partial<ItemTypeInput>): Promise
   return { ok: true }
 }
 
-export async function remove(id: string): Promise<ServiceResult> {
-  const { error } = await supabase.from('item_types').delete().eq('id', id)
+export async function remove(id: string, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('item_types').delete().eq('id', id)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }

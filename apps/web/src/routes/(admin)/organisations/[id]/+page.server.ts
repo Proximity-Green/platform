@@ -1,5 +1,5 @@
 import { fail, error, redirect } from '@sveltejs/kit'
-import { requirePermission, getUserIdFromRequest, supabase } from '$lib/services/permissions.service'
+import { requirePermission, getUserIdFromRequest, supabase, sbForUser } from '$lib/services/permissions.service'
 import { logFail } from '$lib/services/action-log.service'
 import * as walletsService from '$lib/services/wallets.service'
 import * as subsService from '$lib/services/subscription-lines.service'
@@ -191,7 +191,8 @@ export const load = async ({ params, cookies, locals }) => {
     locations: locationsRes.data ?? [],
     organisations: (orgsRes.data ?? []).filter((o: any) => o.id !== id),
     persons: allPersons,
-    items: itemsRes.data ?? []
+    items: itemsRes.data ?? [],
+    viewerId: userId
   }
 }
 
@@ -249,7 +250,7 @@ export const actions = {
 
     if (!patch.name) return fail(400, { error: 'Name is required' })
 
-    const { error: upErr } = await supabase.from('organisations').update(patch).eq('id', id)
+    const { error: upErr } = await sbForUser(userId).from('organisations').update(patch).eq('id', id)
     if (upErr) return fail(400, { error: upErr.message })
     return { success: true, message: 'Organisation updated' }
   },
@@ -266,7 +267,7 @@ export const actions = {
     if (!tenantId) return fail(400, { error: 'Tenant ID is required' })
     if (!customerId) return fail(400, { error: 'Customer ID is required' })
 
-    const { error: insErr } = await supabase.from('organisation_accounting_customers').insert({
+    const { error: insErr } = await sbForUser(userId).from('organisation_accounting_customers').insert({
       organisation_id: params.id,
       provider,
       accounting_external_tenant_id: tenantId,
@@ -286,7 +287,7 @@ export const actions = {
     const status = blank(data, 'status')
     if (!status) return fail(400, { error: 'status required' })
 
-    const { error: upErr } = await supabase
+    const { error: upErr } = await sbForUser(userId)
       .from('organisations')
       .update({ status })
       .eq('id', params.id)
@@ -312,7 +313,7 @@ export const actions = {
       kind: kindRaw as walletsService.WalletTxnKind,
       amount,
       notes: blank(data, 'notes')
-    })
+    }, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Transaction added' }
   },
@@ -334,7 +335,7 @@ export const actions = {
     if (data.has('location_id')) patch.location_id = blank(data, 'location_id')
     if (data.has('notes')) patch.notes = blank(data, 'notes')
 
-    const result = await subsService.update(id, patch)
+    const result = await subsService.update(id, patch, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Subscription line updated' }
   },
@@ -365,7 +366,7 @@ export const actions = {
     let subLicenseId: string | null = null
     if (requiresLicense) {
       const startedAt = blank(data, 'started_at') ?? new Date().toISOString().slice(0, 10)
-      const { data: licence, error: licErr } = await supabase
+      const { data: licence, error: licErr } = await sbForUser(userId)
         .from('licenses')
         .insert({
           item_id,
@@ -396,7 +397,7 @@ export const actions = {
       started_at: blank(data, 'started_at') ?? new Date().toISOString().slice(0, 10),
       ended_at: blank(data, 'ended_at'),
       notes: blank(data, 'notes')
-    } as any)
+    } as any, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Subscription line added' }
   },
@@ -424,7 +425,8 @@ export const actions = {
     const first = subs[0] as any
     const subTotal = subs.reduce((s: number, x: any) => s + Number(x.base_rate) * Number(x.quantity ?? 1), 0)
 
-    const { data: invoice, error: invErr } = await supabase.from('invoices').insert({
+    const sb = sbForUser(userId)
+    const { data: invoice, error: invErr } = await sb.from('invoices').insert({
       kind,
       direction: 'customer',
       status: kind === 'quote' ? 'quote' : 'draft',
@@ -445,7 +447,7 @@ export const actions = {
       const meta = s.item_id ? s.items : s.licenses?.items
       const qty = Number(s.quantity ?? 1)
       const up = Number(s.base_rate)
-      await supabase.from('invoice_lines').insert({
+      await sb.from('invoice_lines').insert({
         invoice_id: invoice.id,
         subscription_line_id: s.id,
         description: meta?.name ?? 'Subscription charge',
@@ -475,7 +477,7 @@ export const actions = {
     const { data: org } = await supabase.from('organisations').select('billing_currency').eq('id', params.id).single()
     const currency = (org as any)?.billing_currency ?? 'ZAR'
 
-    const { data: invoice, error: invErr } = await supabase.from('invoices').insert({
+    const { data: invoice, error: invErr } = await sbForUser(userId).from('invoices').insert({
       kind: 'invoice',
       direction: 'customer',
       status: 'draft',
@@ -494,7 +496,7 @@ export const actions = {
     const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'organisations', 'delete')
 
-    const { error: delErr } = await supabase.from('organisations').delete().eq('id', params.id)
+    const { error: delErr } = await sbForUser(userId).from('organisations').delete().eq('id', params.id)
     if (delErr) return fail(400, { error: delErr.message })
     throw redirect(303, '/organisations')
   }

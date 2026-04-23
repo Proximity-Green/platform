@@ -1,4 +1,4 @@
-import { supabase } from '$lib/services/permissions.service'
+import { supabase, sbForUser } from '$lib/services/permissions.service'
 
 export type ContractType = 'contract' | 'flexi_agreement' | 'addendum' | 'master_services_agreement'
 export type ContractStatus = 'draft' | 'active' | 'expired' | 'terminated'
@@ -82,20 +82,20 @@ export async function listLinked(contract_id: string) {
   return data ?? []
 }
 
-export async function create(input: ContractInput): Promise<ServiceResult> {
-  const { error } = await supabase.from('contracts').insert(input)
+export async function create(input: ContractInput, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('contracts').insert(input)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
 
-export async function update(id: string, input: Partial<ContractInput>): Promise<ServiceResult> {
-  const { error } = await supabase.from('contracts').update(input).eq('id', id)
+export async function update(id: string, input: Partial<ContractInput>, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('contracts').update(input).eq('id', id)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
 
-export async function remove(id: string): Promise<ServiceResult> {
-  const { error } = await supabase.from('contracts').delete().eq('id', id)
+export async function remove(id: string, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('contracts').delete().eq('id', id)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }

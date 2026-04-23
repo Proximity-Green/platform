@@ -29,7 +29,8 @@ export const load = async ({ params, cookies, locals }) => {
   return {
     person: personRes.data,
     organisations: organisationsPromise,
-    subscriptions: subscriptionsPromise
+    subscriptions: subscriptionsPromise,
+    viewerId: userId
   }
 }
 
@@ -57,7 +58,7 @@ export const actions = {
       onboarded_at: blank('onboarded_at'),
       offboarded_at: blank('offboarded_at'),
       external_accounting_customer_id: blank('external_accounting_customer_id')
-    })
+    }, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Member updated' }
   },
@@ -65,7 +66,7 @@ export const actions = {
   delete: async ({ params, cookies, locals }) => {
     const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'persons', 'delete')
-    const result = await personsService.deletePerson(params.id)
+    const result = await personsService.deletePerson(params.id, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Member deleted' }
   },

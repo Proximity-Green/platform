@@ -33,11 +33,20 @@ export async function log(
     enrichedDetails.performed_by = await resolveEmail(performedBy) ?? performedBy
   }
 
-  await supabase.from('system_logs').insert({
+  const { error } = await supabase.from('system_logs').insert({
     category,
     level,
     message,
     details: enrichedDetails,
     created_by: performedBy ?? null
   })
+
+  // Surface log-write failures to the dev console. Without this, a silently
+  // failing INSERT (RLS, schema mismatch, bad creds) leaves no trace anywhere
+  // and makes "why aren't my logs appearing" impossible to debug.
+  if (error) {
+    console.error(`[system-log] insert failed for [${category}/${level}] "${message}"`, {
+      code: error.code, details: error.details, hint: error.hint, message: error.message
+    })
+  }
 }

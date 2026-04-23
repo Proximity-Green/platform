@@ -55,7 +55,7 @@ export const actions = {
       organisation_id,
       currency,
       balance: num(data, 'balance') ?? 0
-    })
+    }, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Wallet created' }
   },
@@ -70,7 +70,7 @@ export const actions = {
 
     const result = await walletsService.update(id, {
       currency: blank(data, 'currency') ?? undefined
-    })
+    }, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Wallet updated' }
   },
@@ -80,7 +80,7 @@ export const actions = {
     if (userId) await requirePermission(userId, 'wallets', 'delete')
 
     const data = await request.formData()
-    const result = await walletsService.remove(data.get('id') as string)
+    const result = await walletsService.remove(data.get('id') as string, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Wallet deleted' }
   },
@@ -102,7 +102,7 @@ export const actions = {
       kind: kindRaw as walletsService.WalletTxnKind,
       amount,
       notes: blank(data, 'notes')
-    })
+    }, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Transaction added' }
   }

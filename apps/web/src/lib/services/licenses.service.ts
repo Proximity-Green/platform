@@ -1,4 +1,4 @@
-import { supabase } from '$lib/services/permissions.service'
+import { supabase, sbForUser } from '$lib/services/permissions.service'
 
 export type License = {
   id: string
@@ -61,14 +61,14 @@ export async function listAll(): Promise<LicenseEnriched[]> {
   })) as LicenseEnriched[]
 }
 
-export async function create(input: LicenseInput): Promise<ServiceResult> {
-  const { error } = await supabase.from('licenses').insert(input)
+export async function create(input: LicenseInput, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('licenses').insert(input)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
 
-export async function update(id: string, input: Partial<LicenseInput>): Promise<ServiceResult> {
-  const { error } = await supabase
+export async function update(id: string, input: Partial<LicenseInput>, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId)
     .from('licenses')
     .update({ ...input, updated_at: new Date().toISOString() })
     .eq('id', id)
@@ -76,8 +76,8 @@ export async function update(id: string, input: Partial<LicenseInput>): Promise<
   return { ok: true }
 }
 
-export async function remove(id: string): Promise<ServiceResult> {
-  const { error } = await supabase.from('licenses').delete().eq('id', id)
+export async function remove(id: string, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('licenses').delete().eq('id', id)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }

@@ -1,4 +1,4 @@
-import { supabase } from '$lib/services/permissions.service'
+import { supabase, sbForUser } from '$lib/services/permissions.service'
 
 export type ServiceResult = { ok: true; message?: string } | { ok: false; error: string }
 
@@ -31,44 +31,43 @@ export async function listRolesWithCounts() {
       usersByRole[ur.role_id].push(u)
     }
   })
-  // Sort each role's users by email for stable display
   Object.values(usersByRole).forEach(list => list.sort((a, b) => a.email.localeCompare(b.email)))
 
   return { roles: roles ?? [], permissions: permissions ?? [], roleCounts, usersByRole }
 }
 
-export async function createRole(name: string, description: string): Promise<ServiceResult> {
-  const { error } = await supabase.from('roles').insert({ name, description })
+export async function createRole(name: string, description: string, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('roles').insert({ name, description })
   if (error) return { ok: false, error: error.message }
   return { ok: true, message: 'Role created' }
 }
 
-export async function updateRole(id: string, name: string, description: string): Promise<ServiceResult> {
-  const { error } = await supabase.from('roles').update({ name, description }).eq('id', id)
+export async function updateRole(id: string, name: string, description: string, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('roles').update({ name, description }).eq('id', id)
   if (error) return { ok: false, error: error.message }
   return { ok: true, message: 'Role updated' }
 }
 
-export async function deleteRole(id: string): Promise<ServiceResult> {
-  const { error } = await supabase.from('roles').delete().eq('id', id)
+export async function deleteRole(id: string, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('roles').delete().eq('id', id)
   if (error) return { ok: false, error: error.message }
   return { ok: true, message: 'Role deleted' }
 }
 
-export async function addPermission(roleId: string, resource: string, action: string): Promise<ServiceResult> {
-  const { error } = await supabase.from('permissions').insert({ role_id: roleId, resource, action })
+export async function addPermission(roleId: string, resource: string, action: string, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('permissions').insert({ role_id: roleId, resource, action })
   if (error) return { ok: false, error: error.message }
   return { ok: true, message: 'Permission added' }
 }
 
-export async function removePermission(id: string): Promise<ServiceResult> {
-  const { error } = await supabase.from('permissions').delete().eq('id', id)
+export async function removePermission(id: string, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('permissions').delete().eq('id', id)
   if (error) return { ok: false, error: error.message }
   return { ok: true, message: 'Permission removed' }
 }
 
-export async function detachUserFromRole(userId: string, roleId: string): Promise<ServiceResult> {
-  const { error } = await supabase
+export async function detachUserFromRole(userId: string, roleId: string, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId)
     .from('user_roles')
     .delete()
     .eq('user_id', userId)

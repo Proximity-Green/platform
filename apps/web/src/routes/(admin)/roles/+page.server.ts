@@ -16,7 +16,8 @@ export const actions = {
     const data = await request.formData()
     const result = await rolesService.createRole(
       data.get('name') as string,
-      data.get('description') as string
+      data.get('description') as string,
+      userId
     )
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: result.message }
@@ -30,7 +31,8 @@ export const actions = {
     const result = await rolesService.updateRole(
       data.get('id') as string,
       data.get('name') as string,
-      data.get('description') as string
+      data.get('description') as string,
+      userId
     )
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: result.message }
@@ -41,7 +43,7 @@ export const actions = {
     if (userId) await requirePermission(userId, 'roles', 'manage')
 
     const data = await request.formData()
-    const result = await rolesService.deleteRole(data.get('id') as string)
+    const result = await rolesService.deleteRole(data.get('id') as string, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: result.message }
   },
@@ -54,7 +56,8 @@ export const actions = {
     const result = await rolesService.addPermission(
       data.get('role_id') as string,
       data.get('resource') as string,
-      data.get('action') as string
+      data.get('action') as string,
+      userId
     )
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: result.message }
@@ -67,7 +70,8 @@ export const actions = {
     const data = await request.formData()
     const result = await rolesService.detachUserFromRole(
       data.get('user_id') as string,
-      data.get('role_id') as string
+      data.get('role_id') as string,
+      userId
     )
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: result.message }
@@ -78,7 +82,7 @@ export const actions = {
     if (userId) await requirePermission(userId, 'roles', 'manage')
 
     const data = await request.formData()
-    const result = await rolesService.removePermission(data.get('id') as string)
+    const result = await rolesService.removePermission(data.get('id') as string, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: result.message }
   }

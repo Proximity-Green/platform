@@ -1,4 +1,4 @@
-import { supabase } from '$lib/services/permissions.service'
+import { supabase, sbForUser } from '$lib/services/permissions.service'
 import { log } from '$lib/services/system-log.service'
 import { MAILGUN_API_KEY as CONFIGURED_MAILGUN_API_KEY } from '$lib/server/env'
 
@@ -39,8 +39,8 @@ export type TemplateUpdate = {
   variables?: string[]
 }
 
-export async function updateTemplate(id: string, update: TemplateUpdate): Promise<ServiceResult> {
-  const { error } = await supabase
+export async function updateTemplate(id: string, update: TemplateUpdate, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId)
     .from('message_templates')
     .update({ ...update, updated_at: new Date().toISOString() })
     .eq('id', id)
@@ -60,14 +60,14 @@ export type TemplateCreate = {
   variables: string[]
 }
 
-export async function createTemplate(input: TemplateCreate): Promise<ServiceResult> {
-  const { error } = await supabase.from('message_templates').insert(input)
+export async function createTemplate(input: TemplateCreate, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('message_templates').insert(input)
   if (error) return { ok: false, error: error.message }
   return { ok: true, message: 'Template created' }
 }
 
-export async function deleteTemplate(id: string): Promise<ServiceResult> {
-  const { error } = await supabase.from('message_templates').delete().eq('id', id)
+export async function deleteTemplate(id: string, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('message_templates').delete().eq('id', id)
   if (error) return { ok: false, error: error.message }
   return { ok: true, message: 'Template deleted' }
 }

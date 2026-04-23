@@ -100,7 +100,7 @@ export const actions = {
     if (!input.name || !input.slug) {
       return fail(400, { error: 'Name and slug are required' })
     }
-    const result = await locationsService.createLocation(input)
+    const result = await locationsService.createLocation(input, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Location created' }
   },
@@ -113,7 +113,7 @@ export const actions = {
     const id = data.get('id') as string
     if (!id) return fail(400, { error: 'Missing id' })
     const input = readLocationInput(data)
-    const result = await locationsService.updateLocation(id, input)
+    const result = await locationsService.updateLocation(id, input, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Location updated' }
   },
@@ -123,7 +123,7 @@ export const actions = {
     if (userId) await requirePermission(userId, 'locations', 'delete')
 
     const data = await request.formData()
-    const result = await locationsService.deleteLocation(data.get('id') as string)
+    const result = await locationsService.deleteLocation(data.get('id') as string, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Location deleted' }
   }

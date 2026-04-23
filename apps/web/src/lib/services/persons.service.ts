@@ -1,12 +1,22 @@
-import { supabase } from '$lib/services/permissions.service'
+import { supabase, sbForUser } from '$lib/services/permissions.service'
 import { log } from '$lib/services/system-log.service'
-import { tasks } from '@trigger.dev/sdk/v3'
+import { tasks, configure as configureTrigger } from '@trigger.dev/sdk/v3'
 import type { sendWelcomeEmail } from '$lib/../trigger/welcome-email'
-import { PUBLIC_APP_URL } from '$lib/server/env'
+import { PUBLIC_APP_URL, TRIGGER_SECRET_KEY, TRIGGER_API_URL } from '$lib/server/env'
 
 const APP_URL = PUBLIC_APP_URL
 const AUTH_CONFIRM_URL = `${APP_URL}/auth/confirm`
 const TRIGGER_RUNS_BASE_URL = 'https://jobs.poc.proximity.green/orgs/proximity-green-f2c3/projects/poc-aX4R/env/dev/runs'
+
+// The Trigger.dev SDK reads its secret key from process.env by default.
+// SvelteKit/Vite loads .env values into $env/* modules, NOT into process.env,
+// so the SDK sees nothing without this explicit configure() call.
+if (TRIGGER_SECRET_KEY) {
+  configureTrigger({
+    secretKey: TRIGGER_SECRET_KEY,
+    ...(TRIGGER_API_URL ? { baseURL: TRIGGER_API_URL } : {})
+  })
+}
 
 export type PersonInput = {
   first_name: string
@@ -58,20 +68,20 @@ export async function listPersons() {
   }))
 }
 
-export async function createPerson(input: PersonInput): Promise<ServiceResult> {
-  const { error } = await supabase.from('persons').insert(input)
+export async function createPerson(input: PersonInput, userId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(userId).from('persons').insert(input)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
 
-export async function updatePerson(id: string, input: Partial<PersonInput>): Promise<ServiceResult> {
-  const { error } = await supabase.from('persons').update(input).eq('id', id)
+export async function updatePerson(id: string, input: Partial<PersonInput>, userId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(userId).from('persons').update(input).eq('id', id)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
 
-export async function deletePerson(id: string): Promise<ServiceResult> {
-  const { error } = await supabase.from('persons').delete().eq('id', id)
+export async function deletePerson(id: string, userId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(userId).from('persons').delete().eq('id', id)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
@@ -84,7 +94,7 @@ function pick<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]
 }
 
-export async function generateRandomPersons(count = 10): Promise<ServiceResult> {
+export async function generateRandomPersons(count = 10, userId: string | null = null): Promise<ServiceResult> {
   const people = Array.from({ length: count }, () => {
     const first = pick(FIRST_NAMES)
     const last = pick(LAST_NAMES)
@@ -96,7 +106,7 @@ export async function generateRandomPersons(count = 10): Promise<ServiceResult> 
       job_title: pick(JOB_TITLES)
     }
   })
-  const { error } = await supabase.from('persons').insert(people)
+  const { error } = await sbForUser(userId).from('persons').insert(people)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
@@ -110,30 +120,65 @@ export type InviteAsUserInput = {
 
 export async function inviteAsUser(input: InviteAsUserInput): Promise<ServiceResult> {
   const { email, personId, invitedByUserId, inviterEmail } = input
+  const startedAt = Date.now()
+
+  // Breadcrumb at the top: if this entry appears but the success entry below
+  // doesn't, we know the flow started but didn't finish.
+  await log('auth', 'info', `Invite flow started for ${email}`, {
+    email, person_id: personId, inviter: inviterEmail, step: 'start'
+  }, invitedByUserId)
 
   const { data: result, error } = await supabase.auth.admin.generateLink({
     type: 'invite',
     email,
     options: { redirectTo: AUTH_CONFIRM_URL }
   })
-  if (error) return { ok: false, error: error.message }
+  if (error) {
+    await log('auth', 'error', `Invite failed at generateLink for ${email}`, {
+      email, person_id: personId, step: 'generateLink',
+      error_message: error.message, error_status: (error as any).status ?? null
+    }, invitedByUserId)
+    return { ok: false, error: error.message }
+  }
 
   // Supabase generates action links with the internal kong hostname;
   // swap it for the public hostname so the emailed link works externally.
   let inviteUrl = result.properties?.action_link ?? APP_URL
   inviteUrl = inviteUrl.replace('http://supabase-kong:8000', 'https://db.poc.proximity.green')
 
-  await supabase.from('persons').update({ user_id: result.user.id }).eq('id', personId)
+  const sb = sbForUser(invitedByUserId)
+  const { error: personUpdateErr } = await sb.from('persons').update({ user_id: result.user.id }).eq('id', personId)
+  if (personUpdateErr) {
+    await log('system', 'error', `Invite: failed to link user_id to person ${personId}`, {
+      email, person_id: personId, user_id: result.user.id, step: 'persons.update',
+      error_code: personUpdateErr.code, error_message: personUpdateErr.message, error_hint: personUpdateErr.hint
+    }, invitedByUserId)
+  }
 
-  const { data: memberRole } = await supabase.from('roles').select('id').eq('name', 'member').single()
-  if (memberRole) {
-    await supabase.from('user_roles').insert({ user_id: result.user.id, role_id: memberRole.id })
+  const { data: memberRole, error: roleLookupErr } = await sb.from('roles').select('id').eq('name', 'member').single()
+  if (roleLookupErr || !memberRole) {
+    await log('system', 'warning', `Invite: 'member' role not found — user will be invited without a role`, {
+      email, person_id: personId, user_id: result.user.id, step: 'roles.select',
+      ...(roleLookupErr ? { error_code: roleLookupErr.code, error_message: roleLookupErr.message } : {})
+    }, invitedByUserId)
+  } else {
+    const { error: roleInsertErr } = await sb.from('user_roles').insert({ user_id: result.user.id, role_id: memberRole.id })
+    if (roleInsertErr) {
+      await log('system', 'error', `Invite: failed to assign 'member' role`, {
+        email, person_id: personId, user_id: result.user.id, role_id: memberRole.id, step: 'user_roles.insert',
+        error_code: roleInsertErr.code, error_message: roleInsertErr.message, error_hint: roleInsertErr.hint
+      }, invitedByUserId)
+    }
   }
 
   const { data: person } = await supabase.from('persons').select('first_name, last_name').eq('id', personId).single()
 
   let triggerRunId: string | null = null
   let triggerError: string | null = null
+  let triggerErrorStack: string | null = null
+  const triggerKeyKind = TRIGGER_SECRET_KEY.startsWith('tr_prod_')
+    ? 'prod' : TRIGGER_SECRET_KEY.startsWith('tr_dev_')
+    ? 'dev' : TRIGGER_SECRET_KEY ? 'other' : 'missing'
   try {
     const handle = await tasks.trigger<typeof sendWelcomeEmail>('send-welcome-email', {
       email,
@@ -145,19 +190,26 @@ export async function inviteAsUser(input: InviteAsUserInput): Promise<ServiceRes
     triggerRunId = handle?.id ?? null
   } catch (e: any) {
     triggerError = e?.message ?? String(e)
+    triggerErrorStack = e?.stack?.split('\n').slice(0, 6).join('\n') ?? null
   }
 
   await log('email', triggerError ? 'warning' : 'success', `Invitation sent to ${email} from People page`, {
     to: email, type: 'invite', source: 'app', via: 'trigger', person_id: personId,
     trigger_job: 'send-welcome-email',
+    trigger_key_kind: triggerKeyKind,
+    invite_url: inviteUrl,
+    duration_ms: Date.now() - startedAt,
     ...(triggerRunId ? {
       trigger_run_id: triggerRunId,
       trigger_status: 'triggered',
       trigger_url: `${TRIGGER_RUNS_BASE_URL}/${triggerRunId}`
     } : {}),
-    ...(triggerError ? { trigger_error: triggerError } : {})
+    ...(triggerError ? { trigger_error: triggerError, ...(triggerErrorStack ? { trigger_error_stack: triggerErrorStack } : {}) } : {})
   }, invitedByUserId)
-  await log('auth', 'info', `Person invited as user: ${email} (role: member)`, { email, person_id: personId, role: 'member' }, invitedByUserId)
+  await log('auth', 'info', `Person invited as user: ${email} (role: member)`, {
+    email, person_id: personId, role: 'member', step: 'complete',
+    duration_ms: Date.now() - startedAt
+  }, invitedByUserId)
 
   return { ok: true }
 }

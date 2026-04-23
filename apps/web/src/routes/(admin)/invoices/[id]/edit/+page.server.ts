@@ -1,5 +1,5 @@
 import { fail, error, redirect } from '@sveltejs/kit'
-import { requirePermission, getUserIdFromRequest, supabase } from '$lib/services/permissions.service'
+import { requirePermission, getUserIdFromRequest, supabase, sbForUser } from '$lib/services/permissions.service'
 import * as invoicesService from '$lib/services/invoices.service'
 
 const blank = (data: FormData, k: string): string | null => {
@@ -81,14 +81,15 @@ export const actions = {
       location_id: blank(data, 'location_id')
     }
 
-    const { error: upErr } = await supabase.from('invoices').update(patch).eq('id', id)
+    const sb = sbForUser(userId)
+    const { error: upErr } = await sb.from('invoices').update(patch).eq('id', id)
     if (upErr) return fail(400, { error: upErr.message })
 
     // Recompute totals from current lines
-    const { data: lines } = await supabase.from('invoice_lines').select('*').eq('invoice_id', id)
+    const { data: lines } = await sb.from('invoice_lines').select('*').eq('invoice_id', id)
     const totals = recomputeTotals(lines ?? [])
-    const amount_paid = Number((await supabase.from('invoices').select('amount_paid').eq('id', id).single()).data?.amount_paid ?? 0)
-    await supabase.from('invoices').update({
+    const amount_paid = Number((await sb.from('invoices').select('amount_paid').eq('id', id).single()).data?.amount_paid ?? 0)
+    await sb.from('invoices').update({
       ...totals,
       amount_due: totals.total - amount_paid,
       updated_at: new Date().toISOString()
@@ -108,7 +109,7 @@ export const actions = {
     if (status === 'sent' || status === 'authorised') patch.sent_at = new Date().toISOString()
     if (status === 'paid') patch.paid_at = new Date().toISOString()
 
-    const { error: upErr } = await supabase.from('invoices').update(patch).eq('id', params.id)
+    const { error: upErr } = await sbForUser(userId).from('invoices').update(patch).eq('id', params.id)
     if (upErr) return fail(400, { error: upErr.message })
     return { success: true, message: `Status set to ${status}` }
   },
@@ -141,7 +142,8 @@ export const actions = {
       .map((l: any) => l.tracking_codes?.code)
       .filter((c: string | null | undefined): c is string => !!c)
 
-    const { error: insErr } = await supabase.from('invoice_lines').insert({
+    const sb = sbForUser(userId)
+    const { error: insErr } = await sb.from('invoice_lines').insert({
       invoice_id: params.id,
       item_id,
       description: blank(data, 'description') ?? (item as any).name,
@@ -160,10 +162,10 @@ export const actions = {
     if (insErr) return fail(400, { error: insErr.message })
 
     // Recompute totals
-    const { data: lines } = await supabase.from('invoice_lines').select('*').eq('invoice_id', params.id)
+    const { data: lines } = await sb.from('invoice_lines').select('*').eq('invoice_id', params.id)
     const totals = recomputeTotals(lines ?? [])
-    const { data: curInv } = await supabase.from('invoices').select('amount_paid').eq('id', params.id).single()
-    await supabase.from('invoices').update({
+    const { data: curInv } = await sb.from('invoices').select('amount_paid').eq('id', params.id).single()
+    await sb.from('invoices').update({
       ...totals,
       amount_due: totals.total - Number((curInv as any)?.amount_paid ?? 0),
       updated_at: new Date().toISOString()
@@ -194,13 +196,14 @@ export const actions = {
       tax_amount,
       total: sub + tax_amount
     }
-    const { error: upErr } = await supabase.from('invoice_lines').update(patch).eq('id', line_id)
+    const sb = sbForUser(userId)
+    const { error: upErr } = await sb.from('invoice_lines').update(patch).eq('id', line_id)
     if (upErr) return fail(400, { error: upErr.message })
 
-    const { data: lines } = await supabase.from('invoice_lines').select('*').eq('invoice_id', params.id)
+    const { data: lines } = await sb.from('invoice_lines').select('*').eq('invoice_id', params.id)
     const totals = recomputeTotals(lines ?? [])
-    const { data: curInv } = await supabase.from('invoices').select('amount_paid').eq('id', params.id).single()
-    await supabase.from('invoices').update({
+    const { data: curInv } = await sb.from('invoices').select('amount_paid').eq('id', params.id).single()
+    await sb.from('invoices').update({
       ...totals,
       amount_due: totals.total - Number((curInv as any)?.amount_paid ?? 0),
       updated_at: new Date().toISOString()
@@ -216,13 +219,14 @@ export const actions = {
     const line_id = blank(data, 'line_id')
     if (!line_id) return fail(400, { error: 'Missing line_id' })
 
-    const { error: delErr } = await supabase.from('invoice_lines').delete().eq('id', line_id)
+    const sb = sbForUser(userId)
+    const { error: delErr } = await sb.from('invoice_lines').delete().eq('id', line_id)
     if (delErr) return fail(400, { error: delErr.message })
 
-    const { data: lines } = await supabase.from('invoice_lines').select('*').eq('invoice_id', params.id)
+    const { data: lines } = await sb.from('invoice_lines').select('*').eq('invoice_id', params.id)
     const totals = recomputeTotals(lines ?? [])
-    const { data: curInv } = await supabase.from('invoices').select('amount_paid').eq('id', params.id).single()
-    await supabase.from('invoices').update({
+    const { data: curInv } = await sb.from('invoices').select('amount_paid').eq('id', params.id).single()
+    await sb.from('invoices').update({
       ...totals,
       amount_due: totals.total - Number((curInv as any)?.amount_paid ?? 0),
       updated_at: new Date().toISOString()
@@ -233,7 +237,7 @@ export const actions = {
   delete: async ({ params, cookies, locals }) => {
     const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'invoices', 'delete')
-    const inv = await invoicesService.remove(params.id)
+    const inv = await invoicesService.remove(params.id, userId)
     if (!inv.ok) return fail(400, { error: inv.error })
     throw redirect(303, '/invoices')
   }

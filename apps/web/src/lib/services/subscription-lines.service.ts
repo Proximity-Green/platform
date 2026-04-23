@@ -1,4 +1,4 @@
-import { supabase } from '$lib/services/permissions.service'
+import { supabase, sbForUser } from '$lib/services/permissions.service'
 
 export type SubscriptionStatus =
   | 'draft'
@@ -105,14 +105,14 @@ export async function listAll(): Promise<SubscriptionLineEnriched[]> {
   })) as SubscriptionLineEnriched[]
 }
 
-export async function create(input: SubscriptionLineInput): Promise<ServiceResult> {
-  const { error } = await supabase.from('subscription_lines').insert(input)
+export async function create(input: SubscriptionLineInput, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('subscription_lines').insert(input)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
 
-export async function update(id: string, input: Partial<SubscriptionLineInput>): Promise<ServiceResult> {
-  const { error } = await supabase
+export async function update(id: string, input: Partial<SubscriptionLineInput>, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId)
     .from('subscription_lines')
     .update({ ...input, updated_at: new Date().toISOString() })
     .eq('id', id)
@@ -120,8 +120,8 @@ export async function update(id: string, input: Partial<SubscriptionLineInput>):
   return { ok: true }
 }
 
-export async function remove(id: string): Promise<ServiceResult> {
-  const { error } = await supabase.from('subscription_lines').delete().eq('id', id)
+export async function remove(id: string, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('subscription_lines').delete().eq('id', id)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
@@ -129,10 +129,11 @@ export async function remove(id: string): Promise<ServiceResult> {
 export async function setStatus(
   id: string,
   status: SubscriptionStatus,
-  extras: Partial<SubscriptionLineInput> = {}
+  extras: Partial<SubscriptionLineInput> = {},
+  actorId: string | null = null
 ): Promise<ServiceResult> {
   const patch: Record<string, any> = { status, ...extras, updated_at: new Date().toISOString() }
-  const { error } = await supabase.from('subscription_lines').update(patch).eq('id', id)
+  const { error } = await sbForUser(actorId).from('subscription_lines').update(patch).eq('id', id)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
@@ -152,9 +153,11 @@ export async function setStatus(
  */
 export async function convertToInvoice(
   subscriptionLineId: string,
-  options: { issued_at?: string; due_days?: number } = {}
+  options: { issued_at?: string; due_days?: number } = {},
+  actorId: string | null = null
 ): Promise<{ ok: true; invoice_id: string } | { ok: false; error: string }> {
-  const { data: sub, error: subErr } = await supabase
+  const sb = sbForUser(actorId)
+  const { data: sub, error: subErr } = await sb
     .from('subscription_lines')
     .select(`
       id, organisation_id, location_id, currency, base_rate, quantity,
@@ -180,7 +183,7 @@ export async function convertToInvoice(
   const unitPrice = Number(sub.base_rate)
   const lineTotal = unitPrice * quantity
 
-  const { data: invoice, error: invErr } = await supabase
+  const { data: invoice, error: invErr } = await sb
     .from('invoices')
     .insert({
       kind: 'invoice',
@@ -205,7 +208,7 @@ export async function convertToInvoice(
 
   if (invErr || !invoice) return { ok: false, error: invErr?.message ?? 'Failed to create invoice' }
 
-  const { error: lineErr } = await supabase.from('invoice_lines').insert({
+  const { error: lineErr } = await sb.from('invoice_lines').insert({
     invoice_id: invoice.id,
     subscription_line_id: sub.id,
     description,
@@ -225,7 +228,7 @@ export async function convertToInvoice(
 
   if (lineErr) {
     // Roll back the invoice row to avoid orphan
-    await supabase.from('invoices').delete().eq('id', invoice.id)
+    await sb.from('invoices').delete().eq('id', invoice.id)
     return { ok: false, error: lineErr.message }
   }
 

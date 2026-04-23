@@ -57,7 +57,7 @@ export const actions = {
       issued_at: blank(data, 'issued_at'),
       due_at: blank(data, 'due_at'),
       tax_mode: (blank(data, 'tax_mode') ?? 'exclusive') as invoicesService.TaxMode
-    })
+    }, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Invoice created' }
   },
@@ -90,7 +90,7 @@ export const actions = {
       discount_total: num(data, 'discount_total') ?? undefined,
       total: num(data, 'total') ?? undefined,
       notes: blank(data, 'notes')
-    })
+    }, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Invoice updated' }
   },
@@ -100,7 +100,7 @@ export const actions = {
     if (userId) await requirePermission(userId, 'invoices', 'delete')
 
     const data = await request.formData()
-    const result = await invoicesService.remove(data.get('id') as string)
+    const result = await invoicesService.remove(data.get('id') as string, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Invoice deleted' }
   },

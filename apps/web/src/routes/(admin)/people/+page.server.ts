@@ -1,5 +1,5 @@
 import { fail } from '@sveltejs/kit'
-import { requirePermission, getUserIdFromRequest, supabase } from '$lib/services/permissions.service'
+import { requirePermission, getUserIdFromRequest, supabase, sbForUser } from '$lib/services/permissions.service'
 import * as personsService from '$lib/services/persons.service'
 import * as usersService from '$lib/services/users.service'
 
@@ -24,7 +24,7 @@ export const actions = {
       email: data.get('email') as string,
       phone: data.get('phone') as string,
       job_title: data.get('job_title') as string
-    })
+    }, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Person created' }
   },
@@ -33,7 +33,7 @@ export const actions = {
     const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'persons', 'create')
 
-    const result = await personsService.generateRandomPersons()
+    const result = await personsService.generateRandomPersons(10, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: '10 random people added' }
   },
@@ -77,7 +77,7 @@ export const actions = {
       onboarded_at: blank('onboarded_at'),
       offboarded_at: blank('offboarded_at'),
       external_accounting_customer_id: blank('external_accounting_customer_id')
-    })
+    }, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Person updated' }
   },
@@ -87,7 +87,7 @@ export const actions = {
     if (userId) await requirePermission(userId, 'persons', 'delete')
 
     const data = await request.formData()
-    const result = await personsService.deletePerson(data.get('id') as string)
+    const result = await personsService.deletePerson(data.get('id') as string, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Person deleted' }
   },
@@ -198,7 +198,8 @@ export const actions = {
 
     // Batch: one delete to clear existing roles, one insert with all new rows.
     // Avoids the N-queries-per-user cost of calling setUserRole in a loop.
-    const { error: delErr } = await supabase
+    const sb = sbForUser(userId)
+    const { error: delErr } = await sb
       .from('user_roles')
       .delete()
       .in('user_id', userIdList)
@@ -208,7 +209,7 @@ export const actions = {
     }
 
     const newRows = userIdList.map(uid => ({ user_id: uid, role_id: roleId }))
-    const { error: insErr } = await supabase.from('user_roles').insert(newRows)
+    const { error: insErr } = await sb.from('user_roles').insert(newRows)
     if (insErr) {
       console.log('[bulkSetRole] insert error:', insErr.message)
       return fail(400, { error: insErr.message })

@@ -37,7 +37,7 @@ export const actions = {
       requires_license: bool(data, 'requires_license'),
       sellable_ad_hoc: bool(data, 'sellable_ad_hoc'),
       sellable_recurring: bool(data, 'sellable_recurring')
-    })
+    }, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Item type created' }
   },
@@ -58,7 +58,7 @@ export const actions = {
       requires_license: bool(data, 'requires_license'),
       sellable_ad_hoc: bool(data, 'sellable_ad_hoc'),
       sellable_recurring: bool(data, 'sellable_recurring')
-    })
+    }, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Item type updated' }
   },
@@ -71,7 +71,7 @@ export const actions = {
     const id = data.get('id') as string
     if (!id) return fail(400, { error: 'Missing id' })
 
-    const result = await itemTypesService.remove(id)
+    const result = await itemTypesService.remove(id, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Item type deleted' }
   }

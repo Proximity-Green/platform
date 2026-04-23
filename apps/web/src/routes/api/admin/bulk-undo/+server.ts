@@ -2,7 +2,7 @@ import { error, json } from '@sveltejs/kit'
 import {
   requirePermission,
   getUserIdFromRequest,
-  supabase
+  sbForUser
 } from '$lib/services/permissions.service'
 
 /**
@@ -20,7 +20,7 @@ export async function POST({ request, cookies, locals }) {
   const body = await request.json().catch(() => null) as { bulk_action_id?: string } | null
   if (!body?.bulk_action_id) throw error(400, 'bulk_action_id is required')
 
-  const { data, error: rpcErr } = await supabase.rpc('bulk_action_undo', {
+  const { data, error: rpcErr } = await sbForUser(userId).rpc('bulk_action_undo', {
     p_bulk_action_id: body.bulk_action_id,
     p_undone_by: userId
   })

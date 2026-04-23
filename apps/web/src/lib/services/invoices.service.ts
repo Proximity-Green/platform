@@ -1,4 +1,4 @@
-import { supabase } from '$lib/services/permissions.service'
+import { supabase, sbForUser } from '$lib/services/permissions.service'
 
 export type InvoiceKind = 'invoice' | 'credit_note' | 'quote'
 export type InvoiceDirection = 'customer' | 'supplier'
@@ -118,20 +118,20 @@ export async function listAllLinesGrouped(): Promise<Record<string, any[]>> {
   return grouped
 }
 
-export async function create(input: InvoiceInput): Promise<ServiceResult> {
-  const { error } = await supabase.from('invoices').insert(input)
+export async function create(input: InvoiceInput, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('invoices').insert(input)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
 
-export async function update(id: string, input: Partial<InvoiceInput>): Promise<ServiceResult> {
-  const { error } = await supabase.from('invoices').update(input).eq('id', id)
+export async function update(id: string, input: Partial<InvoiceInput>, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('invoices').update(input).eq('id', id)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
 
-export async function remove(id: string): Promise<ServiceResult> {
-  const { error } = await supabase.from('invoices').delete().eq('id', id)
+export async function remove(id: string, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('invoices').delete().eq('id', id)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }

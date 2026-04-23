@@ -2,7 +2,8 @@ import { error } from '@sveltejs/kit'
 import {
   requirePermission,
   getUserIdFromRequest,
-  supabase
+  supabase,
+  sbForUser
 } from '$lib/services/permissions.service'
 
 /**
@@ -62,7 +63,7 @@ export async function POST({ request, cookies, locals }) {
 
         emit({ phase: 'applying', role: firstName, targets: ids.length })
 
-        const { data: bulkActionId, error: rpcErr } = await supabase.rpc('bulk_set_first_name_apply', {
+        const { data: bulkActionId, error: rpcErr } = await sbForUser(userId).rpc('bulk_set_first_name_apply', {
           p_person_ids: ids,
           p_first_name: firstName,
           p_performed_by: userId

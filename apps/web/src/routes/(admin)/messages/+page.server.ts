@@ -21,7 +21,7 @@ export const actions = {
       html_body: data.get('html_body') as string,
       text_body: data.get('text_body') as string,
       title: data.get('title') as string
-    })
+    }, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: result.message }
   },
@@ -41,7 +41,7 @@ export const actions = {
       title: (data.get('title') as string) || '',
       description: (data.get('description') as string) || '',
       variables: ((data.get('variables') as string) || '').split(',').map(v => v.trim()).filter(Boolean)
-    })
+    }, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: result.message }
   },
@@ -51,7 +51,7 @@ export const actions = {
     if (userId) await requirePermission(userId, 'settings', 'manage')
 
     const data = await request.formData()
-    const result = await messagesService.deleteTemplate(data.get('id') as string)
+    const result = await messagesService.deleteTemplate(data.get('id') as string, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: result.message }
   },

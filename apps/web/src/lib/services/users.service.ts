@@ -1,4 +1,4 @@
-import { supabase, logAuthAction } from '$lib/services/permissions.service'
+import { supabase, sbForUser, logAuthAction } from '$lib/services/permissions.service'
 import { log } from '$lib/services/system-log.service'
 import { PUBLIC_APP_URL } from '$lib/server/env'
 
@@ -54,16 +54,17 @@ export async function setUserRole(
   roleId: string,
   changedByUserId: string | null
 ): Promise<ServiceResult> {
-  const { data: oldRole } = await supabase.from('user_roles').select('roles(name)').eq('user_id', targetUserId).single()
+  const sb = sbForUser(changedByUserId)
+  const { data: oldRole } = await sb.from('user_roles').select('roles(name)').eq('user_id', targetUserId).single()
   const oldRoleName = (oldRole as any)?.roles?.name ?? 'none'
 
-  await supabase.from('user_roles').delete().eq('user_id', targetUserId)
+  await sb.from('user_roles').delete().eq('user_id', targetUserId)
 
   let newRoleName = 'none'
   if (roleId) {
-    const { error } = await supabase.from('user_roles').insert({ user_id: targetUserId, role_id: roleId })
+    const { error } = await sb.from('user_roles').insert({ user_id: targetUserId, role_id: roleId })
     if (error) return { ok: false, error: error.message }
-    const { data: role } = await supabase.from('roles').select('name').eq('id', roleId).single()
+    const { data: role } = await sb.from('roles').select('name').eq('id', roleId).single()
     newRoleName = role?.name ?? roleId
   }
 

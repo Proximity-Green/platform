@@ -6,6 +6,25 @@ const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 export { supabase }
 
+// Returns a service_role supabase client that includes an x-user-id header
+// on every request. The change_log trigger reads that header when auth.uid()
+// is null (which is always, for service_role writes) and attributes the
+// audit row to the acting user instead of logging "system".
+//
+// Usage in services that mutate domain tables:
+//   const sb = sbForUser(userId)   // userId comes from the server action
+//   await sb.from('persons').update({...}).eq('id', id)
+//
+// If userId is null (e.g. truly systemic writes like migrations/cron),
+// returns the shared client and audit rows correctly show "system".
+export function sbForUser(userId: string | null) {
+  if (!userId) return supabase
+  return createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { 'x-user-id': userId } }
+  })
+}
+
 // Set the current user ID in PostgreSQL session for audit triggers
 export async function setUserContext(userId: string | null) {
   if (userId) {

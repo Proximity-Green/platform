@@ -46,7 +46,7 @@ export const actions = {
       started_at: data.get('started_at') as string,
       ended_at: blank(data, 'ended_at'),
       notes: blank(data, 'notes')
-    })
+    }, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Licence created' }
   },
@@ -65,7 +65,7 @@ export const actions = {
       started_at: data.get('started_at') as string,
       ended_at: blank(data, 'ended_at'),
       notes: blank(data, 'notes')
-    })
+    }, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Licence updated' }
   },
@@ -75,7 +75,7 @@ export const actions = {
     if (userId) await requirePermission(userId, 'subscriptions', 'delete')
 
     const data = await request.formData()
-    const result = await licensesService.remove(data.get('id') as string)
+    const result = await licensesService.remove(data.get('id') as string, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Licence deleted' }
   }

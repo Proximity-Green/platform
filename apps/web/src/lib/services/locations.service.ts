@@ -1,4 +1,4 @@
-import { supabase } from '$lib/services/permissions.service'
+import { supabase, sbForUser } from '$lib/services/permissions.service'
 
 export type LocationStatus = 'active' | 'paused' | 'closed' | 'planned' | 'inactive'
 
@@ -81,20 +81,20 @@ export async function listLocations() {
   return data ?? []
 }
 
-export async function createLocation(input: LocationInput): Promise<ServiceResult> {
-  const { error } = await supabase.from('locations').insert(input)
+export async function createLocation(input: LocationInput, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('locations').insert(input)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
 
-export async function updateLocation(id: string, input: Partial<LocationInput>): Promise<ServiceResult> {
-  const { error } = await supabase.from('locations').update(input).eq('id', id)
+export async function updateLocation(id: string, input: Partial<LocationInput>, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('locations').update(input).eq('id', id)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
 
-export async function deleteLocation(id: string): Promise<ServiceResult> {
-  const { error } = await supabase.from('locations').delete().eq('id', id)
+export async function deleteLocation(id: string, actorId: string | null = null): Promise<ServiceResult> {
+  const { error } = await sbForUser(actorId).from('locations').delete().eq('id', id)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
