@@ -16,7 +16,8 @@
     FieldGrid,
     Select,
     Badge,
-    Copyable
+    Copyable,
+    RecordLive
   } from '$lib/components/ui'
   import type { Column, Filter } from '$lib/components/ui/DataTable.svelte'
   import { fmtMoney, fmtMoneyWithCurrency } from '$lib/utils/money'
@@ -350,6 +351,8 @@
   // ---------- delete ----------
   let confirmDelete = $state(false)
 </script>
+
+<RecordLive tableName="organisations" recordId={org.id} viewerId={data.viewerId ?? null} label="organisation" />
 
 <PageHead title={`Organisation: ${org.name}`} lede={pageLede}>
   <Button variant="ghost" size="sm" href="/organisations">← Back</Button>

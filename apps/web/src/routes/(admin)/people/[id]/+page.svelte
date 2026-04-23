@@ -11,7 +11,8 @@
     FieldGrid,
     Select,
     Badge,
-    SubmitButton
+    SubmitButton,
+    RecordLive
   } from '$lib/components/ui'
   import { fmtMoneyWithCurrency } from '$lib/utils/money'
 
@@ -148,6 +149,8 @@
     return 'info'
   }
 </script>
+
+<RecordLive tableName="persons" recordId={person.id} viewerId={data.viewerId ?? null} label="member" />
 
 <PageHead title={`${person.first_name} ${person.last_name}`} lede={person.email}>
   <Button variant="ghost" size="sm" href="/people">← Back</Button>
