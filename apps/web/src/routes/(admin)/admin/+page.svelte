@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { KpiCard, PageHead, Badge, Button, Workshop17Logo } from '$lib/components/ui'
+  import { goto } from '$app/navigation'
+  import { KpiCard, PageHead, Badge, Button, Drawer, FieldGrid, Field, Workshop17Logo } from '$lib/components/ui'
   import { buildStats } from '$lib/generated/build-stats'
   import { marked } from 'marked'
 
@@ -13,6 +14,13 @@
   let askError = $state<string | null>(null)
   let chatEl = $state<HTMLDivElement | null>(null)
   let inputEl = $state<HTMLTextAreaElement | null>(null)
+
+  let raiseOpen = $state(false)
+  let raiseKind = $state<'feature_request' | 'note'>('feature_request')
+  let raiseTitle = $state('')
+  let raiseSummary = $state('')
+  let raising = $state(false)
+  let raiseError = $state<string | null>(null)
 
   $effect(() => {
     // Re-run whenever the conversation length or thinking state changes.
@@ -95,6 +103,47 @@
 
   function clearChat() { messages = []; askError = null }
 
+  function openSave(kind: 'feature_request' | 'note') {
+    if (messages.length === 0) return
+    const firstUser = messages.find((m) => m.role === 'user')?.content ?? ''
+    raiseKind = kind
+    raiseTitle = firstUser.slice(0, 80)
+    raiseSummary = ''
+    raiseError = null
+    raiseOpen = true
+  }
+
+  async function submitRaise(e: Event) {
+    e.preventDefault()
+    const title = raiseTitle.trim()
+    if (!title || raising) return
+    raising = true
+    raiseError = null
+    try {
+      const res = await fetch('/api/admin/feature-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          kind: raiseKind,
+          summary: raiseSummary.trim() || null,
+          transcript: messages
+        })
+      })
+      const body = await res.json()
+      if (!res.ok || body.error) {
+        raiseError = body.message ?? body.error ?? `HTTP ${res.status}`
+        return
+      }
+      raiseOpen = false
+      await goto(body.href)
+    } catch (err) {
+      raiseError = err instanceof Error ? err.message : String(err)
+    } finally {
+      raising = false
+    }
+  }
+
   const taglines = [
     'Measure twice. Cut once. Ship weekly.',
     'A platform is a trust exercise with a database.',
@@ -115,6 +164,28 @@
     const now = Date.now()
     return Math.max(1, Math.round((now - start) / (1000 * 60 * 60 * 24)))
   })()
+
+  type DocCard = { href: string; title: string; sub: string }
+  type DocGroup = { heading: string; cards: DocCard[] }
+  const DOC_GROUPS: DocGroup[] = [
+    {
+      heading: 'Reference',
+      cards: [
+        { href: '/docs?p=architecture',    title: 'Architecture',       sub: 'Stack, layout, data flow, audit pipeline, deployment.' },
+        { href: '/docs?p=conventions',     title: 'Conventions',        sub: 'Naming, services, UI primitives, migration rules.' },
+        { href: '/docs?p=catalog',         title: 'Catalog & Tracking', sub: 'Items, families, tracking-code cascade.' },
+        { href: '/docs?p=migration',       title: 'Migration',          sub: 'WSM → PG field-by-field map.' },
+        { href: '/docs?p=benchmark',       title: 'Benchmark',          sub: 'Our schema vs Stripe / Chargebee / Xero / ERP.' },
+        { href: '/docs?p=platform-school', title: 'Platform School',    sub: 'Learning material.' }
+      ]
+    },
+    {
+      heading: 'Integrations',
+      cards: [
+        { href: '/docs?p=sage', title: 'Sage', sub: 'Sage Business Cloud integration — meeting prep, legal-entity map, adapter scope.' }
+      ]
+    }
+  ]
 
   const fmt = (n: number) => n.toLocaleString('en-US')
   const fmtK = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : fmt(n)
@@ -191,7 +262,11 @@
   <div class="ask-head">
     <h2 class="section-title">Ask the platform</h2>
     {#if messages.length > 0}
-      <button class="ask-clear" onclick={clearChat} disabled={asking}>Clear</button>
+      <div class="ask-head-actions">
+        <button class="ask-clear" onclick={() => openSave('feature_request')} disabled={asking}>Raise as feature request</button>
+        <button class="ask-clear" onclick={() => openSave('note')} disabled={asking}>Save as note</button>
+        <button class="ask-clear" onclick={clearChat} disabled={asking}>Clear</button>
+      </div>
     {/if}
   </div>
   <p class="section-sub">Claude Sonnet 4.6 with the platform's schema, conventions, and architecture in its head. Read-only — it describes, explains, suggests.</p>
@@ -276,6 +351,55 @@
     </div>
   </div>
 </section>
+
+<Drawer
+  open={raiseOpen}
+  title={raiseKind === 'feature_request' ? 'Raise as feature request' : 'Save as note'}
+  formId="raise-fr-form"
+  onClose={() => (raiseOpen = false)}
+>
+  <form id="raise-fr-form" onsubmit={submitRaise}>
+    <div class="kind-toggle">
+      <label class="kind-opt" class:is-active={raiseKind === 'feature_request'}>
+        <input type="radio" bind:group={raiseKind} value="feature_request" />
+        <span class="kind-name">Feature request</span>
+        <span class="kind-hint">Actionable ask, enters the triage / planned / done lifecycle and can be upvoted.</span>
+      </label>
+      <label class="kind-opt" class:is-active={raiseKind === 'note'}>
+        <input type="radio" bind:group={raiseKind} value="note" />
+        <span class="kind-name">Note</span>
+        <span class="kind-hint">Just save the chat for reference. Can be promoted to a feature request later.</span>
+      </label>
+    </div>
+
+    <FieldGrid cols={1}>
+      <Field label="Title">
+        <input type="text" bind:value={raiseTitle} required maxlength="160" class="raise-input" />
+      </Field>
+      <Field label="Summary — the problem or ask in plain language">
+        <textarea bind:value={raiseSummary} rows="4" class="raise-textarea" placeholder="Optional. If blank, reviewers will read the chat below."></textarea>
+      </Field>
+    </FieldGrid>
+    <p class="raise-hint">The full chat ({messages.length} messages) will be attached.</p>
+    {#if raiseError}
+      <p class="raise-error">{raiseError}</p>
+    {/if}
+  </form>
+  {#snippet footer()}
+    <Button variant="ghost" size="sm" onclick={() => (raiseOpen = false)} disabled={raising}>Cancel</Button>
+    <Button type="submit" form="raise-fr-form" size="sm" loading={raising}>
+      {raising ? 'Saving…' : raiseKind === 'feature_request' ? 'Raise' : 'Save'}
+    </Button>
+  {/snippet}
+</Drawer>
+
+<div class="feedback-strip">
+  <span class="feedback-strip-label">Feedback</span>
+  <a class="feedback-strip-link primary" href="/feature-requests" target="_blank" rel="noopener">Browse all ↗</a>
+  <span class="feedback-strip-sep" aria-hidden="true">·</span>
+  <a class="feedback-strip-link" href="/feature-requests?new=feature_request" target="_blank" rel="noopener">+ Raise request ↗</a>
+  <a class="feedback-strip-link" href="/feature-requests?new=note" target="_blank" rel="noopener">+ Save note ↗</a>
+</div>
 
 <section class="section">
   <h2 class="section-title">Platform</h2>
@@ -580,6 +704,86 @@
   }
   .ask-clear:hover:not(:disabled) { color: var(--text); border-color: var(--text-muted); }
   .ask-clear:disabled { opacity: 0.5; cursor: not-allowed; }
+  .ask-head-actions { display: inline-flex; gap: var(--space-2); align-items: center; }
+
+  .raise-input,
+  .raise-textarea {
+    width: 100%;
+    padding: var(--space-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: var(--text-sm);
+    background: var(--surface);
+    color: var(--text);
+  }
+  .raise-textarea { resize: vertical; min-height: 80px; }
+  .raise-hint { font-size: var(--text-xs); color: var(--text-muted); margin: var(--space-3) 0 0; }
+  .raise-error { font-size: var(--text-xs); color: var(--danger); margin: var(--space-2) 0 0; }
+
+  .feedback-strip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    margin: var(--space-3) 0 var(--space-6);
+    background: var(--surface-sunk, var(--surface-hover));
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+  }
+  .feedback-strip-label {
+    font-size: 10px;
+    font-weight: var(--weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    margin-right: var(--space-1);
+  }
+  .feedback-strip-link {
+    color: var(--text);
+    text-decoration: none;
+    padding: 2px 0;
+    font-weight: var(--weight-medium);
+  }
+  .feedback-strip-link:hover { color: var(--accent); text-decoration: underline; }
+  .feedback-strip-link.primary { color: var(--accent); font-weight: var(--weight-semibold); }
+  .feedback-strip-sep { color: var(--text-muted); }
+
+  .kind-toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+  }
+  .kind-opt {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    background: var(--surface);
+    transition: all 150ms;
+  }
+  .kind-opt input { display: none; }
+  .kind-opt:hover { border-color: var(--text-muted); }
+  .kind-opt.is-active {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  }
+  .kind-name {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+    color: var(--text);
+  }
+  .kind-hint {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
 
   .suggest-grid {
     display: grid;

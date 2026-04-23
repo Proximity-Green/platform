@@ -3,8 +3,8 @@ import { resolve } from 'node:path'
 import { marked } from 'marked'
 
 const DOCS_DIR = resolve(process.cwd(), '../../docs')
-const PAGES = ['ARCHITECTURE.md', 'CONVENTIONS.md', 'CATALOG.md', 'MIGRATION.md', 'BENCHMARK.md', 'SAGE_MEETING.md', 'PLATFORM_SCHOOL.md'] as const
-type DocSlug = 'architecture' | 'conventions' | 'catalog' | 'migration' | 'benchmark' | 'sage-meeting' | 'platform-school'
+const PAGES = ['ARCHITECTURE.md', 'CONVENTIONS.md', 'CATALOG.md', 'MIGRATION.md', 'BENCHMARK.md', 'TESTING.md', 'SAGE.md', 'PLATFORM_SCHOOL.md'] as const
+type DocSlug = 'architecture' | 'conventions' | 'catalog' | 'migration' | 'benchmark' | 'testing' | 'sage' | 'platform-school'
 
 const FILE_BY_SLUG: Record<DocSlug, (typeof PAGES)[number]> = {
   architecture: 'ARCHITECTURE.md',
@@ -12,7 +12,8 @@ const FILE_BY_SLUG: Record<DocSlug, (typeof PAGES)[number]> = {
   catalog: 'CATALOG.md',
   migration: 'MIGRATION.md',
   benchmark: 'BENCHMARK.md',
-  'sage-meeting': 'SAGE_MEETING.md',
+  testing: 'TESTING.md',
+  sage: 'SAGE.md',
   'platform-school': 'PLATFORM_SCHOOL.md'
 }
 
@@ -32,13 +33,15 @@ export const load = async ({ url }) => {
     slug,
     html,
     pages: [
-      { slug: 'architecture', label: 'Architecture' },
-      { slug: 'conventions', label: 'Conventions' },
-      { slug: 'catalog', label: 'Catalog & Tracking' },
-      { slug: 'migration', label: 'Migration' },
-      { slug: 'benchmark', label: 'Benchmark' },
-      { slug: 'sage-meeting', label: 'Sage Meeting' },
-      { slug: 'platform-school', label: 'Platform School' }
-    ]
+      { type: 'link', slug: 'architecture', label: 'Architecture' },
+      { type: 'link', slug: 'conventions', label: 'Conventions' },
+      { type: 'link', slug: 'catalog', label: 'Catalog & Tracking' },
+      { type: 'link', slug: 'migration', label: 'Migration' },
+      { type: 'link', slug: 'benchmark', label: 'Benchmark' },
+      { type: 'link', slug: 'testing', label: 'Testing' },
+      { type: 'link', slug: 'platform-school', label: 'Platform School' },
+      { type: 'heading', label: 'Integrations' },
+      { type: 'link', slug: 'sage', label: 'Sage' }
+    ] as ({ type: 'link'; slug: string; label: string } | { type: 'heading'; label: string })[]
   }
 }

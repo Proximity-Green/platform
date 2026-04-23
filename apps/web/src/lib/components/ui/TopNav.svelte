@@ -8,7 +8,7 @@
 
   type Perms = { role: string | null; permissions: any; loaded: boolean }
 
-  type IconName = 'admin' | 'building' | 'user' | 'globe' | 'coins' | 'sliders'
+  type IconName = 'admin' | 'building' | 'user' | 'globe' | 'coins' | 'sliders' | 'book'
   type Leaf = { href: string; label: string; guard?: string; after?: string }
   type Section = { heading?: string; items: Leaf[] }
   type Group = { label: string; icon: IconName; sections: Section[]; primary?: boolean }
@@ -24,8 +24,9 @@
 
   type PrimaryLeaf = Leaf & { icon: IconName }
   const PRIMARY: PrimaryLeaf[] = [
-    { href: '/organisations', label: 'Organisations', guard: 'organisations', icon: 'building' },
-    { href: '/people',        label: 'Members',       guard: 'persons',       icon: 'user' }
+    { href: '/organisations',    label: 'Organisations',    guard: 'organisations',    icon: 'building' },
+    { href: '/people',           label: 'Members',          guard: 'persons',          icon: 'user' },
+    { href: '/feature-requests', label: 'Feedback',         guard: 'feature_requests', icon: 'book' }
   ]
 
   const GROUPS: Group[] = [
@@ -54,12 +55,11 @@
         {
           heading: 'System',
           items: [
-            { href: '/users',       label: 'Users',       guard: 'users' },
-            { href: '/roles',       label: 'Roles',       guard: 'roles' },
-            { href: '/messages',    label: 'Messages',    guard: 'settings' },
-            { href: '/changelog',   label: 'Change Log',  guard: 'audit_log' },
-            { href: '/system-logs', label: 'System Logs', guard: 'system_logs' },
-            { href: '/docs',        label: 'Docs' }
+            { href: '/users',            label: 'Users',            guard: 'users' },
+            { href: '/roles',            label: 'Roles',            guard: 'roles' },
+            { href: '/messages',         label: 'Messages',         guard: 'settings' },
+            { href: '/changelog',        label: 'Change Log',       guard: 'audit_log' },
+            { href: '/system-logs',      label: 'System Logs',      guard: 'system_logs' }
           ]
         }
       ]
@@ -188,6 +188,12 @@
         <line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/>
         <line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/>
       </svg>
+    {:else if name === 'book'}
+      <!-- Lucide: book-open -->
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2Z"/>
+        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7Z"/>
+      </svg>
     {/if}
   </span>
 {/snippet}
@@ -244,6 +250,11 @@
     </nav>
 
     <div class="nav-right">
+      <a href="/docs" class="nav-item docs-link" class:is-active={isActive('/docs')}>
+        {@render navIcon('book')}
+        <span class="label">Docs</span>
+      </a>
+
       {#if search}
         {@render search()}
       {:else}

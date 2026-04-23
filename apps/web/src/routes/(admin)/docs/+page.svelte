@@ -8,7 +8,11 @@
 <div class="layout">
   <nav class="side">
     {#each data.pages as p}
-      <a href="?p={p.slug}" class="side-link" class:is-active={p.slug === data.slug}>{p.label}</a>
+      {#if p.type === 'heading'}
+        <div class="side-heading">{p.label}</div>
+      {:else}
+        <a href="?p={p.slug}" class="side-link" class:is-active={p.slug === data.slug}>{p.label}</a>
+      {/if}
     {/each}
     <a class="side-link external" href="https://github.com/Proximity-Green/platform/tree/develop/docs" target="_blank" rel="noopener">View on GitHub ↗</a>
   </nav>
@@ -51,6 +55,15 @@
     border-top: 1px solid var(--border);
     padding-top: var(--space-3);
     font-size: var(--text-xs);
+  }
+
+  .side-heading {
+    margin: var(--space-3) var(--space-3) var(--space-1);
+    font-size: var(--text-xs);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: var(--weight-semibold);
   }
 
   .doc {
