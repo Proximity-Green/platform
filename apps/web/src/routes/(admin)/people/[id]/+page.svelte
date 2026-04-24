@@ -152,7 +152,7 @@
 
 <RecordLive tableName="persons" recordId={person.id} viewerId={data.viewerId ?? null} label="member" />
 
-<PageHead title={`${person.first_name} ${person.last_name}`} lede={person.email}>
+<PageHead title={`Member: ${person.first_name} ${person.last_name}`} lede={person.email}>
   <Button variant="ghost" size="sm" href="/people">← Back</Button>
   {#if !person.user_id && can('users', 'manage')}
     <SubmitButton
@@ -380,6 +380,7 @@
 
   .tabs {
     display: flex;
+    flex-wrap: wrap;
     gap: 2px;
     border-bottom: 1px solid var(--border);
     margin-bottom: var(--space-5);
@@ -392,11 +393,18 @@
     text-decoration: none;
     border-bottom: 2px solid transparent;
     margin-bottom: -1px;
+    white-space: nowrap;
   }
   .tab:hover { color: var(--text); }
   .tab.is-active {
     color: var(--accent);
     border-bottom-color: var(--accent);
+  }
+
+  @media (max-width: 640px) {
+    .summary { flex-wrap: wrap; gap: 8px; }
+    .tabs { margin-bottom: var(--space-4); }
+    .tab { padding: 10px 12px; }
   }
 
   .pane { display: none; }

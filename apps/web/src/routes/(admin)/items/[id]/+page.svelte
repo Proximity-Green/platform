@@ -711,4 +711,33 @@
   .subs-row .right { text-align: right; }
   .subs-row .mono { font-family: var(--font-mono); }
   .subs-row .muted { color: var(--text-muted); }
+
+  @media (max-width: 640px) {
+    .subs-head { display: none; }
+    .subs-row {
+      display: block;
+      padding: var(--space-3);
+      border-top: 1px solid var(--border);
+    }
+    .subs-row > * {
+      display: block;
+      padding: 4px 0;
+    }
+    .subs-row .org {
+      font-size: 1rem;
+      font-weight: var(--weight-semibold);
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+    }
+    .subs-row > span {
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+    }
+    .subs-row > span:last-child { border-bottom: none; }
+    .subs-row .right { text-align: left; }
+    /* Label prefixes for each field (column order: Organisation, Status, Qty, Rate, Started, Ended) */
+    .subs-row > *:nth-child(2)::before { content: 'Status: '; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: var(--weight-semibold); margin-right: 6px; }
+    .subs-row > *:nth-child(3)::before { content: 'Qty: '; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: var(--weight-semibold); margin-right: 6px; }
+    .subs-row > *:nth-child(4)::before { content: 'Rate: '; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: var(--weight-semibold); margin-right: 6px; }
+    .subs-row > *:nth-child(5)::before { content: 'Started: '; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: var(--weight-semibold); margin-right: 6px; }
+    .subs-row > *:nth-child(6)::before { content: 'Ended: '; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: var(--weight-semibold); margin-right: 6px; }
+  }
 </style>

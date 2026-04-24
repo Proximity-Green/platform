@@ -55,4 +55,14 @@
     background: var(--success-soft, rgba(89, 163, 112, 0.16));
     border-color: var(--success-soft, rgba(89, 163, 112, 0.16));
   }
+
+  @media (max-width: 640px) {
+    .notice {
+      flex-direction: column;
+      align-items: stretch;
+      gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+    }
+    .notice-action { align-self: flex-start; }
+  }
 </style>

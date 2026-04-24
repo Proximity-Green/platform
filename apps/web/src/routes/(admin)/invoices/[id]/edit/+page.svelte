@@ -275,12 +275,12 @@
                   {/if}
                 </div>
               </td>
-              <td class="num mono">{Number(l.quantity).toFixed(0)}</td>
-              <td class="mono muted">{l.accounting_gl_code ?? '—'}</td>
-              <td class="num mono">{money(Number(l.quantity) * Number(l.unit_price) - Number(l.discount ?? 0), inv.currency)}</td>
-              <td class="num mono">{Number(l.discount ?? 0) === 0 ? '0%' : num(l.discount)}</td>
-              <td class="num mono">{money(l.tax_amount, inv.currency)}</td>
-              <td class="num mono">{money(l.total, inv.currency)}</td>
+              <td class="num mono" data-label="Qty">{Number(l.quantity).toFixed(0)}</td>
+              <td class="mono muted" data-label="Account">{l.accounting_gl_code ?? '—'}</td>
+              <td class="num mono" data-label="Amount (ex VAT)">{money(Number(l.quantity) * Number(l.unit_price) - Number(l.discount ?? 0), inv.currency)}</td>
+              <td class="num mono" data-label="Discount">{Number(l.discount ?? 0) === 0 ? '0%' : num(l.discount)}</td>
+              <td class="num mono" data-label="VAT">{money(l.tax_amount, inv.currency)}</td>
+              <td class="num mono" data-label="Total (inc VAT)">{money(l.total, inv.currency)}</td>
               <td class="row-actions">
                 <form method="POST" action="?/removeLine" use:enhance>
                   <input type="hidden" name="line_id" value={l.id} />
@@ -566,5 +566,61 @@
     .edit-line-grid { grid-template-columns: repeat(2, 1fr); }
     .ef.desc-ef { grid-column: span 1; }
     .ef.actions { grid-column: span 2; }
+  }
+
+  @media (max-width: 640px) {
+    .edit-line-grid { grid-template-columns: 1fr; }
+    .ef.actions { grid-column: span 1; }
+    .summary { max-width: none; }
+
+    /* Line items: each tr becomes a card */
+    .lines-table { display: block; }
+    .lines-table thead { display: none; }
+    .lines-table tbody { display: block; }
+    .lines-table tbody tr.line-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      grid-template-areas:
+        "desc actions"
+        "body body";
+      gap: 6px 10px;
+      padding: var(--space-3);
+      margin-bottom: var(--space-3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--surface-raised);
+    }
+    .lines-table tbody td {
+      display: block;
+      padding: 4px 0;
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+    }
+    .lines-table tbody td:first-child {
+      grid-area: desc;
+      padding: 0;
+      border-bottom: none;
+    }
+    .lines-table tbody td.row-actions {
+      grid-area: actions;
+      padding: 0;
+      border-bottom: none;
+      width: auto;
+    }
+    .lines-table tbody td[data-label] { grid-column: 1 / -1; }
+    .lines-table tbody td[data-label]::before {
+      content: attr(data-label);
+      display: block;
+      font-size: 10px;
+      font-weight: var(--weight-semibold);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+    .lines-table tbody td.num { text-align: left; }
+    .lines-table tbody tr.line-row td:last-of-type { border-bottom: none; }
+    .lines-table tbody tr.edit-line-row { display: block; }
+    .lines-table tbody tr.edit-line-row td { display: block; border: none; }
+    .lines-table tbody tr.edit-line-row td[colspan] { padding: var(--space-3); }
   }
 </style>

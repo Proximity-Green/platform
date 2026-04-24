@@ -453,4 +453,19 @@
   .undo-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
   .undo-btn:disabled { opacity: 0.6; cursor: wait; }
   .small { font-size: var(--text-xs); }
+
+  @media (max-width: 640px) {
+    .field-row {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 2px;
+      padding: 4px 0;
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+    }
+    .field-row:last-child { border-bottom: none; }
+    .field-name { min-width: 0; }
+    .arrow { display: none; }
+    .old-val, .new-val, .restored-val { word-break: break-word; }
+    .tab { padding: 10px 10px; }
+  }
 </style>

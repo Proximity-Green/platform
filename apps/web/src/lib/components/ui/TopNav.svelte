@@ -119,6 +119,7 @@
 
   let openGroup = $state<string | null>(null)
   let openAvatar = $state(false)
+  let mobileOpen = $state(false)
 
   function toggleGroup(label: string) {
     openGroup = openGroup === label ? null : label
@@ -128,9 +129,15 @@
     openAvatar = !openAvatar
     openGroup = null
   }
+  function toggleMobile() {
+    mobileOpen = !mobileOpen
+    openGroup = null
+    openAvatar = false
+  }
   function closeAll() {
     openGroup = null
     openAvatar = false
+    mobileOpen = false
   }
 
   // Click-outside close
@@ -198,7 +205,7 @@
   </span>
 {/snippet}
 
-<header class="topnav" role="navigation" aria-label="Primary">
+<header class="topnav" class:mobile-open={mobileOpen} role="navigation" aria-label="Primary">
   <div class="nav-inner">
     <a href="/admin" class="brand" onclick={closeAll} aria-label="Workshop17">
       <span class="brand-mark"><Workshop17Logo /></span>
@@ -255,11 +262,13 @@
         <span class="label">Docs</span>
       </a>
 
-      {#if search}
-        {@render search()}
-      {:else}
-        <GlobalSearch />
-      {/if}
+      <div class="search-wrap">
+        {#if search}
+          {@render search()}
+        {:else}
+          <GlobalSearch />
+        {/if}
+      </div>
 
       <div class="avatar-wrap" class:is-open={openAvatar}>
         <button type="button" class="avatar-btn" onclick={toggleAvatar} aria-label="Account">
@@ -286,8 +295,74 @@
           </div>
         {/if}
       </div>
+
+      <button
+        type="button"
+        class="hamburger"
+        onclick={toggleMobile}
+        aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+        aria-expanded={mobileOpen}
+      >
+        <span class="hamburger-bars" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </span>
+      </button>
     </div>
   </div>
+
+  {#if mobileOpen}
+    <div class="mobile-drawer" role="menu">
+      <div class="mobile-search">
+        {#if search}
+          {@render search()}
+        {:else}
+          <GlobalSearch />
+        {/if}
+      </div>
+
+      <a href="/admin" class="mobile-link" class:is-active={isActive('/admin')} onclick={closeAll}>
+        {@render navIcon('admin')}
+        <span>Admin</span>
+      </a>
+
+      {#each visiblePrimary as item (item.href)}
+        <a href={item.href} class="mobile-link" class:is-active={isActive(item.href)} onclick={closeAll}>
+          {@render navIcon(item.icon)}
+          <span>{item.label}</span>
+        </a>
+      {/each}
+
+      <a href="/docs" class="mobile-link" class:is-active={isActive('/docs')} onclick={closeAll}>
+        {@render navIcon('book')}
+        <span>Docs</span>
+      </a>
+
+      {#each visibleGroups as group (group.label)}
+        <div class="mobile-group">
+          <div class="mobile-group-head">
+            {@render navIcon(group.icon)}
+            <span>{group.label}</span>
+          </div>
+          {#each group.sections as section}
+            {#if section.heading}
+              <div class="mobile-heading">{section.heading}</div>
+            {/if}
+            {#each section.items as leaf (leaf.href)}
+              <a
+                href={leaf.href}
+                class="mobile-sublink"
+                class:is-active={isActive(leaf.href)}
+                class:is-nested={!!leaf.after}
+                onclick={closeAll}
+              >
+                {leaf.label}
+              </a>
+            {/each}
+          {/each}
+        </div>
+      {/each}
+    </div>
+  {/if}
 </header>
 
 <style>
@@ -337,8 +412,109 @@
     gap: 2px;
     flex: 1;
     min-width: 0;
-    flex-wrap: wrap;
   }
+
+  .hamburger {
+    display: none;
+    background: transparent;
+    border: none;
+    color: var(--nav-item-color);
+    width: 40px;
+    height: 40px;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    border-radius: 6px;
+  }
+  .hamburger:hover { background: var(--nav-selected-bg); }
+  .hamburger-bars {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 20px;
+  }
+  .hamburger-bars span {
+    display: block;
+    height: 2px;
+    background: currentColor;
+    border-radius: 1px;
+    transition: transform var(--motion-fast) var(--ease-out), opacity var(--motion-fast) var(--ease-out);
+  }
+  .topnav.mobile-open .hamburger-bars span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+  .topnav.mobile-open .hamburger-bars span:nth-child(2) { opacity: 0; }
+  .topnav.mobile-open .hamburger-bars span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
+
+  .mobile-drawer {
+    display: none;
+    flex-direction: column;
+    background: var(--nav-dropdown-bg, var(--nav-bg));
+    color: var(--nav-item-color);
+    box-shadow: var(--shadow-md);
+    padding: var(--space-3) 0 var(--space-4);
+    max-height: calc(100vh - var(--topnav-height));
+    overflow-y: auto;
+  }
+  .mobile-search {
+    padding: 0 var(--space-4) var(--space-2);
+  }
+  .mobile-search :global(.global-search) { width: 100%; }
+  .mobile-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px var(--space-4);
+    color: var(--nav-item-color);
+    text-decoration: none;
+    font-size: 1rem;
+    font-weight: var(--weight-medium);
+    border-left: 3px solid transparent;
+  }
+  .mobile-link:hover { background: var(--nav-selected-bg); }
+  .mobile-link.is-active {
+    background: var(--nav-selected-bg);
+    border-left-color: var(--nav-selected-accent);
+  }
+  .mobile-link .icon { width: 20px; height: 20px; }
+  .mobile-group {
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    margin-top: var(--space-2);
+    padding-top: var(--space-2);
+  }
+  .mobile-group-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px var(--space-4);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    opacity: 0.7;
+  }
+  .mobile-group-head .icon { width: 16px; height: 16px; }
+  .mobile-heading {
+    padding: 10px var(--space-4) 4px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    opacity: 0.55;
+    font-weight: 600;
+  }
+  .mobile-sublink {
+    display: block;
+    padding: 10px var(--space-4) 10px calc(var(--space-4) + 8px);
+    color: var(--nav-item-color);
+    text-decoration: none;
+    font-size: 0.95rem;
+    border-left: 3px solid transparent;
+  }
+  .mobile-sublink:hover { background: var(--nav-selected-bg); }
+  .mobile-sublink.is-active {
+    background: var(--nav-selected-bg);
+    border-left-color: var(--nav-selected-accent);
+    font-weight: var(--weight-semibold);
+  }
+  .mobile-sublink.is-nested { padding-left: calc(var(--space-4) + 24px); font-size: 0.88rem; opacity: 0.85; }
 
   .nav-item {
     display: inline-flex;
@@ -510,8 +686,17 @@
   }
   .mode-btn { font-size: 11px; padding: 4px 0; opacity: 0.8; }
 
-  @media (max-width: 720px) {
-    .nav-item .label { display: none; }
-    .dropdown-trigger .label { display: none; }
+  .search-wrap { display: flex; align-items: center; }
+
+  @media (max-width: 900px) {
+    .nav-inner { padding: 0 var(--space-4); gap: var(--space-1); }
+    .brand { padding-right: var(--space-3); }
+    .brand-mark :global(svg) { width: 128px; }
+    .nav-items { display: none; }
+    .docs-link { display: none; }
+    .search-wrap { display: none; }
+    .nav-right { gap: var(--space-2); padding-left: 0; }
+    .hamburger { display: inline-flex; }
+    .topnav.mobile-open .mobile-drawer { display: flex; }
   }
 </style>

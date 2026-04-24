@@ -138,7 +138,11 @@
 
   function stopLive() {
     if (!liveChannel) return
-    supabase.removeChannel(liveChannel)
+    try {
+      supabase.removeChannel(liveChannel)
+    } catch (e) {
+      console.warn('[DataTable] realtime teardown failed:', e)
+    }
     liveChannel = null
   }
 
@@ -147,7 +151,17 @@
     if (live) startLive(); else stopLive()
   }
 
-  onDestroy(stopLive)
+  // In dev, Vite HMR destroys the old component each time any touched file
+  // re-saves. @supabase/phoenix has a teardown bug (`connToClose.close is
+  // not a function`) that escapes as an uncaught sync throw inside an async
+  // Promise executor — which crashes Node. Skip the channel cleanup during
+  // HMR; the leak is harmless (dev process gets replaced) and the real user
+  // case (page navigation) still triggers onDestroy normally in prod where
+  // import.meta.hot is undefined.
+  onDestroy(() => {
+    if ((import.meta as any).hot) return
+    stopLive()
+  })
 
   function handleRowClick(e: MouseEvent, item: T, i: number) {
     selectedIndex = i
@@ -277,6 +291,27 @@
 
   $effect(() => {
     if (selectedIndex >= paged.length) selectedIndex = Math.max(0, paged.length - 1)
+  })
+
+  // Mirror each column's label onto the matching <td> via data-label, so the
+  // mobile card CSS can surface it as a caption above the value. Runs after
+  // each render because the user-provided row snippet outputs its own <td>s
+  // which we don't otherwise control.
+  $effect(() => {
+    void paged
+    void columns
+    if (!tbodyEl) return
+    const rows = tbodyEl.querySelectorAll('tr:not(.expanded-row)')
+    rows.forEach(tr => {
+      const tds = tr.querySelectorAll(':scope > td')
+      const offset = isExpandedRow ? 1 : 0  // expand-col is the first td when enabled
+      tds.forEach((td, i) => {
+        const colIdx = i - offset
+        const col = columns[colIdx]
+        if (col) td.setAttribute('data-label', col.label)
+        else td.removeAttribute('data-label')
+      })
+    })
   })
 
   function scrollSelectedIntoView() {
@@ -842,5 +877,81 @@
   }
   @media (max-width: 900px) {
     .hide-md { display: none; }
+  }
+
+  @media (max-width: 640px) {
+    .toolbar { gap: var(--space-2); }
+    .search { max-width: none; width: 100%; flex-basis: 100%; }
+    .count { margin-left: 0; order: 2; }
+    .filters { flex-wrap: wrap; }
+    .fs-btn { display: none; }
+
+    .table-scroll { overflow-x: visible; }
+    .table-scroll table,
+    .table-scroll thead,
+    .table-scroll tbody,
+    .table-scroll tr { display: block; width: auto; }
+    .table-scroll colgroup,
+    .table-scroll thead { display: none; }
+    .table-scroll table { table-layout: auto; }
+
+    .table-scroll tbody tr {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      margin-bottom: var(--space-3);
+      padding: var(--space-2) var(--space-3);
+      background: var(--surface-raised);
+    }
+    .table-scroll tbody tr:hover,
+    .table-scroll tbody tr.is-selected { background: var(--surface-hover); }
+    .table-scroll :global(tbody tr.is-active) { background: var(--accent-soft); }
+    .table-scroll :global(tbody tr.is-selected td:first-child) { box-shadow: none; }
+    .table-scroll tbody tr:last-child { margin-bottom: 0; }
+
+    .table-scroll :global(tbody tr > td) {
+      display: block;
+      width: 100%;
+      padding: 6px 0;
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+      text-align: left;
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+    }
+    .table-scroll :global(tbody tr > td:last-child) { border-bottom: none; }
+    .table-scroll :global(tbody tr > td:first-child) {
+      font-size: 1rem;
+      font-weight: var(--weight-semibold);
+      padding-top: 2px;
+    }
+    /* Column-label caption above each value on mobile. Skip the first td —
+       that's the card's primary (name/action) and the label would be noise. */
+    .table-scroll :global(tbody tr > td[data-label]:not(:first-child))::before {
+      content: attr(data-label);
+      display: block;
+      font-size: 10px;
+      font-weight: var(--weight-semibold);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+    .table-scroll :global(td.ellipsis) {
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+    }
+    .table-scroll :global(td.actions-col .actions) { justify-content: flex-start; }
+    .table-scroll .resizer { display: none; }
+
+    .table-scroll tbody tr.expanded-row {
+      padding: 0;
+      border: none;
+      background: transparent;
+    }
+    .table-scroll :global(tr.expanded-row > td) {
+      padding: var(--space-3);
+      border-radius: var(--radius-md);
+    }
   }
 </style>

@@ -609,8 +609,8 @@
                     <input type="checkbox" checked={selectedSubIds.has(s.id)}
                       onchange={() => toggleSubSelected(s.id)} />
                   </td>
-                  <td>{s.location_name ?? '—'}</td>
-                  <td>
+                  <td data-label="Location">{s.location_name ?? '—'}</td>
+                  <td data-label="Description">
                     <div class="desc-cell">
                       <div class="desc-head">
                         <Badge tone={s.source_kind === 'License' ? 'info' : 'success'}>{s.source_kind}</Badge>
@@ -621,7 +621,7 @@
                       {/if}
                     </div>
                   </td>
-                  <td>
+                  <td data-label="Member">
                     {#if s.member_name}
                       <span class="primary">{s.member_name}</span>
                       {#if homeLocation}<Badge tone="default">{homeLocation.name}</Badge>{/if}
@@ -629,12 +629,12 @@
                       <span class="muted">—</span>
                     {/if}
                   </td>
-                  <td class="date">{fmtDate(s.started_at)} / {s.ended_at ? fmtDate(s.ended_at) : '∞'}</td>
-                  <td class="num mono">{s._qty}</td>
-                  <td class="num mono">{num(s._rate)}</td>
-                  <td class="num mono">{num(s._discount)}</td>
-                  <td class="num mono">{num(s._exVat)}</td>
-                  <td class="num mono">{num(s._inclVat)}</td>
+                  <td class="date" data-label="Start / End">{fmtDate(s.started_at)} / {s.ended_at ? fmtDate(s.ended_at) : '∞'}</td>
+                  <td class="num mono" data-label="Qty">{s._qty}</td>
+                  <td class="num mono" data-label="Price">{num(s._rate)}</td>
+                  <td class="num mono" data-label="Discount">{num(s._discount)}</td>
+                  <td class="num mono" data-label="Ex VAT">{num(s._exVat)}</td>
+                  <td class="num mono" data-label="Incl VAT">{num(s._inclVat)}</td>
                   <td class="row-actions-col">
                     <button class="row-btn" onclick={() => editingSubId = s.id} aria-label="Edit">⋮</button>
                   </td>
@@ -1024,6 +1024,10 @@
     font-weight: var(--weight-semibold);
   }
 
+  @media (max-width: 640px) {
+    .two-col { grid-template-columns: 1fr; gap: var(--space-3); }
+  }
+
   .tab-body { display: flex; flex-direction: column; gap: var(--space-4); }
 
   .two-col {
@@ -1083,6 +1087,98 @@
     overflow-x: auto;
   }
   .sub-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+  @media (max-width: 640px) {
+    .simple-table { min-width: 560px; }
+
+    /* Sub-table: each row becomes a card stacked vertically. */
+    .table-wrap { overflow-x: visible; border: none; background: transparent; box-shadow: none; }
+    .sub-table { min-width: 0; display: block; }
+    .sub-table thead { display: none; }
+    .sub-table tbody, .sub-table tfoot { display: block; }
+    .sub-table tr {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      grid-template-areas:
+        "check title actions"
+        "body body body";
+      gap: 6px 10px;
+      padding: var(--space-3);
+      margin-bottom: var(--space-3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--surface-raised);
+    }
+    .sub-table tr.selected { background: var(--accent-soft); }
+    .sub-table td {
+      display: block;
+      padding: 4px 0;
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+    }
+    .sub-table td[data-label]::before {
+      content: attr(data-label);
+      display: block;
+      font-size: 10px;
+      font-weight: var(--weight-semibold);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+    /* Header row inside the card: checkbox + location + actions */
+    .sub-table td.check-col { grid-area: check; padding: 0; border-bottom: none; }
+    .sub-table td.row-actions-col { grid-area: actions; padding: 0; border-bottom: none; }
+    /* The Location cell is the 2nd td (first `data-label`) — promote it to title */
+    .sub-table td[data-label="Location"] {
+      grid-area: title;
+      padding: 0;
+      font-weight: var(--weight-semibold);
+      font-size: 1rem;
+      border-bottom: none;
+    }
+    .sub-table td[data-label="Location"]::before { display: none; }
+    /* Everything else flows as the card body */
+    .sub-table td[data-label]:not([data-label="Location"]) {
+      grid-column: 1 / -1;
+    }
+    .sub-table td:last-of-type, .sub-table tr > td[data-label]:last-of-type { border-bottom: none; }
+    .sub-table td.num { text-align: left; }
+
+    /* Edit-row keeps full-width; breaking it out of the card is fine */
+    .sub-table tr.edit-row {
+      display: block;
+      padding: var(--space-3);
+      grid-template-columns: none;
+      grid-template-areas: none;
+    }
+    .sub-table tr.edit-row td[colspan] {
+      display: block;
+      border: none;
+      padding: 0;
+    }
+
+    /* Empty placeholder row */
+    .sub-table tr:has(td.empty-row) {
+      display: block;
+      padding: var(--space-3);
+    }
+
+    /* Totals row: keep simple, span all */
+    .sub-table tfoot tr.totals-row {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: var(--space-3);
+      background: var(--surface-sunk);
+    }
+    .sub-table tfoot tr.totals-row td {
+      display: inline;
+      padding: 0;
+      border: none;
+    }
+    .sub-table tfoot tr.totals-row td[colspan] { flex-basis: 100%; font-weight: var(--weight-semibold); }
+    .sub-table tfoot tr.totals-row td::before { display: none; }
+  }
   .sub-table thead th {
     background: var(--accent);
     color: white;

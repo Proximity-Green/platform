@@ -606,6 +606,9 @@
     overflow-x: auto;
   }
   .tc-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+  @media (max-width: 640px) {
+    .tc-table { min-width: 520px; }
+  }
   .tc-table thead th {
     background: var(--surface-sunk);
     text-align: left;

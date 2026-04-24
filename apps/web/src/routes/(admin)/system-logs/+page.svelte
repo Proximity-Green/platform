@@ -243,4 +243,18 @@
     font-size: var(--text-sm);
     margin: 0;
   }
+
+  @media (max-width: 640px) {
+    .kpis { grid-template-columns: repeat(2, 1fr); gap: var(--space-2); }
+    .detail-row {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 2px;
+      padding: 4px 0;
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+    }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-key { min-width: 0; }
+    .detail-val, .detail-link { word-break: break-word; }
+  }
 </style>

@@ -219,6 +219,12 @@
 /* Kill the graphite-theme underline */
 [data-theme='w17'] .tab::after { display: none !important; }
 
+/* Mobile: collapse tab-wrap into a single horizontal-scroll strip. The
+   Bootstrap `flex-wrap: wrap` default produces multi-row tab piles that
+   compete with page scroll on narrow viewports. */
+/* Mobile tabs: inherit w17's default flex-wrap: wrap so tabs pile onto
+   multiple rows. No horizontal scroll. */
+
 /* Tab panel body — WSM `.tab-content` rule */
 [data-theme='w17'] .tab-body {
   background-color: #fff !important;
