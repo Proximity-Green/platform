@@ -38,7 +38,7 @@ export const load = async ({ params, cookies, locals }) => {
     supabase.from('invoice_lines').select('*, subscription_lines(id), items(name, accounting_tax_percentage, location_id)').eq('invoice_id', id).order('created_at'),
     supabase.from('organisations').select('id, name').order('name'),
     supabase.from('locations').select('id, name, short_name, currency').order('name'),
-    supabase.from('items').select('id, name, location_id, base_price, accounting_tax_percentage, accounting_gl_code, accounting_item_code, accounting_tax_code, item_tracking_codes(tracking_codes(code)), item_types(slug, requires_license, sellable_ad_hoc)').eq('active', true).order('name')
+    supabase.from('items').select('id, name, location_id, base_rate, accounting_tax_percentage, accounting_gl_code, accounting_item_code, accounting_tax_code, item_tracking_codes(tracking_codes(code)), item_types(slug, requires_license, sellable_ad_hoc)').eq('active', true).order('name')
   ])
 
   if (invRes.error || !invRes.data) throw error(404, 'Invoice not found')
@@ -132,7 +132,7 @@ export const actions = {
     const { data: inv } = await supabase.from('invoices').select('currency').eq('id', params.id).single()
 
     const quantity = num(data, 'quantity') ?? 1
-    const unit_price = num(data, 'unit_price') ?? Number((item as any).base_price ?? 0)
+    const unit_price = num(data, 'unit_price') ?? Number((item as any).base_rate ?? 0)
     const discount = num(data, 'discount') ?? 0
     const taxPct = Number((item as any).accounting_tax_percentage ?? 15)
     const sub = quantity * unit_price - discount

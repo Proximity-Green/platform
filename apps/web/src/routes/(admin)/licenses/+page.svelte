@@ -43,13 +43,12 @@
   }
 
   const columns: Column<LicenseEnriched>[] = [
-    { key: 'organisation_name', label: 'Organisation', sortable: true, width: '18%', get: l => l.organisation_name ?? '' },
-    { key: 'item_name', label: 'Item', sortable: true, width: '18%', get: l => l.item_name ?? '' },
-    { key: 'user_name', label: 'User', sortable: true, width: '16%', muted: true, get: l => l.user_name ?? '', hideBelow: 'md' },
-    { key: 'location_name', label: 'Location', sortable: true, width: '12%', muted: true, get: l => l.location_name ?? '', hideBelow: 'md' },
-    { key: 'space_name', label: 'Space', width: '10%', muted: true, get: l => l.space_name ?? '', hideBelow: 'md' },
-    { key: 'started_at', label: 'Started', sortable: true, width: '11%', date: true, hideBelow: 'sm' },
-    { key: 'ended_at', label: 'Ended', sortable: true, width: '11%', date: true, hideBelow: 'sm' }
+    { key: 'organisation_name', label: 'Organisation', sortable: true, width: '20%', get: l => l.organisation_name ?? '' },
+    { key: 'item_name', label: 'Item', sortable: true, width: '22%', get: l => l.item_name ?? '' },
+    { key: 'user_name', label: 'User', sortable: true, width: '18%', muted: true, get: l => l.user_name ?? '', hideBelow: 'md' },
+    { key: 'location_name', label: 'Location', sortable: true, width: '14%', muted: true, get: l => l.location_name ?? '', hideBelow: 'md' },
+    { key: 'started_at', label: 'Started', sortable: true, width: '13%', date: true, hideBelow: 'sm' },
+    { key: 'ended_at', label: 'Ended', sortable: true, width: '13%', date: true, hideBelow: 'sm' }
   ]
 
   const filters: Filter<LicenseEnriched>[] = [
@@ -70,10 +69,6 @@
     { value: '', label: 'Select location…' },
     ...data.locations.map((l: any) => ({ value: l.id, label: l.short_name ?? l.name }))
   ])
-  const spaceOptions = $derived([
-    { value: '', label: 'None' },
-    ...data.spaces.map((s: any) => ({ value: s.id, label: s.name }))
-  ])
   const personOptions = $derived([
     { value: '', label: 'None' },
     ...data.persons.map((p: any) => ({ value: p.id, label: `${p.first_name} ${p.last_name}` }))
@@ -82,7 +77,7 @@
 
 <PageHead title="Licences" lede="Access-right instances granted to a person or organisation at a space for a period.">
   {#if can('subscriptions', 'create')}
-    <Button size="sm" onclick={() => editing = { id: '', item_id: '', organisation_id: '', location_id: '', space_id: null, user_id: null, started_at: new Date().toISOString(), ended_at: null, notes: null } as any}>+ Add Licence</Button>
+    <Button size="sm" onclick={() => editing = { id: '', item_id: '', organisation_id: '', location_id: '', user_id: null, started_at: new Date().toISOString(), ended_at: null, notes: null } as any}>+ Add Licence</Button>
   {/if}
 </PageHead>
 
@@ -95,7 +90,7 @@
   table="licenses"
   title="Licences"
   lede="Access-right instances granted to a person or organisation at a space for a period."
-  searchFields={['item_name', 'organisation_name', 'user_name', 'location_name', 'space_name']}
+  searchFields={['item_name', 'organisation_name', 'user_name', 'location_name']}
   searchPlaceholder="Search organisation, item, user, location…"
   csvFilename="licences"
   empty="No licences yet."
@@ -108,7 +103,6 @@
     <td>{license.item_name ?? '—'}</td>
     <td class="muted hide-md">{license.user_name ?? '—'}</td>
     <td class="muted hide-md">{license.location_name ?? '—'}</td>
-    <td class="muted hide-md">{license.space_name ?? '—'}</td>
     <td class="date hide-sm">
       <div>{new Date(license.started_at).toLocaleDateString()}</div>
       {#if ctx.showTimes}
@@ -128,7 +122,7 @@
   {/snippet}
   {#snippet pageActions()}
     {#if can('subscriptions', 'create')}
-      <Button size="sm" onclick={() => editing = { id: '', item_id: '', organisation_id: '', location_id: '', space_id: null, user_id: null, started_at: new Date().toISOString(), ended_at: null, notes: null } as any}>+ Add Licence</Button>
+      <Button size="sm" onclick={() => editing = { id: '', item_id: '', organisation_id: '', location_id: '', user_id: null, started_at: new Date().toISOString(), ended_at: null, notes: null } as any}>+ Add Licence</Button>
     {/if}
   {/snippet}
   {#snippet actions(license)}
@@ -182,9 +176,6 @@
         </Field>
         <Field label="Location" required>
           <Select name="location_id" value={editing.location_id ?? ''} options={locationOptions} required />
-        </Field>
-        <Field label="Space">
-          <Select name="space_id" value={editing.space_id ?? ''} options={spaceOptions} />
         </Field>
         <Field label="User">
           <Select name="user_id" value={editing.user_id ?? ''} options={personOptions} />

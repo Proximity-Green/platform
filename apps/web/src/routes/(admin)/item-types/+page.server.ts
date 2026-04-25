@@ -33,10 +33,10 @@ export const actions = {
       slug,
       name,
       description: blank(data, 'description'),
-      family: blank(data, 'family'),
       requires_license: bool(data, 'requires_license'),
       sellable_ad_hoc: bool(data, 'sellable_ad_hoc'),
-      sellable_recurring: bool(data, 'sellable_recurring')
+      sellable_recurring: bool(data, 'sellable_recurring'),
+      apply_pro_rata: bool(data, 'apply_pro_rata')
     }, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Item type created' }
@@ -54,10 +54,10 @@ export const actions = {
       slug: (data.get('slug') as string ?? '').trim(),
       name: (data.get('name') as string ?? '').trim(),
       description: blank(data, 'description'),
-      family: blank(data, 'family'),
       requires_license: bool(data, 'requires_license'),
       sellable_ad_hoc: bool(data, 'sellable_ad_hoc'),
-      sellable_recurring: bool(data, 'sellable_recurring')
+      sellable_recurring: bool(data, 'sellable_recurring'),
+      apply_pro_rata: bool(data, 'apply_pro_rata')
     }, userId)
     if (!result.ok) return fail(400, { error: result.error })
     return { success: true, message: 'Item type updated' }

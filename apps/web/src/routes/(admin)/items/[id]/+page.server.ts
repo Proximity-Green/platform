@@ -37,22 +37,36 @@ async function replaceItemTrackingCodes(itemId: string, ids: string[], actorId: 
   return { ok: true }
 }
 
-type Family = 'space' | 'membership' | 'product' | 'service' | 'art' | 'asset'
+type TypeSlug =
+  | 'office'
+  | 'meeting_room'
+  | 'hotel_room'
+  | 'membership'
+  | 'product'
+  | 'service'
+  | 'art'
+  | 'asset'
+  | 'vehicle'
+  | 'equipment'
 type ColType = 'text' | 'number' | 'integer' | 'boolean' | 'date'
 
-const FAMILY_TABLES: Record<Family, string> = {
-  space: 'space_details',
+const TYPE_TABLES: Partial<Record<TypeSlug, string>> = {
+  office: 'office_details',
+  meeting_room: 'meeting_room_details',
+  hotel_room: 'hotel_room_details',
   membership: 'membership_details',
   product: 'product_details',
   service: 'service_details',
   art: 'art_details',
-  asset: 'asset_details'
+  asset: 'asset_details',
+  vehicle: 'asset_details',
+  equipment: 'asset_details'
 }
 
-async function getFamily(itemTypeId: string): Promise<Family | null> {
-  const { data } = await supabase.from('item_types').select('family').eq('id', itemTypeId).single()
-  const f = (data as { family: string } | null)?.family
-  return (f && (f in FAMILY_TABLES)) ? (f as Family) : null
+async function getTypeSlug(itemTypeId: string): Promise<TypeSlug | null> {
+  const { data } = await supabase.from('item_types').select('slug').eq('id', itemTypeId).single()
+  const s = (data as { slug: string } | null)?.slug
+  return (s && (s in TYPE_TABLES)) ? (s as TypeSlug) : null
 }
 
 function coerceDetailValue(raw: FormDataEntryValue | null, type: ColType): unknown {
@@ -71,24 +85,27 @@ function coerceDetailValue(raw: FormDataEntryValue | null, type: ColType): unkno
   return s
 }
 
-const FAMILY_COLUMNS: Record<Family, { name: string; type: ColType }[]> = {
-  space: [
-    { name: 'meters_squared', type: 'number' },
+const TYPE_COLUMNS: Partial<Record<TypeSlug, { name: string; type: ColType }[]>> = {
+  office: [
+    { name: 'area_sqm', type: 'number' },
     { name: 'capacity', type: 'integer' },
     { name: 'aesthetic', type: 'text' },
     { name: 'aesthetic_impact', type: 'number' },
     { name: 'safety_margin', type: 'number' },
-    { name: 'start_price_per_square_meter', type: 'number' },
-    { name: 'number_available', type: 'integer' },
-    { name: 'private', type: 'boolean' },
-    { name: 'business_case', type: 'text' },
-    { name: 'layout', type: 'text' },
-    { name: 'price_per_day', type: 'number' },
+    { name: 'start_price_per_m2', type: 'number' },
+    { name: 'layout', type: 'text' }
+  ],
+  meeting_room: [
+    { name: 'capacity', type: 'integer' },
     { name: 'price_per_user_per_day', type: 'number' },
-    { name: 'half_day_discount', type: 'number' },
-    { name: 'full_day_discount', type: 'number' },
-    { name: 'off_peak_cost', type: 'number' },
-    { name: 'external_ical', type: 'text' }
+    { name: 'off_peak_factor', type: 'number' },
+    { name: 'layout', type: 'text' },
+    { name: 'slots_per_day', type: 'integer' }
+  ],
+  hotel_room: [
+    { name: 'capacity', type: 'integer' },
+    { name: 'price_per_day', type: 'number' },
+    { name: 'layout', type: 'text' }
   ],
   membership: [
     { name: 'occupancy_type', type: 'text' },
@@ -106,7 +123,6 @@ const FAMILY_COLUMNS: Record<Family, { name: string; type: ColType }[]> = {
     { name: 'volume', type: 'integer' },
     { name: 'member_discount', type: 'integer' },
     { name: 'price_customisable', type: 'boolean' },
-    { name: 'pro_rata', type: 'boolean' },
     { name: 'self_service', type: 'boolean' },
     { name: 'payment_options', type: 'text' },
     { name: 'supplier_name', type: 'text' },
@@ -160,10 +176,11 @@ const FAMILY_COLUMNS: Record<Family, { name: string; type: ColType }[]> = {
   ]
 }
 
-async function upsertDetails(itemId: string, family: Family | null, data: FormData, actorId: string | null = null) {
-  if (!family) return { ok: true as const }
-  const table = FAMILY_TABLES[family]
-  const cols = FAMILY_COLUMNS[family]
+async function upsertDetails(itemId: string, slug: TypeSlug | null, data: FormData, actorId: string | null = null) {
+  if (!slug) return { ok: true as const }
+  const table = TYPE_TABLES[slug]
+  const cols = TYPE_COLUMNS[slug]
+  if (!table || !cols) return { ok: true as const }
   const row: Record<string, unknown> = { item_id: itemId, updated_at: new Date().toISOString() }
   for (const c of cols) {
     const value = coerceDetailValue(data.get(`detail_${c.name}`), c.type)
@@ -186,18 +203,18 @@ export const load = async ({ params, cookies, locals }) => {
   // paints immediately.
   const itemRes = await supabase
     .from('items')
-    .select('*, item_types(slug, name, family), locations(name, short_name)')
+    .select('*, item_types(slug, name, pricing_params), locations(name, short_name)')
     .eq('id', id)
     .single()
   if (itemRes.error || !itemRes.data) throw error(404, 'Item not found')
 
   const item = itemRes.data as any
-  const family = (item.item_types?.family ?? null) as Family | null
+  const slug = (item.item_types?.slug ?? null) as TypeSlug | null
+  const detailsTable = slug ? TYPE_TABLES[slug] : null
 
-  // Family details depend on the item's family, but we can also stream them.
   const detailsPromise: Promise<Record<string, unknown> | null> =
-    family && FAMILY_TABLES[family]
-      ? supabase.from(FAMILY_TABLES[family]).select('*').eq('item_id', id).maybeSingle()
+    detailsTable
+      ? supabase.from(detailsTable).select('*').eq('item_id', id).maybeSingle()
           .then(r => (r.data ?? null) as Record<string, unknown> | null)
       : Promise.resolve(null)
 
@@ -216,7 +233,7 @@ export const load = async ({ params, cookies, locals }) => {
 
   return {
     item,
-    family,
+    slug,
     // Streamed — awaited on the client inside {#await}
     itemTypes: lookups.listItemTypes(),
     locations: lookups.listLocationsLite(),
@@ -237,11 +254,12 @@ export const actions = {
 
     const result = await itemsService.update(params.id, {
       item_type_id: newItemTypeId,
+      base_rate_override: blankBool(data, 'base_rate_override', false),
       location_id: blankStr(data, 'location_id'),
       name: (data.get('name') as string ?? '').trim(),
       description: blankStr(data, 'description'),
       sku: blankStr(data, 'sku'),
-      base_price: blankNum(data, 'base_price'),
+      base_rate: blankNum(data, 'base_rate'),
       accounting_gl_code: blankStr(data, 'accounting_gl_code'),
       accounting_item_code: blankStr(data, 'accounting_item_code'),
       accounting_tax_code: blankStr(data, 'accounting_tax_code'),
@@ -254,9 +272,9 @@ export const actions = {
     const linkResult = await replaceItemTrackingCodes(params.id, trackingCodeIds(data), userId)
     if (!linkResult.ok) return await logFail(userId, 'items.update.tracking_codes', linkResult.error, { id: params.id })
 
-    const family = await getFamily(newItemTypeId)
-    const detailsResult = await upsertDetails(params.id, family, data, userId)
-    if (!detailsResult.ok) return await logFail(userId, 'items.update.details', detailsResult.error, { id: params.id, family })
+    const slug = await getTypeSlug(newItemTypeId)
+    const detailsResult = await upsertDetails(params.id, slug, data, userId)
+    if (!detailsResult.ok) return await logFail(userId, 'items.update.details', detailsResult.error, { id: params.id, slug })
 
     return { success: true, message: 'Item updated' }
   },

@@ -293,6 +293,17 @@
     min-width: var(--sel-width, 140px);
     width: 100%;
   }
+  /* Defeat any uppercase / letter-spacing inherited from a wrapping <label>
+     (Field.svelte) so dropdown content reads as authored. */
+  .select-trigger,
+  .select-option,
+  .select-empty,
+  .select-search-input {
+    text-transform: none;
+    letter-spacing: normal;
+    font-weight: var(--weight-normal, 400);
+  }
+
   .select-trigger {
     appearance: none;
     -webkit-appearance: none;
@@ -449,17 +460,21 @@
     font-size: var(--text-xs);
     padding: 6px 8px;
   }
+  /* HIGHLIGHTED = keyboard/mouse cursor position. Subtle, neutral. */
   .select-option.is-highlighted {
-    background: var(--accent-soft);
-    color: var(--accent);
+    background: var(--surface-sunk, #f4f4f4);
+    color: var(--text);
   }
+  /* SELECTED = the saved/active value. Marked with ✓ + accent text only,
+     no fill. Keeps it visually distinct from highlight. */
   .select-option.is-selected {
     font-weight: var(--weight-semibold);
     color: var(--accent);
+    background: transparent;
   }
   .select-option.is-selected.is-highlighted {
-    background: var(--accent);
-    color: var(--accent-contrast, #ffffff);
+    background: var(--accent-soft);
+    color: var(--accent);
   }
   .opt-check {
     width: 14px;

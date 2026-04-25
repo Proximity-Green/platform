@@ -8,7 +8,8 @@ export type Item = {
   name: string
   description: string | null
   sku: string | null
-  base_price: number | null
+  base_rate: number | null
+  base_rate_override: boolean
   accounting_gl_code: string | null
   accounting_item_code: string | null
   accounting_tax_code: string | null
@@ -32,7 +33,8 @@ export type ItemInput = {
   name: string
   description?: string | null
   sku?: string | null
-  base_price?: number | null
+  base_rate?: number | null
+  base_rate_override?: boolean
   accounting_gl_code?: string | null
   accounting_item_code?: string | null
   accounting_tax_code?: string | null

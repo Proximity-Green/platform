@@ -35,6 +35,15 @@
   let addingProduct = $state(false)
   let addLocationId = $state<string>('')
   let addItemId = $state<string>('')
+  let addBaseRate = $state<string>('')
+
+  // Auto-fill the base rate from the chosen item; user can still overwrite.
+  $effect(() => {
+    if (!addItemId) { addBaseRate = ''; return }
+    const it = (data.items as any[]).find(i => i.id === addItemId)
+    if (!it) return
+    addBaseRate = it.base_rate != null ? String(it.base_rate) : ''
+  })
 
   // Selected sub IDs for "Create Invoice" / "Create Quote"
   let selectedSubIds = $state<Set<string>>(new Set())
@@ -260,7 +269,13 @@
       const all = subsellableItems as any[]
       return all
         .filter((i: any) => !loc || i.location_id === loc)
-        .map((i: any) => ({ value: i.id, label: i.name }))
+        .map((i: any) => {
+          const rate = i.base_rate
+          const suffix = rate != null && Number.isFinite(Number(rate))
+            ? ` (${fmtMoney(Number(rate))})`
+            : ''
+          return { value: i.id, label: `${i.name}${suffix}` }
+        })
     }
   })
 
@@ -271,7 +286,6 @@
     item_name: string | null
     user_name: string | null
     location_name: string | null
-    space_name: string | null
     started_at: string | null
     ended_at: string | null
   }
@@ -279,10 +293,9 @@
   const licenceColumns: Column<LicenceRow>[] = [
     { key: 'location_name', label: 'Location', sortable: true, width: '18%' },
     { key: 'item_name', label: 'Description', sortable: true, width: '30%' },
-    { key: 'user_name', label: 'Member', sortable: true, width: '20%' },
-    { key: 'space_name', label: 'Space', width: '14%', muted: true, hideBelow: 'md' },
-    { key: 'started_at', label: 'Started', sortable: true, width: '9%', date: true },
-    { key: 'ended_at', label: 'Ended', sortable: true, width: '9%', date: true, hideBelow: 'sm' }
+    { key: 'user_name', label: 'Member', sortable: true, width: '24%' },
+    { key: 'started_at', label: 'Started', sortable: true, width: '14%', date: true },
+    { key: 'ended_at', label: 'Ended', sortable: true, width: '14%', date: true, hideBelow: 'sm' }
   ]
 
   // ---------- invoice table (WSM Invoices expandable) ----------
@@ -496,7 +509,7 @@
       data={data.licences as LicenceRow[]}
       columns={licenceColumns}
       table="org-licences"
-      searchFields={['item_name', 'user_name', 'location_name', 'space_name']}
+      searchFields={['item_name', 'user_name', 'location_name']}
       searchPlaceholder="Search item, member, location…"
       csvFilename={`org-${org.slug ?? org.id}-licences`}
       empty="No licences yet — create via a Subscription proposal."
@@ -509,7 +522,6 @@
           <span class="primary">{l.item_name ?? '—'}</span>
         </td>
         <td>{l.user_name ?? '—'}</td>
-        <td class="muted hide-md">{l.space_name ?? '—'}</td>
         <td class="date">{fmtDate(l.started_at)}</td>
         <td class="date hide-sm">{fmtDate(l.ended_at)}</td>
       {/snippet}
@@ -672,7 +684,7 @@
             <Select name="user_id" value="" options={personOptions} placeholder="Member" />
             <input type="date" name="started_at" value={new Date().toISOString().slice(0, 10)} />
             <input type="number" name="quantity" value="1" step="0.01" placeholder="Qty" />
-            <input type="number" name="base_rate" value="0" step="0.01" placeholder="Price" />
+            <input type="number" name="base_rate" bind:value={addBaseRate} step="0.01" placeholder="Price" />
             <Button type="submit" size="sm" loading={saving}>Add</Button>
             <Button type="button" variant="ghost" size="sm" onclick={() => { addingProduct = false; addLocationId = ''; addItemId = '' }}>Cancel</Button>
           </form>

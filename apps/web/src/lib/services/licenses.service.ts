@@ -6,7 +6,6 @@ export type License = {
   item_id: string
   organisation_id: string
   location_id: string
-  space_id: string | null
   user_id: string | null
   started_at: string
   ended_at: string | null
@@ -20,14 +19,12 @@ export type LicenseEnriched = License & {
   organisation_name: string | null
   location_name: string | null
   user_name: string | null
-  space_name: string | null
 }
 
 export type LicenseInput = {
   item_id: string
   organisation_id: string
   location_id: string
-  space_id?: string | null
   user_id?: string | null
   started_at: string
   ended_at?: string | null
@@ -44,7 +41,6 @@ export async function listAll(): Promise<LicenseEnriched[]> {
       items(name),
       organisations(name),
       locations(name),
-      spaces(name),
       persons:user_id(first_name, last_name)
     `)
     .order('created_at', { ascending: false })
@@ -54,7 +50,6 @@ export async function listAll(): Promise<LicenseEnriched[]> {
     item_name: row.items?.name ?? null,
     organisation_name: row.organisations?.name ?? null,
     location_name: row.locations?.name ?? null,
-    space_name: row.spaces?.name ?? null,
     user_name: row.persons
       ? `${row.persons.first_name ?? ''} ${row.persons.last_name ?? ''}`.trim() || null
       : null

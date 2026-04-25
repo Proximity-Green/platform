@@ -7,12 +7,11 @@ export const load = async ({ cookies, locals }) => {
   if (userId) await requirePermission(userId, 'subscriptions', 'read')
 
   const licenses = await licensesService.listAll()
-  const [{ data: items }, { data: orgs }, { data: locations }, { data: spaces }, { data: persons }] =
+  const [{ data: items }, { data: orgs }, { data: locations }, { data: persons }] =
     await Promise.all([
       supabase.from('items').select('id, name').order('name'),
       supabase.from('organisations').select('id, name').order('name'),
       supabase.from('locations').select('id, name, short_name').order('name'),
-      supabase.from('spaces').select('id, name, location_id').order('name'),
       supabase.from('persons').select('id, first_name, last_name').order('first_name')
     ])
 
@@ -21,7 +20,6 @@ export const load = async ({ cookies, locals }) => {
     items: items ?? [],
     organisations: orgs ?? [],
     locations: locations ?? [],
-    spaces: spaces ?? [],
     persons: persons ?? []
   }
 }
@@ -41,7 +39,6 @@ export const actions = {
       item_id: data.get('item_id') as string,
       organisation_id: data.get('organisation_id') as string,
       location_id: data.get('location_id') as string,
-      space_id: blank(data, 'space_id'),
       user_id: blank(data, 'user_id'),
       started_at: data.get('started_at') as string,
       ended_at: blank(data, 'ended_at'),
@@ -60,7 +57,6 @@ export const actions = {
       item_id: data.get('item_id') as string,
       organisation_id: data.get('organisation_id') as string,
       location_id: data.get('location_id') as string,
-      space_id: blank(data, 'space_id'),
       user_id: blank(data, 'user_id'),
       started_at: data.get('started_at') as string,
       ended_at: blank(data, 'ended_at'),

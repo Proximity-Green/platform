@@ -26,7 +26,7 @@
     name: string
     description: string | null
     sku: string | null
-    base_price: number | null
+    base_rate: number | null
     accounting_gl_code: string | null
     accounting_item_code: string | null
     accounting_tax_code: string | null
@@ -41,7 +41,7 @@
     location_name: string | null
   }
 
-  type LookupOption = { id: string; slug?: string; name: string; family?: Family }
+  type LookupOption = { id: string; slug?: string; name: string }
 
   type TrackingCode = {
     id: string
@@ -53,29 +53,42 @@
     active: boolean
   }
 
-  type Family = 'space' | 'membership' | 'product' | 'service' | 'art' | 'asset'
+  type TypeSlug =
+    | 'office'
+    | 'meeting_room'
+    | 'hotel_room'
+    | 'membership'
+    | 'product'
+    | 'service'
+    | 'art'
+    | 'asset'
+    | 'vehicle'
+    | 'equipment'
   type FieldKind = 'text' | 'number' | 'integer' | 'boolean' | 'date' | 'enum' | 'long_text'
   type FieldDef = { slug: string; label: string; kind: FieldKind; options?: string[]; unit?: string; noSeparator?: boolean }
 
-  // Hardcoded UI-schema per family. Must match FAMILY_COLUMNS in +page.server.ts.
-  const FAMILY_FIELDS: Record<Family, FieldDef[]> = {
-    space: [
-      { slug: 'meters_squared', label: 'Floor area', kind: 'number', unit: 'm²' },
+  // Per-type UI-schema. Must match TYPE_COLUMNS in +page.server.ts.
+  const TYPE_FIELDS: Partial<Record<TypeSlug, FieldDef[]>> = {
+    office: [
+      { slug: 'area_sqm', label: 'Area', kind: 'number', unit: 'm²' },
       { slug: 'capacity', label: 'Capacity', kind: 'integer' },
       { slug: 'aesthetic', label: 'Aesthetic', kind: 'text' },
       { slug: 'aesthetic_impact', label: 'Aesthetic impact', kind: 'number' },
       { slug: 'safety_margin', label: 'Safety margin', kind: 'number' },
-      { slug: 'start_price_per_square_meter', label: 'Start price per m²', kind: 'number' },
-      { slug: 'number_available', label: 'Number available', kind: 'integer' },
-      { slug: 'private', label: 'Private', kind: 'boolean' },
-      { slug: 'layout', label: 'Default layout', kind: 'text' },
-      { slug: 'price_per_day', label: 'Price per day', kind: 'number' },
+      { slug: 'start_price_per_m2', label: 'Start price per m²', kind: 'number' },
+      { slug: 'layout', label: 'Layout', kind: 'text' }
+    ],
+    meeting_room: [
+      { slug: 'capacity', label: 'Capacity', kind: 'integer' },
       { slug: 'price_per_user_per_day', label: 'Price per user / day', kind: 'number' },
-      { slug: 'half_day_discount', label: 'Half-day discount', kind: 'number' },
-      { slug: 'full_day_discount', label: 'Full-day discount', kind: 'number' },
-      { slug: 'off_peak_cost', label: 'Off-peak cost', kind: 'number' },
-      { slug: 'external_ical', label: 'External iCal URL', kind: 'text' },
-      { slug: 'business_case', label: 'Business case', kind: 'long_text' }
+      { slug: 'off_peak_factor', label: 'Off-peak factor', kind: 'number' },
+      { slug: 'layout', label: 'Layout', kind: 'text' },
+      { slug: 'slots_per_day', label: 'Slots per day', kind: 'integer' }
+    ],
+    hotel_room: [
+      { slug: 'capacity', label: 'Capacity', kind: 'integer' },
+      { slug: 'price_per_day', label: 'Price per day', kind: 'number' },
+      { slug: 'layout', label: 'Layout', kind: 'text' }
     ],
     membership: [
       { slug: 'occupancy_type', label: 'Occupancy type', kind: 'enum', options: ['individual','team','corporate'] },
@@ -93,7 +106,6 @@
       { slug: 'volume', label: 'Volume / pack size', kind: 'integer' },
       { slug: 'member_discount', label: 'Member discount %', kind: 'integer' },
       { slug: 'price_customisable', label: 'Price customisable', kind: 'boolean' },
-      { slug: 'pro_rata', label: 'Pro-rata billing', kind: 'boolean' },
       { slug: 'self_service', label: 'Self-service purchase', kind: 'boolean' },
       { slug: 'payment_options', label: 'Payment options', kind: 'text' },
       { slug: 'supplier_name', label: 'Supplier name', kind: 'text' },
@@ -215,27 +227,27 @@
 
   function onCreateItemTypeChange(v: string) {
     if (v !== createItemTypeId) {
-      const prev = familyForType(createItemTypeId)
-      const next = familyForType(v)
+      const prev = slugForType(createItemTypeId)
+      const next = slugForType(v)
       createItemTypeId = v
       if (prev !== next) createDetails = {}
     }
   }
 
-  const itemTypeFamilyById = $derived.by(() => {
-    const m = new Map<string, Family>()
+  const itemTypeSlugById = $derived.by(() => {
+    const m = new Map<string, TypeSlug>()
     for (const t of data.itemTypes as LookupOption[]) {
-      if (t.family) m.set(t.id, t.family)
+      if (t.slug && t.slug in TYPE_FIELDS) m.set(t.id, t.slug as TypeSlug)
     }
     return m
   })
 
-  function familyForType(itemTypeId: string): Family | null {
-    return itemTypeFamilyById.get(itemTypeId) ?? null
+  function slugForType(itemTypeId: string): TypeSlug | null {
+    return itemTypeSlugById.get(itemTypeId) ?? null
   }
 
-  const createFamily = $derived(familyForType(createItemTypeId))
-  const createFields = $derived(createFamily ? FAMILY_FIELDS[createFamily] : [])
+  const createSlug = $derived(slugForType(createItemTypeId))
+  const createFields = $derived(createSlug ? (TYPE_FIELDS[createSlug] ?? []) : [])
 
   function fieldInputType(kind: FieldKind): string {
     if (kind === 'date') return 'date'
@@ -270,10 +282,10 @@
     }
   }
 
-  function randomDetailsFor(family: Family): Record<string, string> {
-    if (family === 'art') return randomArtDetails()
+  function randomDetailsFor(slug: TypeSlug): Record<string, string> {
+    if (slug === 'art') return randomArtDetails()
     const out: Record<string, string> = {}
-    for (const f of FAMILY_FIELDS[family]) out[f.slug] = randomValueFor(f)
+    for (const f of (TYPE_FIELDS[slug] ?? [])) out[f.slug] = randomValueFor(f)
     return out
   }
 
@@ -369,8 +381,8 @@
 
   const itemTypeOptions = $derived(
     [...(data.itemTypes as LookupOption[])]
-      .sort((a, b) => (a.family ?? 'zzz').localeCompare(b.family ?? 'zzz') || a.name.localeCompare(b.name))
-      .map(t => ({ value: t.id, label: t.name, group: t.family ?? 'Other' }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(t => ({ value: t.id, label: t.name }))
   )
   const locationOptions = $derived([
     { value: '', label: 'None' },
@@ -420,7 +432,7 @@
     { key: 'tracking_codes', label: 'Tracking Codes', width: '15%', muted: true, hideBelow: 'md',
       get: i => itemTrackingCodeLabels(i.id).join(', '),
       render: i => itemTrackingCodeLabels(i.id).join(', ') || '' },
-    { key: 'base_price', label: 'Price', sortable: true, width: '10%', align: 'right', mono: true, get: i => i.base_price ?? null, render: i => fmtPrice(i.base_price) },
+    { key: 'base_rate', label: 'Rate', sortable: true, width: '10%', align: 'right', mono: true, get: i => i.base_rate ?? null, render: i => fmtPrice(i.base_rate) },
     { key: 'active', label: 'Active', sortable: true, width: '8%' }
   ]
 
@@ -520,7 +532,7 @@
 
         <FieldGrid cols={3}>
           <Field name="name" label="Name" required />
-          <Field name="base_price" label="Base Price" type="number" placeholder="0.00" />
+          <Field name="base_rate" label="Base Rate" type="number" placeholder="0.00" />
           <Field label="Active">
             <Select name="active" value="true" options={yesNo} />
           </Field>
@@ -542,11 +554,11 @@
             />
           </Field>
         </FieldGrid>
-        {#if createFamily && createFields.length > 0}
+        {#if createSlug && createFields.length > 0}
           <div class="meta-head">
-            <h3 class="section-title">{createFamily} details</h3>
+            <h3 class="section-title">{createSlug.replace(/_/g, ' ')} details</h3>
             <Button variant="ghost" size="sm" type="button"
-              onclick={() => { if (createFamily) createDetails = randomDetailsFor(createFamily) }}>
+              onclick={() => { if (createSlug) createDetails = randomDetailsFor(createSlug) }}>
               🎲 Randomise
             </Button>
           </div>
@@ -674,7 +686,7 @@
         <span class="muted">—</span>
       {/each}
     </td>
-    <td class="mono price">{fmtPrice(item.base_price)}</td>
+    <td class="mono price">{fmtPrice(item.base_rate)}</td>
     <td>
       {#if item.active}
         <Badge tone="success">Active</Badge>

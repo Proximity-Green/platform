@@ -7,157 +7,108 @@
     Toast,
     DataTable,
     Drawer,
-    FormCard,
     FieldGrid,
     Field,
-    Select,
-    Copyable,
-    SubmitButton,
-    Badge
+    Badge,
+    SubmitButton
   } from '$lib/components/ui'
   import type { Column, Filter } from '$lib/components/ui/DataTable.svelte'
+  import type { Space, SpaceFilter } from '$lib/services/spaces.service'
 
-  type Space = {
-    id: string
-    wsm_id: string | null
-    location_id: string
-    location: { id: string; name: string; slug: string } | null
-    name: string
-    code: string | null
-    description: string | null
-    capacity: number | null
-    area_sqm: number | null
-    floor: string | null
-    active: boolean
-    metadata: Record<string, unknown> | null
-    created_at: string
-  }
-
-  type LocationRef = { id: string; name: string; slug: string; status?: string }
+  type ItemTypeRef = { id: string; slug: string; name: string }
+  type LocationRef  = { id: string; name: string; short_name: string | null }
 
   let { data, form } = $props()
-  let showCreate = $state(false)
   let editing = $state<Space | null>(null)
   let saving = $state(false)
 
   $effect(() => {
-    if (form?.success) { editing = null; showCreate = false }
+    if (form?.success) { editing = null }
   })
 
   let perms = $state({ role: null as string | null, permissions: [] as any, loaded: false })
   permStore.subscribe(v => { perms = v })
   function can(resource: string, action: string = 'read') { return canDo(perms, resource, action) }
 
+  function newDraft(): Space {
+    return {
+      id: '',
+      name: '',
+      description: null,
+      filter: {},
+      manual_item_ids: null,
+      active: true,
+      created_at: '',
+      updated_at: ''
+    }
+  }
+
+  function summariseFilter(f: SpaceFilter | null | undefined): string {
+    if (!f) return '—'
+    const parts: string[] = []
+    if (f.item_type_slugs?.length) parts.push(`type ∈ ${f.item_type_slugs.join(',')}`)
+    if (f.location_ids?.length)    parts.push(`@${f.location_ids.length} loc${f.location_ids.length > 1 ? 's' : ''}`)
+    if (f.capacity_min != null)    parts.push(`cap ≥ ${f.capacity_min}`)
+    if (f.capacity_max != null)    parts.push(`cap ≤ ${f.capacity_max}`)
+    if (f.area_min != null)        parts.push(`m² ≥ ${f.area_min}`)
+    if (f.area_max != null)        parts.push(`m² ≤ ${f.area_max}`)
+    return parts.length ? parts.join(' · ') : '—'
+  }
+
   const columns: Column<Space>[] = [
-    { key: 'name', label: 'Name', sortable: true, width: '22%' },
-    { key: 'code', label: 'Code', width: '10%', mono: true, muted: true, hideBelow: 'sm' },
-    { key: 'location', label: 'Location', sortable: true, width: '20%',
-      get: s => s.location?.name ?? '' },
-    { key: 'floor', label: 'Floor', width: '8%', muted: true, hideBelow: 'md' },
-    { key: 'capacity', label: 'Capacity', width: '10%', align: 'right', hideBelow: 'md',
-      get: s => s.capacity, render: s => s.capacity != null ? String(s.capacity) : '—' },
-    { key: 'area_sqm', label: 'Area (sqm)', width: '10%', align: 'right', hideBelow: 'md',
-      get: s => s.area_sqm, render: s => s.area_sqm != null ? String(s.area_sqm) : '—' },
-    { key: 'active', label: 'Active', width: '8%' }
+    { key: 'name',        label: 'Name',        sortable: true, width: '22%' },
+    { key: 'description', label: 'Description', muted: true, ellipsis: true, width: '24%', render: s => s.description || '—' },
+    { key: 'filter',      label: 'Filter',      muted: true, width: '34%', get: s => summariseFilter(s.filter) },
+    { key: 'manual',      label: 'Pinned',      align: 'right', width: '8%', get: s => s.manual_item_ids?.length ?? 0 },
+    { key: 'active',      label: 'Active',      sortable: true, width: '12%' }
   ]
 
-  const locationFilters: Filter<Space>[] = $derived([
-    { key: 'all', label: 'All' },
-    { key: 'active', label: 'Active', test: s => s.active },
-    { key: 'inactive', label: 'Inactive', test: s => !s.active },
-    ...(data.locations as LocationRef[]).map(l => ({
-      key: `loc_${l.id}`,
-      label: l.short_name ?? l.name,
-      test: (s: Space) => s.location_id === l.id
-    }))
-  ])
+  const filters: Filter<Space>[] = [
+    { key: 'active',   label: 'Active',   test: s => s.active },
+    { key: 'archived', label: 'Archived', test: s => !s.active },
+    { key: 'all',      label: 'All' }
+  ]
 </script>
 
-<PageHead title="Spaces" lede="Bookable units inside each location — desks, offices, rooms.">
+<PageHead title="Spaces" lede="Saved queries that group items for reporting (e.g. all offices in JHB, meeting rooms ≥ 8 seats).">
   {#if can('locations', 'create')}
-    <Button size="sm" onclick={() => { showCreate = !showCreate }}>
-      {showCreate ? 'Cancel' : '+ Add Space'}
-    </Button>
+    <Button size="sm" onclick={() => editing = newDraft()}>+ Add Space</Button>
   {/if}
 </PageHead>
 
 <Toast error={form?.error} success={form?.success} message={form?.message} />
 
-{#if showCreate && can('locations', 'create')}
-  <div class="create-wrap">
-    <FormCard
-      action="?/create"
-      id="create-form"
-      onSubmit={() => { saving = true }}
-      onResult={() => { saving = false }}
-    >
-      <FieldGrid cols={4}>
-        <Field label="Location" required>
-          <Select
-            name="location_id"
-            placeholder="Choose location…"
-            required
-            options={(data.locations as LocationRef[]).map(l => ({ value: l.id, label: l.short_name ?? l.name }))}
-          />
-        </Field>
-        <Field name="name" label="Name" required />
-        <Field name="code" label="Code" placeholder="e.g. 4A" />
-        <Field name="floor" label="Floor" />
-      </FieldGrid>
-      {#snippet actions()}
-        <Button type="submit" size="sm" loading={saving}>{saving ? 'Saving…' : 'Create Space'}</Button>
-      {/snippet}
-    </FormCard>
-  </div>
-{/if}
-
 <DataTable
   data={data.spaces as Space[]}
   {columns}
-  filters={locationFilters}
+  {filters}
   table="spaces"
   title="Spaces"
-  lede="Bookable units inside each location — desks, offices, rooms."
-  searchFields={['name', 'code', 'floor', 'description', 'location.name']}
-  searchPlaceholder="Search name, code, floor…"
+  lede="Saved queries that group items for reporting."
+  searchFields={['name', 'description']}
+  searchPlaceholder="Search name or description…"
   csvFilename="spaces"
   empty="No spaces yet."
-  timesToggle
   isActiveRow={(s) => s.id === editing?.id}
   onActivate={(s) => editing = s}
 >
-  {#snippet row(space, _ctx)}
-    <td class="name-cell">
-      <Copyable value={space.name}>
-        <span class="name">{space.name}</span>
-      </Copyable>
-      {#if space.description}
-        <div class="desc">{space.description}</div>
-      {/if}
-    </td>
-    <td class="mono muted hide-sm">{space.code ?? '—'}</td>
-    <td class="muted">{space.location?.name ?? '—'}</td>
-    <td class="muted hide-md">{space.floor ?? '—'}</td>
-    <td class="align-right hide-md">{space.capacity ?? '—'}</td>
-    <td class="align-right hide-md">{space.area_sqm ?? '—'}</td>
+  {#snippet row(s)}
+    <td><span class="name">{s.name}</span></td>
+    <td class="muted ellipsis">{s.description ?? '—'}</td>
+    <td class="muted mono small">{summariseFilter(s.filter)}</td>
+    <td class="mono align-right">{s.manual_item_ids?.length ?? 0}</td>
     <td>
-      {#if space.active}
-        <Badge tone="success">active</Badge>
-      {:else}
-        <Badge tone="danger">inactive</Badge>
-      {/if}
+      {#if s.active}<Badge tone="success">Active</Badge>{:else}<Badge tone="default">Archived</Badge>{/if}
     </td>
   {/snippet}
   {#snippet pageActions()}
     {#if can('locations', 'create')}
-      <Button size="sm" onclick={() => { showCreate = !showCreate }}>
-        {showCreate ? 'Cancel' : '+ Add Space'}
-      </Button>
+      <Button size="sm" onclick={() => editing = newDraft()}>+ Add Space</Button>
     {/if}
   {/snippet}
-  {#snippet actions(space)}
+  {#snippet actions(s)}
     {#if can('locations', 'update')}
-      <Button variant="ghost" size="sm" onclick={() => editing = space}>Edit</Button>
+      <Button variant="ghost" size="sm" onclick={() => editing = s}>Edit</Button>
     {/if}
     {#if can('locations', 'delete')}
       <SubmitButton
@@ -166,10 +117,10 @@
         pendingLabel="Deleting…"
         variant="danger"
         size="sm"
-        fields={{ id: space.id }}
+        fields={{ id: s.id }}
         confirm={{
           title: 'Delete space?',
-          message: `Permanently delete ${space.name}? This cannot be undone.`,
+          message: `Permanently delete ${s.name}? Saved query only — no item data is touched.`,
           variant: 'danger'
         }}
       />
@@ -177,12 +128,12 @@
   {/snippet}
 </DataTable>
 
-<Drawer open={!!editing} title="Edit Space" formId="edit-form" onClose={() => editing = null}>
+<Drawer open={!!editing} title={editing?.id ? 'Edit Space' : 'Add Space'} formId="space-form" onClose={() => editing = null}>
   {#if editing}
     <form
       method="POST"
-      action="?/update"
-      id="edit-form"
+      action={editing.id ? '?/update' : '?/create'}
+      id="space-form"
       autocomplete="off"
       use:enhance={() => {
         saving = true
@@ -192,59 +143,79 @@
         }
       }}
     >
-      <input type="hidden" name="id" value={editing.id} />
+      {#if editing.id}
+        <input type="hidden" name="id" value={editing.id} />
+      {/if}
 
       <h3 class="section-title">Identity</h3>
       <FieldGrid cols={2}>
-        <Field label="Location" required>
-          <Select
-            name="location_id"
-            value={editing.location_id}
-            required
-            options={(data.locations as LocationRef[]).map(l => ({ value: l.id, label: l.short_name ?? l.name }))}
-          />
-        </Field>
         <Field name="name" label="Name" value={editing.name} required />
-        <Field name="code" label="Code" value={editing.code ?? ''} />
-        <Field name="floor" label="Floor" value={editing.floor ?? ''} />
-      </FieldGrid>
-      <FieldGrid cols={1}>
-        <Field name="description" label="Description" value={editing.description ?? ''} />
-      </FieldGrid>
-
-      <h3 class="section-title">Capacity</h3>
-      <FieldGrid cols={2}>
-        <Field name="capacity" label="Capacity" type="number" value={editing.capacity != null ? String(editing.capacity) : ''} />
-        <Field name="area_sqm" label="Area (sqm)" value={editing.area_sqm != null ? String(editing.area_sqm) : ''} />
-      </FieldGrid>
-
-      <h3 class="section-title">Status</h3>
-      <FieldGrid cols={2}>
         <label class="checkbox-field">
           <input type="checkbox" name="active" checked={editing.active} />
           <span>Active</span>
         </label>
       </FieldGrid>
+      <FieldGrid cols={1}>
+        <Field name="description" label="Description" value={editing.description ?? ''} />
+      </FieldGrid>
+
+      <h3 class="section-title">Filter</h3>
+      <p class="hint">Items matching ALL filters below will be members of this space.</p>
+
+      <div class="filter-section">
+        <span class="filter-label">Item types</span>
+        <div class="checkbox-grid">
+          {#each (data.itemTypes as ItemTypeRef[]) as t (t.id)}
+            <label class="cb-row">
+              <input
+                type="checkbox"
+                name="filter_item_type_slugs"
+                value={t.slug}
+                checked={editing.filter?.item_type_slugs?.includes(t.slug) ?? false}
+              />
+              <span>{t.name} <span class="mono muted">({t.slug})</span></span>
+            </label>
+          {/each}
+        </div>
+      </div>
+
+      <div class="filter-section">
+        <span class="filter-label">Locations</span>
+        <div class="checkbox-grid">
+          {#each (data.locations as LocationRef[]) as l (l.id)}
+            <label class="cb-row">
+              <input
+                type="checkbox"
+                name="filter_location_ids"
+                value={l.id}
+                checked={editing.filter?.location_ids?.includes(l.id) ?? false}
+              />
+              <span>{l.short_name ?? l.name}</span>
+            </label>
+          {/each}
+        </div>
+      </div>
+
+      <FieldGrid cols={4}>
+        <Field name="filter_capacity_min" label="Capacity min" type="number" value={editing.filter?.capacity_min != null ? String(editing.filter.capacity_min) : ''} />
+        <Field name="filter_capacity_max" label="Capacity max" type="number" value={editing.filter?.capacity_max != null ? String(editing.filter.capacity_max) : ''} />
+        <Field name="filter_area_min"     label="Area min (m²)" type="number" value={editing.filter?.area_min != null ? String(editing.filter.area_min) : ''} />
+        <Field name="filter_area_max"     label="Area max (m²)" type="number" value={editing.filter?.area_max != null ? String(editing.filter.area_max) : ''} />
+      </FieldGrid>
     </form>
   {/if}
   {#snippet footer()}
     <Button variant="ghost" size="sm" onclick={() => editing = null} disabled={saving}>Cancel</Button>
-    <Button type="submit" form="edit-form" size="sm" loading={saving}>{saving ? 'Saving…' : 'Save'}</Button>
+    <Button type="submit" form="space-form" size="sm" loading={saving}>{saving ? 'Saving…' : 'Save'}</Button>
   {/snippet}
 </Drawer>
 
 <style>
-  .create-wrap { margin-bottom: var(--space-6); }
-  .name-cell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .name { font-weight: var(--weight-medium); color: var(--text); }
-  .desc {
-    font-size: var(--text-xs);
-    color: var(--text-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 300px;
-  }
+  .muted { color: var(--text-muted); }
+  .mono  { font-family: var(--font-mono); }
+  .small { font-size: var(--text-xs); }
+  .align-right { text-align: right; }
 
   .section-title {
     font-size: var(--text-xs);
@@ -256,6 +227,33 @@
   }
   .section-title:first-of-type { margin-top: 0; }
 
+  .hint { color: var(--text-muted); font-size: var(--text-xs); margin: 0 0 var(--space-2); }
+
+  .filter-section { margin-bottom: var(--space-4); }
+  .filter-label {
+    display: block;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--label-color);
+    font-weight: var(--weight-semibold);
+    margin-bottom: var(--space-2);
+  }
+
+  .checkbox-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 4px 12px;
+  }
+  .cb-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+  .cb-row input { accent-color: var(--accent); }
+
   .checkbox-field {
     display: flex;
     align-items: center;
@@ -265,7 +263,4 @@
     padding-top: 18px;
   }
   .checkbox-field input { width: 16px; height: 16px; accent-color: var(--accent); }
-
-  @media (max-width: 640px) { .hide-sm { display: none; } }
-  @media (max-width: 900px) { .hide-md { display: none; } }
 </style>

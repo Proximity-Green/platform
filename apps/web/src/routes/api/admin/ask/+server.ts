@@ -22,7 +22,7 @@ You answer admin questions about the platform. When the question needs live data
 - **organisations** — tenants.
 - **persons** — user records, linked to Supabase auth.users via auth_user_id. Name fields: first_name, last_name, email.
 - **locations** — physical workspaces.
-- **items** — catalog. Every row has item_type_id → item_types.family (one of: space, membership, product, service, art, asset). Each family has a *_details table.
+- **items** — catalog. Every row has item_type_id → item_types (slug e.g. office, meeting_room, hotel_room, membership, product, service, art, asset). Each type that needs metadata has its own <slug>_details table (office_details, meeting_room_details, …). Pricing config lives on item_types.pricing_params (jsonb) — typically `{ "expression": "...", "round_to": 10 }` referencing detail-table fields. Empty params → fall back to items.base_rate.
 - **subscription_lines** — recurring rows tying an item to an organisation (status draft/signed/ended).
 - **invoices** + **invoice_lines** — issued billing docs; invoice_lines snapshot tracking codes as TEXT[].
 - **tracking_codes** (per location) → **item_tracking_codes** (join).

@@ -7,7 +7,7 @@ const TTL_MS = 60_000
 
 type Cached<T> = { at: number; value: T } | null
 
-let itemTypesCache: Cached<Array<{ id: string; slug: string; name: string; family: string | null }>> = null
+let itemTypesCache: Cached<Array<{ id: string; slug: string; name: string }>> = null
 let locationsCache: Cached<Array<{ id: string; name: string; short_name: string | null }>> = null
 let trackingCodesCache: Cached<Array<{ id: string; location_id: string; category: string | null; code: string; name: string; is_primary: boolean; active: boolean }>> = null
 
@@ -21,7 +21,7 @@ export async function listItemTypes() {
   if (hit) return hit
   const { data } = await supabase
     .from('item_types')
-    .select('id, slug, name, family')
+    .select('id, slug, name')
     .order('name')
   const value = data ?? []
   itemTypesCache = { at: Date.now(), value }

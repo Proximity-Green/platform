@@ -52,7 +52,6 @@ export const load = async ({ params, cookies, locals }) => {
         *,
         items(name),
         locations(name),
-        spaces(name),
         persons:user_id(first_name, last_name)
       `)
       .eq('organisation_id', id)
@@ -62,7 +61,7 @@ export const load = async ({ params, cookies, locals }) => {
       .select(`
         *,
         items(name, accounting_tax_percentage),
-        licenses(item_id, space_id, items(name, accounting_tax_percentage), locations(name)),
+        licenses(item_id, items(name, accounting_tax_percentage), locations(name)),
         locations(name),
         persons:user_id(first_name, last_name)
       `)
@@ -112,7 +111,7 @@ export const load = async ({ params, cookies, locals }) => {
       .order('first_name'),
     supabase
       .from('items')
-      .select('id, name, location_id, base_price, accounting_tax_percentage, item_types(slug, requires_license, sellable_recurring, sellable_ad_hoc)')
+      .select('id, name, location_id, base_rate, accounting_tax_percentage, item_types(slug, requires_license, sellable_recurring, sellable_ad_hoc)')
       .eq('active', true)
       .order('name')
   ])
@@ -122,7 +121,6 @@ export const load = async ({ params, cookies, locals }) => {
     ...row,
     item_name: row.items?.name ?? null,
     location_name: row.locations?.name ?? null,
-    space_name: row.spaces?.name ?? null,
     user_name: row.persons
       ? `${row.persons.first_name ?? ''} ${row.persons.last_name ?? ''}`.trim() || null
       : null
@@ -357,10 +355,13 @@ export const actions = {
     // subs for licence-requiring types).
     const { data: it } = await supabase
       .from('items')
-      .select('id, item_types(requires_license)')
+      .select('id, base_rate, item_types(requires_license)')
       .eq('id', item_id)
       .single()
     const requiresLicense = (it as any)?.item_types?.requires_license === true
+    const itemRate = Number((it as any)?.base_rate ?? 0)
+    const formRate = num(data, 'base_rate')
+    const subBaseRate = formRate != null && formRate > 0 ? formRate : itemRate
 
     let subItemId: string | null = item_id
     let subLicenseId: string | null = null
@@ -388,7 +389,7 @@ export const actions = {
       organisation_id: params.id,
       location_id,
       user_id: blank(data, 'user_id'),
-      base_rate: num(data, 'base_rate') ?? 0,
+      base_rate: subBaseRate,
       currency: loc?.currency ?? 'ZAR',
       quantity: num(data, 'quantity') ?? 1,
       frequency: 'monthly',

@@ -13,10 +13,21 @@
     Badge
   } from '$lib/components/ui'
   import { fmtMoneyWithCurrency } from '$lib/utils/money'
+  import { resolvePrice, type PricingParams } from '$lib/services/pricing.service'
 
-  type Family = 'space' | 'membership' | 'product' | 'service' | 'art' | 'asset'
+  type TypeSlug =
+    | 'office'
+    | 'meeting_room'
+    | 'hotel_room'
+    | 'membership'
+    | 'product'
+    | 'service'
+    | 'art'
+    | 'asset'
+    | 'vehicle'
+    | 'equipment'
   type FieldKind = 'text' | 'number' | 'integer' | 'boolean' | 'date' | 'enum' | 'long_text'
-  type FieldDef = { slug: string; label: string; kind: FieldKind; options?: string[]; unit?: string; noSeparator?: boolean }
+  type FieldDef = { slug: string; label: string; kind: FieldKind; options?: string[]; unit?: string; noSeparator?: boolean; hint?: string; percentBump?: boolean }
 
   type TrackingCode = {
     id: string
@@ -28,20 +39,27 @@
     active: boolean
   }
 
-  const FAMILY_FIELDS: Record<Family, FieldDef[]> = {
-    space: [
-      { slug: 'meters_squared', label: 'Floor area', kind: 'number', unit: 'm²' },
+  const TYPE_FIELDS: Partial<Record<TypeSlug, FieldDef[]>> = {
+    office: [
+      { slug: 'area_sqm', label: 'Area', kind: 'number', unit: 'm²' },
       { slug: 'capacity', label: 'Capacity', kind: 'integer' },
-      { slug: 'aesthetic', label: 'Aesthetic', kind: 'text' },
-      { slug: 'aesthetic_impact', label: 'Aesthetic impact', kind: 'number' },
-      { slug: 'safety_margin', label: 'Safety margin', kind: 'number' },
-      { slug: 'start_price_per_square_meter', label: 'Start price per m²', kind: 'number' },
-      { slug: 'number_available', label: 'Number available', kind: 'integer' },
-      { slug: 'private', label: 'Private', kind: 'boolean' },
-      { slug: 'layout', label: 'Default layout', kind: 'text' },
-      { slug: 'price_per_day', label: 'Price per day', kind: 'number' },
+      { slug: 'aesthetic', label: 'Aesthetic reason', kind: 'text' },
+      { slug: 'aesthetic_impact', label: 'Aesthetic impact %', kind: 'number', percentBump: true },
+      { slug: 'safety_margin', label: 'Safety margin %', kind: 'number', percentBump: true },
+      { slug: 'start_price_per_m2', label: 'Start price per m²', kind: 'number' },
+      { slug: 'layout', label: 'Layout', kind: 'text' }
+    ],
+    meeting_room: [
+      { slug: 'capacity', label: 'Capacity', kind: 'integer' },
       { slug: 'price_per_user_per_day', label: 'Price per user / day', kind: 'number' },
-      { slug: 'business_case', label: 'Business case', kind: 'long_text' }
+      { slug: 'off_peak_factor', label: 'Off-peak factor', kind: 'number', hint: '0.7 = 30% off-peak discount' },
+      { slug: 'layout', label: 'Layout', kind: 'text' },
+      { slug: 'slots_per_day', label: 'Slots per day', kind: 'integer' }
+    ],
+    hotel_room: [
+      { slug: 'capacity', label: 'Capacity', kind: 'integer' },
+      { slug: 'price_per_day', label: 'Price per day', kind: 'number' },
+      { slug: 'layout', label: 'Layout', kind: 'text' }
     ],
     membership: [
       { slug: 'occupancy_type', label: 'Occupancy type', kind: 'enum', options: ['individual','team','corporate'] },
@@ -59,7 +77,6 @@
       { slug: 'volume', label: 'Volume / pack size', kind: 'integer' },
       { slug: 'member_discount', label: 'Member discount %', kind: 'integer' },
       { slug: 'price_customisable', label: 'Price customisable', kind: 'boolean' },
-      { slug: 'pro_rata', label: 'Pro-rata billing', kind: 'boolean' },
       { slug: 'self_service', label: 'Self-service purchase', kind: 'boolean' },
       { slug: 'supplier_name', label: 'Supplier name', kind: 'text' },
       { slug: 'supplier_sku', label: 'Supplier SKU', kind: 'text' }
@@ -92,6 +109,22 @@
       { slug: 'rate_per_hour', label: 'Rate / hour', kind: 'number' },
       { slug: 'rate_per_day', label: 'Rate / day', kind: 'number' },
       { slug: 'notes', label: 'Notes', kind: 'long_text' }
+    ],
+    vehicle: [
+      { slug: 'kind', label: 'Kind', kind: 'enum', options: ['vehicle','equipment','bicycle','other'] },
+      { slug: 'make', label: 'Make', kind: 'text' },
+      { slug: 'model', label: 'Model', kind: 'text' },
+      { slug: 'serial_number', label: 'Serial #', kind: 'text' },
+      { slug: 'registration', label: 'Registration', kind: 'text' },
+      { slug: 'rate_per_hour', label: 'Rate / hour', kind: 'number' },
+      { slug: 'rate_per_day', label: 'Rate / day', kind: 'number' }
+    ],
+    equipment: [
+      { slug: 'kind', label: 'Kind', kind: 'enum', options: ['vehicle','equipment','bicycle','other'] },
+      { slug: 'make', label: 'Make', kind: 'text' },
+      { slug: 'model', label: 'Model', kind: 'text' },
+      { slug: 'serial_number', label: 'Serial #', kind: 'text' },
+      { slug: 'rate_per_day', label: 'Rate / day', kind: 'number' }
     ]
   }
 
@@ -102,7 +135,7 @@
   function can(resource: string, action: string = 'read') { return canDo(perms, resource, action) }
 
   const item = $derived(data.item as any)
-  const family = $derived(data.family as Family | null)
+  const itemSlug = $derived(data.slug as TypeSlug | null)
 
   // Streamed lookups + item-specific async data. Initialise empty/null so the
   // shell paints immediately; populate when promises resolve.
@@ -111,24 +144,56 @@
   let trackingCodes = $state<TrackingCode[]>([])
   let subscriptions = $state<any[]>([])
 
+  // Clamp any number-ish value to currency precision (2dp) and return as string.
+  // Used everywhere base_rate flows from a number into a form string, so legacy
+  // FP drift like 137.50000000000003 doesn't survive a round-trip.
+  function num2dp(v: number | string | null | undefined): string {
+    if (v == null || v === '') return ''
+    const n = Number(v)
+    if (!Number.isFinite(n)) return ''
+    return String(Math.round(n * 100) / 100)
+  }
+
   let saving = $state(false)
   let itemTypeId = $state<string>(item.item_type_id)
   let locationId = $state<string>(item.location_id ?? '')
   let codeIds = $state<string[]>([])
   let details = $state<Record<string, string>>({})
   let name = $state<string>(item.name)
-  let basePrice = $state<string>(item.base_price != null ? String(item.base_price) : '')
+  let basePrice = $state<string>(num2dp(item.base_rate))
+  let baseRateOverride = $state<boolean>(!!item.base_rate_override)
   let taxPercentage = $state<string>(item.accounting_tax_percentage != null ? String(item.accounting_tax_percentage) : '')
 
-  function detailsToForm(row: Record<string, unknown> | null): Record<string, string> {
+  // Convention for percent fields:
+  //   - DB stores a decimal fraction (0.2 = 20%)
+  //   - UI displays the percent (20)
+  //   - Formula references the raw fraction, so callers should write
+  //     expressions like "(1 + aesthetic_impact)" to apply a +20% bump.
+  function detailsToForm(row: Record<string, unknown> | null, fields: FieldDef[] = []): Record<string, string> {
     const out: Record<string, string> = {}
     if (!row) return out
+    const fieldBy = new Map(fields.map(f => [f.slug, f]))
     for (const [k, v] of Object.entries(row)) {
       if (k === 'item_id' || k === 'created_at' || k === 'updated_at') continue
       if (v == null) continue
+      const f = fieldBy.get(k)
+      if (f?.percentBump) {
+        const n = Number(v)
+        if (Number.isFinite(n)) {
+          out[k] = String(Math.round(n * 10000) / 100)
+          continue
+        }
+      }
       out[k] = typeof v === 'boolean' ? (v ? 'true' : 'false') : String(v)
     }
     return out
+  }
+
+  function percentToFraction(s: string | undefined): string {
+    if (!s) return ''
+    const n = Number(String(s).replace(/,/g, ''))
+    if (!Number.isFinite(n)) return ''
+    return String(n / 100)
   }
 
   // Re-hydrate form identity when navigation loads a new item
@@ -136,7 +201,8 @@
     itemTypeId = item.item_type_id
     locationId = item.location_id ?? ''
     name = item.name
-    basePrice = item.base_price != null ? String(item.base_price) : ''
+    basePrice = num2dp(item.base_rate)
+    baseRateOverride = !!item.base_rate_override
     taxPercentage = item.accounting_tax_percentage != null ? String(item.accounting_tax_percentage) : ''
   })
 
@@ -149,7 +215,11 @@
     Promise.resolve(data.itemTrackingCodeIds).then(v => { codeIds = [...(v ?? [])] })
   })
   $effect(() => {
-    Promise.resolve(data.itemDetails).then(v => { details = detailsToForm(v ?? null) })
+    Promise.resolve(data.itemDetails).then(v => {
+      const slug = itemSlug
+      const fields = slug ? (TYPE_FIELDS[slug] ?? []) : []
+      details = detailsToForm(v ?? null, fields)
+    })
   })
   $effect(() => {
     Promise.resolve(data.subscriptions).then(v => { subscriptions = v ?? [] })
@@ -200,8 +270,8 @@
 
   const itemTypeOptions = $derived(
     [...itemTypes]
-      .sort((a, b) => (a.family ?? 'zzz').localeCompare(b.family ?? 'zzz') || a.name.localeCompare(b.name))
-      .map(t => ({ value: t.id, label: t.name, group: t.family ?? 'Other' }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(t => ({ value: t.id, label: t.name }))
   )
   const locationOptions = $derived([
     { value: '', label: 'None' },
@@ -212,14 +282,14 @@
     { value: 'false', label: 'No' }
   ]
 
-  const currentFamily = $derived.by(() => {
-    // Prefer the synchronously-loaded family from data; fall back to lookup
-    // once itemTypes stream in (so changing the item type resolves properly).
+  const currentSlug = $derived.by(() => {
+    // Prefer the type slug from streamed itemTypes (in case user just changed
+    // type via the dropdown); fall back to the slug from the page load.
     const t = itemTypes.find(it => it.id === itemTypeId)
-    const f = (t?.family ?? family) as string | undefined
-    return (f && (f in FAMILY_FIELDS)) ? (f as Family) : null
+    const s = (t?.slug ?? itemSlug) as string | undefined
+    return (s && (s in TYPE_FIELDS)) ? (s as TypeSlug) : null
   })
-  const currentFields = $derived<FieldDef[]>(currentFamily ? FAMILY_FIELDS[currentFamily] : [])
+  const currentFields = $derived<FieldDef[]>(currentSlug ? (TYPE_FIELDS[currentSlug] ?? []) : [])
 
   const codeGroups = $derived.by(() => {
     if (!locationId) return [] as { category: string; codes: TrackingCode[] }[]
@@ -272,6 +342,43 @@
     })
   }
 
+  // ────────────────────────────────────────────────────────────────────
+  // Pricing: derive computed value from type's pricing_params + meta-data
+  // form values. Re-runs whenever the user edits the meta-data inputs.
+  // ────────────────────────────────────────────────────────────────────
+  const pricingParams = $derived<PricingParams | null>(
+    (item.item_types?.pricing_params ?? null) as PricingParams | null
+  )
+  const hasExpression = $derived(!!pricingParams?.expression?.trim())
+
+  const detailInputs = $derived.by(() => {
+    const out: Record<string, number | null> = {}
+    const fieldBy = new Map(currentFields.map(f => [f.slug, f]))
+    for (const [k, v] of Object.entries(details)) {
+      if (v === '' || v == null) continue
+      let n = Number(String(v).replace(/,/g, ''))
+      if (Number.isNaN(n)) continue
+      const f = fieldBy.get(k)
+      if (f?.percentBump) n = n / 100
+      out[k] = n
+    }
+    return out
+  })
+
+  const computed = $derived.by(() => {
+    if (!hasExpression) return null
+    return resolvePrice(pricingParams, detailInputs, null)
+  })
+
+  // When formula is present and override is OFF, sync basePrice with computed.
+  $effect(() => {
+    if (!hasExpression || baseRateOverride) return
+    if (computed && 'amount' in computed) {
+      const next = num2dp(computed.amount)
+      if (basePrice !== next) basePrice = next
+    }
+  })
+
   function randChoice<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)] }
   function randInt(min: number, max: number): number { return Math.floor(Math.random() * (max - min + 1)) + min }
   function randDate(fromYear = 2015, toYear = 2025): string {
@@ -280,11 +387,47 @@
     const d = String(randInt(1, 28)).padStart(2, '0')
     return `${y}-${m}-${d}`
   }
+  // Realistic per-slug ranges. UI display values — for percentBump fields
+  // these are entered as percentages (e.g. 20 means +20%, stored as 0.2).
+  const NUM_RANGES: Record<string, [number, number]> = {
+    area_sqm: [12, 200],
+    capacity: [1, 30],
+    aesthetic_impact: [5, 30],
+    safety_margin: [5, 25],
+    start_price_per_m2: [180, 800],
+    price_per_user_per_day: [80, 350],
+    off_peak_factor: [60, 90],
+    slots_per_day: [2, 4],
+    price_per_day: [800, 3000],
+    max_members: [1, 20],
+    cost_extra_member: [200, 1500],
+    space_credits_per_month: [0, 40],
+    space_credits_cost_full_day: [200, 600],
+    space_credits_cost_half_day: [100, 350],
+    stuff_credits_per_month: [0, 100],
+    print_credits_per_month: [0, 200],
+    volume: [1, 24],
+    member_discount: [0, 25],
+    duration_minutes: [15, 120],
+    rate_per_hour: [50, 500],
+    rate_per_day: [400, 4000],
+    rate_per_week: [1500, 15000],
+    insurance_value: [50000, 5000000],
+    list_price: [80000, 8000000],
+    odometer_km: [0, 250000]
+  }
+  const AESTHETIC_REASONS = [
+    'Modern industrial', 'Warm minimalist', 'Boutique heritage',
+    'Bright open-plan', 'Skyline view premium', 'Quiet corner',
+    'Garden-facing', 'High ceilings', 'Period building'
+  ]
+  const LAYOUTS = [
+    'Open plan', 'Private offices', 'Boardroom', 'Hot desks', 'Hybrid mix',
+    'U-shape', 'Theatre', 'Cabaret'
+  ]
   function randomValueFor(f: FieldDef): string {
     switch (f.kind) {
       case 'boolean': return Math.random() > 0.5 ? 'true' : 'false'
-      case 'integer': return String(randInt(1, f.slug.includes('year') ? 2025 : 100))
-      case 'number':  return String(randInt(10, 10000))
       case 'date':    return randDate(2015, 2025)
       case 'enum':    return randChoice(f.options ?? [''])
       case 'long_text': return randChoice([
@@ -292,7 +435,18 @@
         'Sample placeholder text for testing.',
         'Notes captured during the demo session.'
       ])
-      default: return randChoice(['Sample', 'Demo entry', 'Test value', 'Generated'])
+      case 'number':
+      case 'integer': {
+        if (f.slug === 'off_peak_factor') return String(randInt(60, 90) / 100)
+        const r = NUM_RANGES[f.slug]
+        if (r) return String(randInt(r[0], r[1]))
+        if (f.slug.includes('year')) return String(randInt(2010, 2025))
+        return f.kind === 'integer' ? String(randInt(1, 50)) : String(randInt(10, 1000))
+      }
+      default:
+        if (f.slug === 'aesthetic') return randChoice(AESTHETIC_REASONS)
+        if (f.slug === 'layout')    return randChoice(LAYOUTS)
+        return randChoice(['Sample', 'Demo entry', 'Test value', 'Generated'])
     }
   }
   function randomArtDetails(): Record<string, string> {
@@ -315,15 +469,18 @@
       sold_price: sold ? String(randInt(100000, 10000000)) : ''
     }
   }
-  function randomDetailsFor(family: Family): Record<string, string> {
-    if (family === 'art') return randomArtDetails()
+  function randomDetailsFor(slug: TypeSlug): Record<string, string> {
+    if (slug === 'art') return randomArtDetails()
     const out: Record<string, string> = {}
-    for (const f of FAMILY_FIELDS[family]) out[f.slug] = randomValueFor(f)
+    for (const f of (TYPE_FIELDS[slug] ?? [])) out[f.slug] = randomValueFor(f)
     return out
   }
 </script>
 
-<PageHead title={`Item: ${item.name}`} lede={item.item_types?.name ?? ''}>
+<PageHead
+  title={`Item: ${item.name}`}
+  lede={`Type: ${(itemTypes.find((t: any) => t.id === itemTypeId)?.name) ?? item.item_types?.name ?? '—'}`}
+>
   <Button variant="ghost" size="sm" href="/items">← Back</Button>
   {#if can('items', 'update')}
     <Button type="submit" form="update-form" size="sm" loading={saving}>{saving ? 'Saving…' : 'Save Changes'}</Button>
@@ -359,12 +516,7 @@
     <div class="pane" class:is-active={activeTab === 'properties'}>
       <FieldGrid cols={2}>
         <Field label="Item Type">
-          <div class="type-row">
-            <Select name="item_type_id" value={itemTypeId} options={itemTypeOptions} required onchange={(v) => itemTypeId = v} />
-            {#if currentFamily}
-              <Badge tone="default">Family: {currentFamily}</Badge>
-            {/if}
-          </div>
+          <Select name="item_type_id" value={itemTypeId} options={itemTypeOptions} required onchange={(v) => itemTypeId = v} />
         </Field>
         <Field label="Location">
           <Select name="location_id" value={locationId} options={locationOptions} onchange={(v) => locationId = v} />
@@ -403,16 +555,33 @@
 
       <FieldGrid cols={3}>
         <Field name="name" label="Name" value={item.name} oninput={(v) => name = v} required />
-        <Field label="Base Price">
-          <input
-            name="base_price"
-            type="text"
-            inputmode="decimal"
-            value={fmtNum(basePrice)}
-            oninput={(e) => onNumInput(e, (v) => basePrice = v)}
-            placeholder="0.00"
-            autocomplete="off"
-          />
+        <Field label="Base Rate">
+          <div class="rate-row">
+            <input
+              name="base_rate"
+              type="text"
+              inputmode="decimal"
+              value={fmtNum(basePrice)}
+              oninput={(e) => onNumInput(e, (v) => basePrice = v)}
+              placeholder="0.00"
+              autocomplete="off"
+              readonly={hasExpression && !baseRateOverride}
+              class:is-computed={hasExpression && !baseRateOverride}
+            />
+            {#if hasExpression && !baseRateOverride}
+              {#if computed && 'amount' in computed}
+                <span class="rate-badge ok" title={computed.raw != null ? `pre-rounding: ${computed.raw}` : ''}>via formula</span>
+              {:else if computed && !computed.ok}
+                <span class="rate-badge bad" title={computed.error}>{computed.missing ? 'missing inputs' : 'eval error'}</span>
+              {/if}
+            {/if}
+          </div>
+          {#if hasExpression}
+            <label class="override-row">
+              <input type="checkbox" name="base_rate_override" bind:checked={baseRateOverride} />
+              <span>Override formula (manual rate)</span>
+            </label>
+          {/if}
         </Field>
         <Field label="Active">
           <Select name="active" value={item.active ? 'true' : 'false'} options={yesNo} />
@@ -461,11 +630,45 @@
 
     <!-- ── META DATA ── -->
     <div class="pane" class:is-active={activeTab === 'metadata'}>
-      {#if currentFamily && currentFields.length > 0}
+      {#if hasExpression}
+        <div class="price-preview">
+          <div class="price-preview-label">Pricing formula</div>
+          <code class="price-preview-expr">{pricingParams?.expression}</code>
+          {#if computed && 'amount' in computed}
+            <div class="price-preview-flow">
+              {#if computed.raw != null && pricingParams?.round_to}
+                <span class="price-preview-raw">Raw {fmtMoneyWithCurrency(computed.raw, 'ZAR')}</span>
+                <span class="price-preview-arrow">→</span>
+                <span class="price-preview-step">rounded up to nearest R{pricingParams.round_to}</span>
+                <span class="price-preview-arrow">→</span>
+                <span class="price-preview-amount">{fmtMoneyWithCurrency(computed.amount, 'ZAR')}</span>
+              {:else if pricingParams?.round_to}
+                <span class="price-preview-step">rounded up to nearest R{pricingParams.round_to}</span>
+                <span class="price-preview-arrow">→</span>
+                <span class="price-preview-amount">{fmtMoneyWithCurrency(computed.amount, 'ZAR')}</span>
+              {:else}
+                <span class="price-preview-amount">{fmtMoneyWithCurrency(computed.amount, 'ZAR')}</span>
+              {/if}
+            </div>
+          {:else if computed && !computed.ok}
+            <div class="price-preview-flow">
+              {#if computed.missing && computed.missing.length}
+                <span class="price-preview-bad">missing: {computed.missing.join(', ')}</span>
+              {:else}
+                <span class="price-preview-bad">{computed.error}</span>
+              {/if}
+            </div>
+          {/if}
+          {#if baseRateOverride}
+            <div class="price-preview-note">Override is on — manual base rate will be used instead of this formula.</div>
+          {/if}
+        </div>
+      {/if}
+      {#if currentSlug && currentFields.length > 0}
         <div class="meta-head">
-          <h3 class="section-title">{currentFamily} details</h3>
+          <h3 class="section-title">{currentSlug.replace(/_/g, ' ')} details</h3>
           <Button variant="ghost" size="sm" type="button"
-            onclick={() => { if (currentFamily) details = randomDetailsFor(currentFamily) }}>
+            onclick={() => { if (currentSlug) details = randomDetailsFor(currentSlug) }}>
             🎲 Randomise
           </Button>
         </div>
@@ -488,19 +691,35 @@
                 <Select name={`detail_${f.slug}`} value={details[f.slug] ?? ''} options={enumOpts(f)}
                   onchange={(v) => { details[f.slug] = v }} />
               </Field>
+            {:else if (f.kind === 'number' || f.kind === 'integer') && f.percentBump}
+              <Field label={f.label}>
+                <div class="pct-row">
+                  <input type="text" inputmode="decimal"
+                    value={fmtNum(details[f.slug] ?? '')}
+                    oninput={(e) => onNumInput(e, (v) => details[f.slug] = v)}
+                    autocomplete="off" />
+                  <span class="pct-suffix">%</span>
+                </div>
+                <input type="hidden" name={`detail_${f.slug}`} value={percentToFraction(details[f.slug])} />
+                {#if f.hint}<span class="field-hint">{f.hint}</span>{/if}
+              </Field>
             {:else if (f.kind === 'number' || f.kind === 'integer') && !f.noSeparator}
               <Field label={f.unit ? `${f.label} (${f.unit})` : f.label}>
                 <input name={`detail_${f.slug}`} type="text" inputmode="decimal"
                   value={fmtNum(details[f.slug] ?? '')}
                   oninput={(e) => onNumInput(e, (v) => details[f.slug] = v)}
+                  placeholder={f.hint ?? ''}
                   autocomplete="off" />
+                {#if f.hint}<span class="field-hint">{f.hint}</span>{/if}
               </Field>
             {:else}
               <Field label={f.unit ? `${f.label} (${f.unit})` : f.label}>
                 <input name={`detail_${f.slug}`} type={fieldInputType(f.kind)}
                   value={details[f.slug] ?? ''}
                   oninput={(e) => { details[f.slug] = (e.currentTarget as HTMLInputElement).value }}
+                  placeholder={f.hint ?? ''}
                   autocomplete="off" />
+                {#if f.hint}<span class="field-hint">{f.hint}</span>{/if}
               </Field>
             {/if}
           {/each}
@@ -711,6 +930,129 @@
   .subs-row .right { text-align: right; }
   .subs-row .mono { font-family: var(--font-mono); }
   .subs-row .muted { color: var(--text-muted); }
+
+  /* Pricing override + computed indicator */
+  .rate-row {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .rate-row input { flex: 1; min-width: 0; }
+  .rate-row input.is-computed {
+    background: var(--surface-sunk, #fafafa);
+    color: var(--text-muted);
+    cursor: not-allowed;
+  }
+  .rate-badge {
+    display: inline-flex; align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    border: 1px solid transparent;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .rate-badge.ok  { background: var(--success-soft, #d4edda); color: var(--success, #2d6a35); border-color: var(--success, #2d6a35); }
+  .rate-badge.bad { background: #fdecea;                       color: var(--danger,  #c0392b); border-color: var(--danger,  #c0392b); }
+  .override-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: var(--weight-normal, 400);
+    cursor: pointer;
+  }
+  .override-row input { width: 14px; height: 14px; accent-color: var(--accent); }
+
+  .price-preview {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    background: var(--surface-sunk, #fafafa);
+    margin-bottom: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .price-preview-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--label-color);
+    font-weight: var(--weight-semibold);
+  }
+  .price-preview-expr {
+    display: block;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: var(--text-xs);
+    color: var(--text);
+    background: var(--surface, #fff);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 6px 8px;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .price-preview-flow {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+  }
+  .price-preview-raw {
+    color: var(--text-muted);
+  }
+  .price-preview-arrow {
+    color: var(--text-muted);
+  }
+  .price-preview-step {
+    color: var(--text-muted);
+    font-family: var(--font-sans, system-ui, sans-serif);
+    font-size: var(--text-xs);
+  }
+  .price-preview-amount {
+    font-weight: var(--weight-semibold);
+    color: var(--success, #2d6a35);
+  }
+  .price-preview-bad {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--danger, #c0392b);
+  }
+  .price-preview-note {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+  }
+
+  .field-hint {
+    display: block;
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: var(--weight-normal, 400);
+  }
+  .pct-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .pct-row input { flex: 1; padding-right: 28px; min-width: 0; }
+  .pct-suffix {
+    position: absolute;
+    right: 10px;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    pointer-events: none;
+  }
 
   @media (max-width: 640px) {
     .subs-head { display: none; }

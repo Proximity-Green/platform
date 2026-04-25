@@ -5,10 +5,11 @@ export type ItemType = {
   slug: string
   name: string
   description: string | null
-  family: string | null
+  pricing_params: Record<string, any> | null
   requires_license: boolean
   sellable_ad_hoc: boolean
   sellable_recurring: boolean
+  apply_pro_rata: boolean
   metadata: Record<string, any> | null
   created_at: string
   updated_at: string
@@ -18,10 +19,11 @@ export type ItemTypeInput = {
   slug: string
   name: string
   description?: string | null
-  family?: string | null
+  pricing_params?: Record<string, any> | null
   requires_license?: boolean
   sellable_ad_hoc?: boolean
   sellable_recurring?: boolean
+  apply_pro_rata?: boolean
 }
 
 export type ServiceResult = { ok: true } | { ok: false; error: string }
