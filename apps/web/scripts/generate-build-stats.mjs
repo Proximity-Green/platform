@@ -62,11 +62,15 @@ for (const f of allFiles) {
 }
 
 const migrations = allFiles.filter(f => f.includes('/packages/database/migrations/') && f.endsWith('.sql')).length
+// In Docker the build container has no git binary; fall back to the env vars
+// Coolify (and most CI) provide so the prod build still gets a real SHA.
+const envCommit = (process.env.SOURCE_COMMIT ?? '').trim()
+const envBranch = (process.env.SOURCE_BRANCH ?? '').trim()
 const commitCount = Number(sh('git rev-list --count HEAD')) || 0
-const commitShort = sh('git rev-parse --short HEAD')
+const commitShort = sh('git rev-parse --short HEAD') || envCommit.slice(0, 7)
 const firstCommitIso = sh('git log --reverse --format=%aI | head -1').split('\n')[0] || new Date().toISOString()
-const lastCommitIso = sh('git log -1 --format=%aI')
-const branch = sh('git rev-parse --abbrev-ref HEAD')
+const lastCommitIso = sh('git log -1 --format=%aI') || new Date().toISOString()
+const branch = sh('git rev-parse --abbrev-ref HEAD') || envBranch || 'main'
 const generatedAt = new Date().toISOString()
 
 mkdirSync(dirname(OUT_FILE), { recursive: true })

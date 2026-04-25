@@ -1,6 +1,13 @@
 # syntax=docker/dockerfile:1.6
 FROM node:20-alpine AS build
 WORKDIR /app
+# Coolify (and most CI) injects SOURCE_COMMIT/SOURCE_BRANCH as build args.
+# Surface them as env vars so generate-build-stats.mjs can stamp the build
+# with the current commit (the build container has no git binary).
+ARG SOURCE_COMMIT
+ARG SOURCE_BRANCH
+ENV SOURCE_COMMIT=${SOURCE_COMMIT}
+ENV SOURCE_BRANCH=${SOURCE_BRANCH}
 ENV PUBLIC_SUPABASE_URL=https://db.poc.proximity.green
 ENV PUBLIC_SUPABASE_ANON_KEY=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc3NjUyMjk2MCwiZXhwIjo0OTMyMTk2NTYwLCJyb2xlIjoiYW5vbiJ9.A51K0FeE-rdQ64HiREX0bnOiNlMJx_ajhdD6jFApwmM
 ENV SUPABASE_SERVICE_ROLE_KEY=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc3NjUyMjk2MCwiZXhwIjo0OTMyMTk2NTYwLCJyb2xlIjoic2VydmljZV9yb2xlIn0.SlTs1ypSyFvbAPNaGleSaJW47THPM7PFhPEkldiwG-A

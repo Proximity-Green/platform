@@ -6,6 +6,7 @@
   import { loadPrefs } from '$lib/stores/prefs'
   import { look, usesTopNav } from '$lib/stores/theme'
   import { Badge, Button, ModeToggle, ThemeToggle, TopNav, Workshop17Logo } from '$lib/components/ui'
+  import { buildStats } from '$lib/generated/build-stats'
 
   let { children, data } = $props()
   // Trust the server-provided session — +layout.server.ts has already gated
@@ -128,6 +129,11 @@
         {@render children()}
       {/if}
     </main>
+    <footer class="app-footer">
+      <a class="version-chip" href="/admin" title={`branch ${buildStats.branch} · ${buildStats.commitCount} commits · last commit ${buildStats.lastCommitIso?.slice(0, 10) ?? ''}`}>
+        v{buildStats.commitShort || 'dev'}
+      </a>
+    </footer>
   {:else}
   <div class="shell">
     <aside class="sidebar">
@@ -437,4 +443,25 @@
   .nav-overlay-label { font-weight: 500; color: #2b3431; }
   @keyframes navOverlaySpin { to { transform: rotate(360deg); } }
   @keyframes navOverlayIn { from { opacity: 0 } to { opacity: 1 } }
+
+  .app-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding: 8px 16px 16px;
+    pointer-events: none;
+  }
+  .version-chip {
+    pointer-events: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    color: var(--text-muted);
+    text-decoration: none;
+    border: 1px solid var(--border);
+    background: var(--surface, #fff);
+    opacity: 0.7;
+    transition: opacity 120ms ease;
+  }
+  .version-chip:hover { opacity: 1; }
 </style>
