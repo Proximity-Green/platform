@@ -7,6 +7,9 @@ ENV SUPABASE_SERVICE_ROLE_KEY=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzd
 # ANTHROPIC_API_KEY is set at runtime via Coolify env vars (the whitespace-strip
 # in $lib/server/env.ts heals any Coolify paste corruption).
 COPY package*.json ./
+# Match the npm version that writes lock files in dev (npm 11). Base
+# node:20-alpine ships with npm 10, which rejects npm-11 lock formats.
+RUN npm install -g npm@11
 # BuildKit cache mount keeps the npm cache across builds — skips re-downloading
 # packages on every deploy. Requires DOCKER_BUILDKIT=1 (default in Coolify).
 RUN --mount=type=cache,target=/root/.npm npm ci
