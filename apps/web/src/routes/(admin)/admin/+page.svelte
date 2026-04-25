@@ -435,6 +435,50 @@
   </div>
 </section>
 
+<section class="commits-section">
+  <h2 class="section-title">Recent commits</h2>
+  {#await data.commits}
+    <p class="muted">Loading commits…</p>
+  {:then commits}
+    {#if !commits || commits.length === 0}
+      <p class="muted">
+        No commit data — set <span class="mono">GITHUB_TOKEN</span> in Coolify to enable this list.
+      </p>
+    {:else}
+      <table class="commits-tbl">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Message</th>
+            <th>Author</th>
+            <th class="num">Files</th>
+            <th class="num">+</th>
+            <th class="num">−</th>
+            <th>SHA</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each commits as c (c.sha)}
+            <tr>
+              <td class="muted small">
+                {c.date ? new Date(c.date).toLocaleString('en-ZA', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
+              </td>
+              <td>{c.message}</td>
+              <td class="muted small">{c.author}</td>
+              <td class="num mono">{c.filesChanged ?? '—'}</td>
+              <td class="num mono pos">{c.additions != null ? `+${c.additions.toLocaleString('en-US')}` : '—'}</td>
+              <td class="num mono neg">{c.deletions != null ? `−${c.deletions.toLocaleString('en-US')}` : '—'}</td>
+              <td class="mono small">
+                <a href={c.url} target="_blank" rel="noopener">{c.short}</a>
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    {/if}
+  {/await}
+</section>
+
 <div class="footer-strip">
   <span class="muted">Generated {new Date(buildStats.generatedAt).toLocaleString('en-ZA')}</span>
   <span class="muted">·</span>
@@ -684,6 +728,49 @@
     border-top: 1px dashed var(--border);
     font-size: var(--text-xs);
   }
+
+  .commits-section { margin-top: var(--space-6); }
+  .commits-tbl {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    font-size: var(--text-sm);
+    background: var(--surface);
+  }
+  .commits-tbl th {
+    text-align: left;
+    padding: 8px 12px;
+    background: var(--surface-sunk, #fafafa);
+    border-bottom: 1px solid var(--border);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--label-color);
+    font-weight: var(--weight-semibold);
+    white-space: nowrap;
+  }
+  .commits-tbl td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .commits-tbl tbody tr:last-child td { border-bottom: none; }
+  .commits-tbl tbody tr:hover { background: var(--surface-sunk, #fafafa); }
+  .commits-tbl .num { text-align: right; }
+  .commits-tbl .pos { color: var(--success, #2d6a35); }
+  .commits-tbl .neg { color: var(--danger, #c0392b); }
+  .commits-tbl .mono { font-family: var(--font-mono); }
+  .commits-tbl .small { font-size: var(--text-xs); }
+  .commits-tbl .muted { color: var(--text-muted); }
+  .commits-tbl a {
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px dashed transparent;
+  }
+  .commits-tbl a:hover { border-bottom-color: var(--accent); }
 
   .ask-head {
     display: flex;
