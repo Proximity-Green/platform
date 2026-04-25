@@ -35,6 +35,7 @@ export const GET = async ({ locals, cookies, url }) => {
       .from('approved_domains')
       .select('id, domain')
       .eq('domain', domain)
+      .is('deleted_at', null)
       .maybeSingle()
     out.approvedDomainMatch = ad
   }

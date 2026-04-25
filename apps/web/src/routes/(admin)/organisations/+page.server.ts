@@ -7,6 +7,7 @@ export const load = async ({ cookies, locals }) => {
   const { data: organisations } = await supabase
     .from('organisations')
     .select('id, wsm_id, name, slug, legal_name, short_name, industry, type, status, email, phone, website, billing_currency, started_at, created_at, updated_at')
+    .is('deleted_at', null)
     .order('name', { ascending: true })
 
   return { organisations: organisations ?? [] }

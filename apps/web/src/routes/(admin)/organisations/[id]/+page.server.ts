@@ -27,6 +27,7 @@ export const load = async ({ params, cookies, locals }) => {
     .from('organisations')
     .select('*')
     .eq('id', id)
+    .is('deleted_at', null)
     .single()
 
   if (orgErr || !organisation) throw error(404, 'Organisation not found')
@@ -55,6 +56,10 @@ export const load = async ({ params, cookies, locals }) => {
         persons:user_id(first_name, last_name)
       `)
       .eq('organisation_id', id)
+      .is('deleted_at', null)
+      .is('items.deleted_at', null)
+      .is('locations.deleted_at', null)
+      .is('persons.deleted_at', null)
       .order('started_at', { ascending: false }),
     supabase
       .from('subscription_lines')
@@ -66,11 +71,20 @@ export const load = async ({ params, cookies, locals }) => {
         persons:user_id(first_name, last_name)
       `)
       .eq('organisation_id', id)
+      .is('deleted_at', null)
+      .is('items.deleted_at', null)
+      .is('licenses.deleted_at', null)
+      .is('licenses.items.deleted_at', null)
+      .is('licenses.locations.deleted_at', null)
+      .is('locations.deleted_at', null)
+      .is('persons.deleted_at', null)
       .order('started_at', { ascending: false }),
     supabase
       .from('contracts')
       .select('*, persons!contracts_signed_by_person_id_fkey(first_name, last_name)')
       .eq('organisation_id', id)
+      .is('deleted_at', null)
+      .is('persons.deleted_at', null)
       .order('started_at', { ascending: false, nullsFirst: false }),
     supabase
       .from('invoices')
@@ -86,6 +100,7 @@ export const load = async ({ params, cookies, locals }) => {
       .from('wallets')
       .select('*')
       .eq('organisation_id', id)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false }),
     supabase
       .from('wallet_transactions')
@@ -102,17 +117,21 @@ export const load = async ({ params, cookies, locals }) => {
       .from('persons')
       .select('id, first_name, last_name, email, phone, job_title, status, started_at, onboarded_at')
       .eq('organisation_id', id)
+      .is('deleted_at', null)
       .order('first_name', { ascending: true }),
-    supabase.from('locations').select('id, name, short_name, currency').order('name'),
-    supabase.from('organisations').select('id, name').order('name'),
+    supabase.from('locations').select('id, name, short_name, currency').is('deleted_at', null).order('name'),
+    supabase.from('organisations').select('id, name').is('deleted_at', null).order('name'),
     supabase
       .from('persons')
       .select('id, first_name, last_name, email, organisation_id')
+      .is('deleted_at', null)
       .order('first_name'),
     supabase
       .from('items')
       .select('id, name, location_id, base_rate, accounting_tax_percentage, item_types(slug, requires_license, sellable_recurring, sellable_ad_hoc)')
       .eq('active', true)
+      .is('deleted_at', null)
+      .is('item_types.deleted_at', null)
       .order('name')
   ])
 
@@ -348,7 +367,7 @@ export const actions = {
     if (!item_id) return fail(400, { error: 'Item is required' })
     if (!location_id) return fail(400, { error: 'Location is required' })
 
-    const { data: loc } = await supabase.from('locations').select('currency').eq('id', location_id).single()
+    const { data: loc } = await supabase.from('locations').select('currency').eq('id', location_id).is('deleted_at', null).single()
 
     // If the item's item_type requires a licence, we must create the licence first and
     // reference it from the sub via license_id (the DB trigger blocks item_id-backed
@@ -357,6 +376,8 @@ export const actions = {
       .from('items')
       .select('id, base_rate, item_types(requires_license)')
       .eq('id', item_id)
+      .is('deleted_at', null)
+      .is('item_types.deleted_at', null)
       .single()
     const requiresLicense = (it as any)?.item_types?.requires_license === true
     const itemRate = Number((it as any)?.base_rate ?? 0)
@@ -421,6 +442,12 @@ export const actions = {
         licenses(items(name, accounting_gl_code, accounting_item_code, accounting_tax_code, item_tracking_codes(tracking_codes(code))))
       `)
       .in('id', subIds)
+      .is('deleted_at', null)
+      .is('items.deleted_at', null)
+      .is('items.item_tracking_codes.tracking_codes.deleted_at', null)
+      .is('licenses.deleted_at', null)
+      .is('licenses.items.deleted_at', null)
+      .is('licenses.items.item_tracking_codes.tracking_codes.deleted_at', null)
     if (subErr || !subs?.length) return fail(400, { error: subErr?.message ?? 'No subs found' })
 
     const first = subs[0] as any
@@ -475,7 +502,7 @@ export const actions = {
     const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'invoices', 'create')
 
-    const { data: org } = await supabase.from('organisations').select('billing_currency').eq('id', params.id).single()
+    const { data: org } = await supabase.from('organisations').select('billing_currency').eq('id', params.id).is('deleted_at', null).single()
     const currency = (org as any)?.billing_currency ?? 'ZAR'
 
     const { data: invoice, error: invErr } = await sbForUser(userId).from('invoices').insert({

@@ -34,11 +34,11 @@ export const load = async ({ params, cookies, locals }) => {
   const id = params.id
 
   const [invRes, linesRes, orgsRes, locationsRes, itemsRes] = await Promise.all([
-    supabase.from('invoices').select('*, organisations(name, billing_currency), locations(name)').eq('id', id).single(),
-    supabase.from('invoice_lines').select('*, subscription_lines(id), items(name, accounting_tax_percentage, location_id)').eq('invoice_id', id).order('created_at'),
-    supabase.from('organisations').select('id, name').order('name'),
-    supabase.from('locations').select('id, name, short_name, currency').order('name'),
-    supabase.from('items').select('id, name, location_id, base_rate, accounting_tax_percentage, accounting_gl_code, accounting_item_code, accounting_tax_code, item_tracking_codes(tracking_codes(code)), item_types(slug, requires_license, sellable_ad_hoc)').eq('active', true).order('name')
+    supabase.from('invoices').select('*, organisations(name, billing_currency), locations(name)').eq('id', id).is('organisations.deleted_at', null).is('locations.deleted_at', null).single(),
+    supabase.from('invoice_lines').select('*, subscription_lines(id), items(name, accounting_tax_percentage, location_id)').eq('invoice_id', id).is('subscription_lines.deleted_at', null).is('items.deleted_at', null).order('created_at'),
+    supabase.from('organisations').select('id, name').is('deleted_at', null).order('name'),
+    supabase.from('locations').select('id, name, short_name, currency').is('deleted_at', null).order('name'),
+    supabase.from('items').select('id, name, location_id, base_rate, accounting_tax_percentage, accounting_gl_code, accounting_item_code, accounting_tax_code, item_tracking_codes(tracking_codes(code)), item_types(slug, requires_license, sellable_ad_hoc)').eq('active', true).is('deleted_at', null).is('item_tracking_codes.tracking_codes.deleted_at', null).is('item_types.deleted_at', null).order('name')
   ])
 
   if (invRes.error || !invRes.data) throw error(404, 'Invoice not found')
@@ -126,6 +126,8 @@ export const actions = {
       .from('items')
       .select('*, item_tracking_codes(tracking_codes(code))')
       .eq('id', item_id)
+      .is('deleted_at', null)
+      .is('item_tracking_codes.tracking_codes.deleted_at', null)
       .single()
     if (!item) return fail(400, { error: 'Item not found' })
 

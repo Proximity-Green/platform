@@ -40,6 +40,7 @@ export async function listPersons() {
   const { data } = await supabase
     .from('persons')
     .select('*')
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
   const persons = data ?? []
 
@@ -171,7 +172,7 @@ export async function inviteAsUser(input: InviteAsUserInput): Promise<ServiceRes
     }
   }
 
-  const { data: person } = await supabase.from('persons').select('first_name, last_name').eq('id', personId).single()
+  const { data: person } = await supabase.from('persons').select('first_name, last_name').eq('id', personId).is('deleted_at', null).single()
 
   let triggerRunId: string | null = null
   let triggerError: string | null = null

@@ -26,16 +26,19 @@ export const GET = async ({ url, cookies, locals }) => {
       .from('organisations')
       .select('id, name, short_name, slug')
       .or(`name.ilike.${like},short_name.ilike.${like},slug.ilike.${like},legal_name.ilike.${like}`)
+      .is('deleted_at', null)
       .limit(LIMIT_PER_KIND),
     supabase
       .from('persons')
       .select('id, first_name, last_name, email')
       .or(`first_name.ilike.${like},last_name.ilike.${like},email.ilike.${like}`)
+      .is('deleted_at', null)
       .limit(LIMIT_PER_KIND),
     supabase
       .from('locations')
       .select('id, name, short_name')
       .or(`name.ilike.${like},short_name.ilike.${like}`)
+      .is('deleted_at', null)
       .limit(LIMIT_PER_KIND),
     supabase
       .from('items')
@@ -45,6 +48,9 @@ export const GET = async ({ url, cookies, locals }) => {
         item_tracking_codes(tracking_codes(code))
       `)
       .ilike('name', like)
+      .is('deleted_at', null)
+      .is('locations.deleted_at', null)
+      .is('item_tracking_codes.tracking_codes.deleted_at', null)
       .limit(LIMIT_PER_KIND),
     supabase
       .from('invoices')
@@ -55,11 +61,13 @@ export const GET = async ({ url, cookies, locals }) => {
       .from('subscription_lines')
       .select('id, notes, organisation_id')
       .ilike('notes', like)
+      .is('deleted_at', null)
       .limit(LIMIT_PER_KIND),
     supabase
       .from('feature_requests')
       .select('id, kind, title, summary, status')
       .or(`title.ilike.${like},summary.ilike.${like}`)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .limit(LIMIT_PER_KIND * 2)
   ])

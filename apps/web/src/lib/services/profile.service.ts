@@ -29,8 +29,8 @@ export async function updateProfile(input: ProfileUpdate): Promise<ServiceResult
   }
 
   // Find existing person by user_id, fall back to matching by email (first-login migration path).
-  const { data: byUserId } = await supabase.from('persons').select('id').eq('user_id', userId).single()
-  const { data: byEmail } = !byUserId ? await supabase.from('persons').select('id').eq('email', userEmail).single() : { data: null }
+  const { data: byUserId } = await supabase.from('persons').select('id').eq('user_id', userId).is('deleted_at', null).single()
+  const { data: byEmail } = !byUserId ? await supabase.from('persons').select('id').eq('email', userEmail).is('deleted_at', null).single() : { data: null }
   const existingId = byUserId?.id ?? byEmail?.id
 
   if (existingId) {

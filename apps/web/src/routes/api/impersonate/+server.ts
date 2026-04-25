@@ -25,6 +25,7 @@ export const POST = async ({ request, cookies }) => {
       .from('persons')
       .select('requires_impersonation_permission')
       .eq('user_id', targetUserId)
+      .is('deleted_at', null)
       .single()
 
     if (person?.requires_impersonation_permission) {

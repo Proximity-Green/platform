@@ -77,6 +77,9 @@ export async function listLocations() {
       legal_entity:legal_entities(id, name),
       community_manager:persons!locations_community_manager_person_id_fkey(id, first_name, last_name)
     `)
+    .is('deleted_at', null)
+    .is('legal_entity.deleted_at', null)
+    .is('community_manager.deleted_at', null)
     .order('name', { ascending: true })
   return data ?? []
 }

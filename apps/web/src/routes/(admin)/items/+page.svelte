@@ -2,7 +2,7 @@
   import { permStore, canDo } from '$lib/stores/permissions'
   import { enhance } from '$app/forms'
   import { page } from '$app/stores'
-  import { goto } from '$app/navigation'
+  import { goto, invalidateAll } from '$app/navigation'
   import {
     Button,
     PageHead,
@@ -13,8 +13,10 @@
     FieldGrid,
     Field,
     Select,
-    SubmitButton
+    Modal,
+    ErrorBanner
   } from '$lib/components/ui'
+  import type { ActionableError } from '$lib/services/errors'
   import type { Column, Filter } from '$lib/components/ui/DataTable.svelte'
   import { fmtMoney } from '$lib/utils/money'
 
@@ -162,6 +164,262 @@
   let { data, form } = $props()
   let showCreate = $state(false)
   let saving = $state(false)
+
+  // ── Bulk selection ──────────────────────────────────────────────
+  let selectedIds = $state<Set<string>>(new Set())
+  let filteredItems = $state<Item[]>([])
+  let bulkBusy = $state(false)
+
+  type BulkDialog = null | 'type' | 'location' | 'tracking' | 'gl' | 'tax' | 'active' | 'delete'
+  let bulkDialog = $state<BulkDialog>(null)
+  let bulkDeleteConfirm = $state('')
+
+  // Per-action form values
+  let bulkTypeId = $state('')
+  let bulkLocationId = $state('')
+  let bulkTrackingLocationId = $state('')
+  let bulkTrackingOp = $state<'replace' | 'add'>('replace')
+  let bulkTrackingIds = $state<string[]>([])
+  let bulkGlCode = $state('')
+  let bulkTaxCode = $state('')
+  let bulkTaxPct = $state('')
+  let bulkActive = $state<'true' | 'false'>('true')
+
+  // Streaming progress (mirrors /people)
+  type PhaseStatus = 'pending' | 'active' | 'done' | 'skipped' | 'error'
+  type Phase = { key: string; label: string; status: PhaseStatus; detail?: string }
+  let bulkPhases = $state<Phase[]>([])
+  let bulkResult = $state<{ bulk_action_id: string | null; applied: number; ms: number; role?: string; skipped?: any } | null>(null)
+  let bulkError = $state<ActionableError | string | null>(null)
+  function errorTitle(e: ActionableError | string | null | undefined): string | undefined {
+    if (e == null) return undefined
+    return typeof e === 'string' ? e : e.title
+  }
+  let lastBulkActionId = $state<string | null>(null)
+  let lastBulkSummary = $state<string | null>(null)
+  let undoBusy = $state(false)
+
+  function initPhases(applyingLabel = 'Applying changes') {
+    bulkPhases = [
+      { key: 'resolving', label: 'Looking up records', status: 'active' },
+      { key: 'guarding',  label: 'Checking safety guards', status: 'pending' },
+      { key: 'applying',  label: applyingLabel, status: 'pending' },
+      { key: 'done',      label: 'Done', status: 'pending' }
+    ]
+  }
+  function setPhase(key: string, status: PhaseStatus, detail?: string) {
+    bulkPhases = bulkPhases.map(p => p.key === key ? { ...p, status, detail } : p)
+  }
+  function advancePast(key: string) {
+    let seen = false
+    bulkPhases = bulkPhases.map(p => {
+      if (p.key === key) { seen = true; return p }
+      if (!seen && (p.status === 'active' || p.status === 'pending')) return { ...p, status: 'done' }
+      return p
+    })
+  }
+
+  async function runBulkUpdate(
+    patch: Record<string, unknown>,
+    tracking_codes: { op: 'replace' | 'add', ids: string[] } | null,
+    applyingLabel: string
+  ) {
+    if (selectedArr.length === 0) return
+    bulkBusy = true
+    bulkError = null
+    bulkResult = null
+    initPhases(applyingLabel)
+    try {
+      const body: Record<string, unknown> = { item_ids: selectedArr, patch }
+      if (tracking_codes) body.tracking_codes = tracking_codes
+      const res = await fetch('/api/admin/bulk-update-items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      if (!res.ok || !res.body) {
+        const text = await res.text().catch(() => '')
+        throw new Error(text || `HTTP ${res.status}`)
+      }
+      const reader = res.body.getReader()
+      const dec = new TextDecoder()
+      let buf = ''
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buf += dec.decode(value, { stream: true })
+        let nl
+        while ((nl = buf.indexOf('\n')) !== -1) {
+          const line = buf.slice(0, nl).trim()
+          buf = buf.slice(nl + 1)
+          if (!line) continue
+          let evt: any
+          try { evt = JSON.parse(line) } catch { continue }
+          handlePhase(evt)
+        }
+      }
+    } catch (e: any) {
+      bulkError = e?.message ?? String(e)
+      setPhase('applying', 'error', errorTitle(bulkError))
+    } finally {
+      bulkBusy = false
+    }
+  }
+
+  async function runBulkSoftDelete() {
+    if (selectedArr.length === 0) return
+    if (bulkDeleteConfirm !== 'DELETE') return
+    bulkBusy = true
+    bulkError = null
+    bulkResult = null
+    initPhases('Deleting items')
+    try {
+      const res = await fetch('/api/admin/bulk-soft-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ table: 'items', ids: selectedArr, confirm: 'DELETE' })
+      })
+      if (!res.ok || !res.body) {
+        const text = await res.text().catch(() => '')
+        throw new Error(text || `HTTP ${res.status}`)
+      }
+      const reader = res.body.getReader()
+      const dec = new TextDecoder()
+      let buf = ''
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buf += dec.decode(value, { stream: true })
+        let nl
+        while ((nl = buf.indexOf('\n')) !== -1) {
+          const line = buf.slice(0, nl).trim()
+          buf = buf.slice(nl + 1)
+          if (!line) continue
+          let evt: any
+          try { evt = JSON.parse(line) } catch { continue }
+          handlePhase(evt)
+        }
+      }
+    } catch (e: any) {
+      bulkError = e?.message ?? String(e)
+      setPhase('applying', 'error', errorTitle(bulkError))
+    } finally {
+      bulkBusy = false
+    }
+  }
+
+  function handlePhase(evt: any) {
+    switch (evt.phase) {
+      case 'resolving':
+        setPhase('resolving', 'active', `${evt.selected} selected`)
+        break
+      case 'resolved':
+        setPhase('resolving', 'done', `${evt.linked} found${evt.skipped_no_user ? `, ${evt.skipped_no_user} missing` : ''}`)
+        setPhase('guarding', 'active')
+        break
+      case 'guarding':
+        setPhase('guarding', evt.actionable === 0 ? 'skipped' : 'done',
+          `${evt.actionable} actionable`)
+        setPhase('applying', evt.actionable === 0 ? 'skipped' : 'active',
+          evt.actionable === 0 ? 'nothing to apply' : undefined)
+        break
+      case 'applying':
+        setPhase('applying', 'active', `→ ${evt.role} · ${evt.targets} item${evt.targets === 1 ? '' : 's'}`)
+        break
+      case 'done': {
+        advancePast('done')
+        setPhase('done', 'done', `${evt.applied} applied in ${evt.ms}ms`)
+        bulkResult = evt
+        lastBulkActionId = evt.bulk_action_id ?? null
+        const headline = evt.message
+          ?? (evt.applied > 0 ? `Updated ${evt.role} on ${evt.applied} item${evt.applied === 1 ? '' : 's'}` : 'Nothing applied')
+        const parts = [
+          headline,
+          evt.skipped?.missing ? `${evt.skipped.missing} missing` : null,
+          `${evt.ms}ms`
+        ].filter(Boolean) as string[]
+        lastBulkSummary = parts.join(' · ')
+        invalidateAll()
+        break
+      }
+      case 'error':
+        bulkError = evt.error ?? 'Unknown error'
+        setPhase('applying', 'error', errorTitle(bulkError))
+        break
+    }
+  }
+
+  function closeBulkDialog() {
+    bulkDialog = null
+    bulkPhases = []
+    bulkResult = null
+    bulkError = null
+    bulkTypeId = ''
+    bulkLocationId = ''
+    bulkTrackingLocationId = ''
+    bulkTrackingOp = 'replace'
+    bulkTrackingIds = []
+    bulkGlCode = ''
+    bulkTaxCode = ''
+    bulkTaxPct = ''
+    bulkActive = 'true'
+    bulkDeleteConfirm = ''
+    // Selection is intentionally retained — user may want to chain further
+    // bulk actions on the same set. Clear via the bulk-bar's "Clear" link.
+  }
+
+  async function undoLastBulk() {
+    if (!lastBulkActionId) return
+    undoBusy = true
+    bulkError = null
+    try {
+      const res = await fetch('/api/admin/bulk-undo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bulk_action_id: lastBulkActionId })
+      })
+      if (!res.ok) {
+        const t = await res.text().catch(() => '')
+        throw new Error(t || `HTTP ${res.status}`)
+      }
+      const payload = await res.json().catch(() => ({}))
+      lastBulkActionId = null
+      bulkDialog = null
+      bulkPhases = []
+      bulkResult = null
+      bulkError = null
+      await invalidateAll()
+      lastBulkSummary = `Undone — previous state restored${payload?.restored ? ` (${payload.restored} rows)` : ''}.`
+    } catch (e: any) {
+      const msg = e?.message ?? String(e)
+      bulkError = `Undo failed: ${msg}`
+      lastBulkSummary = `Undo failed: ${msg}`
+    } finally {
+      undoBusy = false
+    }
+  }
+
+  function toggleSelect(id: string, on: boolean) {
+    const next = new Set(selectedIds)
+    if (on) next.add(id); else next.delete(id)
+    selectedIds = next
+  }
+  function selectAll() {
+    selectedIds = new Set((data.items as Item[]).map(i => i.id))
+  }
+  function selectFound() {
+    selectedIds = new Set(filteredItems.map(i => i.id))
+  }
+  function clearSelection() {
+    selectedIds = new Set()
+  }
+  const selectedArr = $derived([...selectedIds])
+  const selectedItems = $derived((data.items as Item[]).filter(i => selectedIds.has(i.id)))
+  const selectedShareLocation = $derived.by(() => {
+    if (selectedItems.length === 0) return null
+    const first = selectedItems[0].location_id
+    return selectedItems.every(i => i.location_id === first) ? first : null
+  })
 
   type TabKey = 'properties' | 'metadata' | 'accounting'
   let createTab = $state<TabKey>('properties')
@@ -424,28 +682,88 @@
     goto(`/items/${i.id}?tab=properties`)
   }
 
+  function fmtTax(i: Item): string {
+    const code = i.accounting_tax_code ?? ''
+    const pct  = i.accounting_tax_percentage
+    if (!code && pct == null) return ''
+    if (code && pct != null) return `${code} ${pct}%`
+    return code || `${pct}%`
+  }
+
   const columns: Column<Item>[] = [
-    { key: 'name', label: 'Name', sortable: true, width: '20%' },
-    { key: 'item_type_name', label: 'Type', sortable: true, width: '12%', muted: true, get: i => i.item_type_name ?? '' },
-    { key: 'accounting_gl_code', label: 'GL Code', sortable: true, width: '11%', mono: true, muted: true, hideBelow: 'md', get: i => i.accounting_gl_code ?? '' },
-    { key: 'location_name', label: 'Location', sortable: true, width: '14%', muted: true, hideBelow: 'md', get: i => i.location_name ?? '' },
-    { key: 'tracking_codes', label: 'Tracking Codes', width: '15%', muted: true, hideBelow: 'md',
+    { key: 'name', label: 'Name', sortable: true, width: '18%' },
+    { key: 'item_type_name', label: 'Type', sortable: true, width: '10%', muted: true, get: i => i.item_type_name ?? '' },
+    { key: 'accounting_gl_code', label: 'GL Code', sortable: true, width: '9%', mono: true, muted: true, hideBelow: 'md', get: i => i.accounting_gl_code ?? '' },
+    { key: 'location_name', label: 'Location', sortable: true, width: '13%', muted: true, hideBelow: 'md', get: i => i.location_name ?? '' },
+    { key: 'tracking_codes', label: 'Tracking Codes', width: '13%', muted: true, hideBelow: 'md',
       get: i => itemTrackingCodeLabels(i.id).join(', '),
       render: i => itemTrackingCodeLabels(i.id).join(', ') || '' },
+    { key: 'accounting_tax_code', label: 'Tax', sortable: true, width: '9%', mono: true, muted: true, hideBelow: 'md', get: i => fmtTax(i), render: i => fmtTax(i) },
     { key: 'base_rate', label: 'Rate', sortable: true, width: '10%', align: 'right', mono: true, get: i => i.base_rate ?? null, render: i => fmtPrice(i.base_rate) },
     { key: 'active', label: 'Active', sortable: true, width: '8%' }
   ]
 
   const filters: Filter<Item>[] = [
     { key: 'all', label: 'All' },
-    { key: 'product', label: 'Product', test: i => i.item_type_slug === 'product' },
-    { key: 'membership', label: 'Membership', test: i => i.item_type_slug === 'membership' },
-    { key: 'office', label: 'Office', test: i => i.item_type_slug === 'office' },
-    { key: 'art', label: 'Art', test: i => i.item_type_slug === 'art' },
-    { key: 'adjustment', label: 'Adjustment', test: i => i.item_type_slug === 'adjustment' },
     { key: 'active', label: 'Active only', test: i => i.active },
     { key: 'no_codes', label: 'No tracking codes', test: i => (itemTrackingCodeIds[i.id]?.length ?? 0) === 0 },
-    { key: 'on_subs', label: 'On active subs', test: i => activeSubItemIds.has(i.id) }
+    { key: 'on_subs', label: 'On active subs', test: i => activeSubItemIds.has(i.id) },
+    {
+      kind: 'select',
+      key: 'type',
+      label: 'Type',
+      multi: true,
+      // Faceted: only show types that exist in the rows reachable under the
+      // other active filters.
+      options: (_state, available) => {
+        const seen = new Set<string>()
+        for (const i of available as Item[]) if (i.item_type_slug) seen.add(i.item_type_slug)
+        return [...(data.itemTypes as LookupOption[])]
+          .filter(t => seen.has(t.slug ?? ''))
+          .map(t => ({ value: t.slug ?? t.id, label: t.name }))
+          .sort((a, b) => a.label.localeCompare(b.label))
+      },
+      test: (item, vals) => !!item.item_type_slug && vals.includes(item.item_type_slug)
+    },
+    {
+      kind: 'select',
+      key: 'location',
+      label: 'Location',
+      // Faceted: only show locations that have at least one row under the
+      // other active filters.
+      options: (_state, available) => {
+        const seen = new Set<string>()
+        for (const i of available as Item[]) if (i.location_id) seen.add(i.location_id)
+        return (data.locations as LookupOption[])
+          .filter(l => seen.has(l.id))
+          .map(l => ({ value: l.id, label: l.name }))
+          .sort((a, b) => a.label.localeCompare(b.label))
+      },
+      test: (item, vals) => !!item.location_id && vals.includes(item.location_id)
+    },
+    {
+      kind: 'select',
+      key: 'tracking',
+      label: 'Tracking code',
+      multi: true,
+      // Faceted: only show tracking codes attached to rows reachable under
+      // the other active filters.
+      options: (_state, available) => {
+        const seen = new Set<string>()
+        for (const i of available as Item[]) {
+          const ids = itemTrackingCodeIds[i.id] ?? []
+          for (const id of ids) seen.add(id)
+        }
+        return (data.trackingCodes as TrackingCode[])
+          .filter(c => seen.has(c.id))
+          .map(c => ({ value: c.id, label: `${c.code} · ${c.name}` }))
+          .sort((a, b) => a.label.localeCompare(b.label))
+      },
+      test: (item, vals) => {
+        const ids = itemTrackingCodeIds[item.id] ?? []
+        return ids.some(id => vals.includes(id))
+      }
+    }
   ]
 </script>
 
@@ -653,6 +971,53 @@
   </div>
 {/if}
 
+{#if (can('bulk_actions', 'update_items') || can('bulk_actions', 'delete_items')) && (selectedIds.size > 0 || (filteredItems.length > 0 && filteredItems.length !== (data.items as Item[]).length))}
+  <div class="bulk-bar" role="region" aria-label="Bulk actions">
+    <div class="bulk-count">
+      {#if selectedIds.size > 0}
+        <strong>{selectedIds.size}</strong> selected
+        <span class="bulk-sep">·</span>
+        <button type="button" class="bulk-link" onclick={clearSelection}>Clear</button>
+      {:else}
+        <span class="muted">No selection</span>
+        <span class="bulk-sep">·</span>
+      {/if}
+      <button type="button" class="bulk-link" onclick={selectAll}>
+        Select all ({(data.items as Item[]).length} records)
+      </button>
+      {#if filteredItems.length > 0 && filteredItems.length !== (data.items as Item[]).length}
+        <button type="button" class="bulk-link" onclick={selectFound}>
+          Select filtered ({filteredItems.length} records)
+        </button>
+      {/if}
+    </div>
+    <div class="bulk-actions">
+      {#if can('bulk_actions', 'update_items')}
+        <Button size="sm" variant="secondary" disabled={selectedIds.size === 0} onclick={() => (bulkDialog = 'type')}>Set type…</Button>
+        <Button size="sm" variant="secondary" disabled={selectedIds.size === 0} onclick={() => (bulkDialog = 'location')}>Set location…</Button>
+        <Button size="sm" variant="secondary" disabled={selectedIds.size === 0}
+                onclick={async () => {
+                  bulkTrackingLocationId = selectedShareLocation ?? ''
+                  bulkDialog = 'tracking'
+                  // Refresh tracking-codes lookup in case it was edited in another tab.
+                  await invalidateAll()
+                }}>
+          Set tracking codes…
+        </Button>
+        <Button size="sm" variant="secondary" disabled={selectedIds.size === 0} onclick={() => (bulkDialog = 'gl')}>Set GL code…</Button>
+        <Button size="sm" variant="secondary" disabled={selectedIds.size === 0} onclick={() => (bulkDialog = 'tax')}>Set tax…</Button>
+        <Button size="sm" variant="secondary" disabled={selectedIds.size === 0} onclick={() => (bulkDialog = 'active')}>Set active…</Button>
+      {/if}
+      {#if can('bulk_actions', 'delete_items')}
+        <button type="button" class="bulk-delete-btn" disabled={selectedIds.size === 0}
+                onclick={() => { bulkDeleteConfirm = ''; bulkDialog = 'delete' }}>
+          <span aria-hidden="true">⚠</span> Delete…
+        </button>
+      {/if}
+    </div>
+  </div>
+{/if}
+
 <DataTable
   data={data.items as Item[]}
   {columns}
@@ -664,10 +1029,23 @@
   searchPlaceholder="Search name, GL Code, type, location…"
   csvFilename="items"
   empty="No items yet."
+  onFilteredChange={(rows) => (filteredItems = rows as Item[])}
+  onFiltersChanged={clearSelection}
   {onRowClick}
 >
   {#snippet row(item)}
-    <td>
+    <td class="name-cell">
+      {#if can('bulk_actions', 'update_items') || can('bulk_actions', 'delete_items')}
+        <label class="row-check-wrap" onclick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            class="row-check"
+            checked={selectedIds.has(item.id)}
+            onchange={(e) => toggleSelect(item.id, (e.currentTarget as HTMLInputElement).checked)}
+            aria-label={`Select ${item.name}`}
+          />
+        </label>
+      {/if}
       <span class="name">{item.name}</span>
     </td>
     <td class="muted">{item.item_type_name ?? '—'}</td>
@@ -686,6 +1064,7 @@
         <span class="muted">—</span>
       {/each}
     </td>
+    <td class="muted mono hide-md">{fmtTax(item) || '—'}</td>
     <td class="mono price">{fmtPrice(item.base_rate)}</td>
     <td>
       {#if item.active}
@@ -702,33 +1081,285 @@
       </Button>
     {/if}
   {/snippet}
-  {#snippet actions(item)}
-    {#if can('items', 'update')}
-      <a
-        class="open-arrow"
-        href={`/items/${item.id}?tab=properties`}
-        onclick={(e) => e.stopPropagation()}
-        aria-label="Open item"
-        title="Open item"
-      >→</a>
-    {/if}
-    {#if can('items', 'delete')}
-      <SubmitButton
-        action="?/delete"
-        label="Delete"
-        pendingLabel="Deleting…"
-        variant="danger"
-        size="sm"
-        fields={{ id: item.id }}
-        confirm={{
-          title: 'Delete item?',
-          message: `Permanently delete ${item.name}? This cannot be undone.`,
-          variant: 'danger'
-        }}
-      />
+</DataTable>
+
+{#snippet phaseList()}
+  <ul class="phase-list" aria-live="polite">
+    {#each bulkPhases as p (p.key)}
+      <li class="phase phase-{p.status}">
+        <span class="phase-icon" aria-hidden="true">
+          {#if p.status === 'done'}✓{:else if p.status === 'active'}<span class="spin"></span>{:else if p.status === 'error'}!{:else if p.status === 'skipped'}–{:else}·{/if}
+        </span>
+        <span class="phase-label">{p.label}</span>
+        {#if p.detail}<span class="phase-detail">{p.detail}</span>{/if}
+      </li>
+    {/each}
+  </ul>
+  {#if bulkResult && !bulkError}
+    <div class="phase-summary ok">
+      <strong>{bulkResult.applied}</strong> item{bulkResult.applied === 1 ? '' : 's'} updated · <span class="muted">{bulkResult.ms}ms</span>
+      {#if bulkResult.bulk_action_id}
+        <Button size="xs" variant="ghost" onclick={undoLastBulk} disabled={undoBusy} loading={undoBusy}>Undo</Button>
+      {/if}
+    </div>
+  {/if}
+  {#if bulkError}
+    <ErrorBanner error={bulkError} showRaw />
+  {/if}
+{/snippet}
+
+<Modal open={bulkDialog === 'type'}
+       title={`Set item type on ${selectedIds.size} item${selectedIds.size === 1 ? '' : 's'}`}
+       onClose={closeBulkDialog}
+       busy={bulkBusy}
+       width="460px"
+       minHeight="240px">
+  <p class="muted small">Changes <code>item_type_id</code>. Per-type detail rows are not auto-migrated — you may need to refill metadata after.</p>
+  {#if bulkPhases.length === 0}
+    <Field label="Item type">
+      <Select value={bulkTypeId} placeholder="Select type…" onchange={(v) => (bulkTypeId = v)} options={itemTypeOptions} />
+    </Field>
+  {:else}
+    {@render phaseList()}
+  {/if}
+  {#snippet footer()}
+    {#if bulkPhases.length === 0}
+      <Button variant="ghost" size="sm" onclick={closeBulkDialog} disabled={bulkBusy}>Cancel</Button>
+      <Button size="sm" onclick={() => runBulkUpdate({ item_type_id: bulkTypeId }, null, 'Setting type')} disabled={!bulkTypeId || bulkBusy}>Apply</Button>
+    {:else}
+      <Button size="sm" onclick={closeBulkDialog} disabled={bulkBusy}>{bulkBusy ? 'Applying…' : 'Close'}</Button>
     {/if}
   {/snippet}
-</DataTable>
+</Modal>
+
+<Modal open={bulkDialog === 'location'}
+       title={`Set location on ${selectedIds.size} item${selectedIds.size === 1 ? '' : 's'}`}
+       onClose={closeBulkDialog}
+       busy={bulkBusy}
+       width="460px"
+       minHeight="240px">
+  <p class="muted small"><strong>Heads-up:</strong> changing location wipes existing tracking codes (they're location-scoped). You can reassign tracking codes after.</p>
+  {#if bulkPhases.length === 0}
+    <Field label="Location">
+      <Select value={bulkLocationId} options={locationOptions} onchange={(v) => (bulkLocationId = v)} />
+    </Field>
+  {:else}
+    {@render phaseList()}
+  {/if}
+  {#snippet footer()}
+    {#if bulkPhases.length === 0}
+      <Button variant="ghost" size="sm" onclick={closeBulkDialog} disabled={bulkBusy}>Cancel</Button>
+      <Button size="sm" onclick={() => runBulkUpdate({ location_id: bulkLocationId || null }, null, 'Setting location')} disabled={bulkBusy}>Apply</Button>
+    {:else}
+      <Button size="sm" onclick={closeBulkDialog} disabled={bulkBusy}>{bulkBusy ? 'Applying…' : 'Close'}</Button>
+    {/if}
+  {/snippet}
+</Modal>
+
+<Modal open={bulkDialog === 'tracking'}
+       title={`Set tracking codes on ${selectedIds.size} item${selectedIds.size === 1 ? '' : 's'}`}
+       onClose={closeBulkDialog}
+       busy={bulkBusy}
+       width="640px"
+       minHeight="320px">
+  {#if !selectedShareLocation}
+    <p class="muted small"><strong>Selected items span multiple locations.</strong> Pick the location whose tracking codes to apply — items on other locations will be skipped.</p>
+  {:else}
+    <p class="muted small">All selected items are at this location — only its tracking codes can be applied.</p>
+  {/if}
+  {#if bulkPhases.length === 0}
+    <FieldGrid cols={2}>
+      <Field label="Location">
+        <Select value={bulkTrackingLocationId} options={locationOptions} disabled={!!selectedShareLocation} onchange={(v) => { bulkTrackingLocationId = v; bulkTrackingIds = [] }} />
+      </Field>
+      <Field label="Mode">
+        <Select value={bulkTrackingOp} options={[{ value: 'replace', label: 'Replace existing' }, { value: 'add', label: 'Add to existing' }]} onchange={(v) => (bulkTrackingOp = v as 'replace' | 'add')} />
+      </Field>
+    </FieldGrid>
+    {#if bulkTrackingLocationId}
+      {@const groups = groupByCategory(codesForLocation(bulkTrackingLocationId))}
+      <div class="sub-loc-wrap tracking-list" style="margin-top: var(--space-3)">
+        {#if groups.length === 0}
+          <p class="sub-loc-empty">
+            No tracking codes defined for this location.
+            {#if can('locations', 'update')}
+              <a href={`/locations/${bulkTrackingLocationId}?tab=tracking`} target="_blank" rel="noopener">Define codes →</a>
+            {/if}
+          </p>
+        {:else}
+          {#each groups as group (group.category)}
+            <div class="provider-group">
+              <div class="provider-header">{group.category}</div>
+              <div class="code-grid">
+                {#each group.codes as tc (tc.id)}
+                  <label class="code-row">
+                    <input
+                      type="checkbox"
+                      checked={bulkTrackingIds.includes(tc.id)}
+                      onchange={(e) => {
+                        const on = (e.currentTarget as HTMLInputElement).checked
+                        if (on) bulkTrackingIds = [...bulkTrackingIds, tc.id]
+                        else bulkTrackingIds = bulkTrackingIds.filter(x => x !== tc.id)
+                      }}
+                    />
+                    <span class="code">{tc.code}</span>
+                    <span class="sep">·</span>
+                    <span class="name">{tc.name}</span>
+                  </label>
+                {/each}
+              </div>
+            </div>
+          {/each}
+        {/if}
+      </div>
+    {/if}
+  {:else}
+    {@render phaseList()}
+  {/if}
+  {#snippet footer()}
+    {#if bulkPhases.length === 0}
+      <Button variant="ghost" size="sm" onclick={closeBulkDialog} disabled={bulkBusy}>Cancel</Button>
+      {@const _availCodes = bulkTrackingLocationId ? codesForLocation(bulkTrackingLocationId).length : 0}
+      <Button size="sm"
+              onclick={() => runBulkUpdate({}, { op: bulkTrackingOp, ids: bulkTrackingIds }, `${bulkTrackingOp === 'replace' ? 'Replacing' : 'Adding'} tracking codes`)}
+              disabled={bulkBusy || !bulkTrackingLocationId || _availCodes === 0 || (bulkTrackingOp === 'add' && bulkTrackingIds.length === 0)}>Apply</Button>
+    {:else}
+      <Button size="sm" onclick={closeBulkDialog} disabled={bulkBusy}>{bulkBusy ? 'Applying…' : 'Close'}</Button>
+    {/if}
+  {/snippet}
+</Modal>
+
+<Modal open={bulkDialog === 'gl'}
+       title={`Set GL code on ${selectedIds.size} item${selectedIds.size === 1 ? '' : 's'}`}
+       onClose={closeBulkDialog}
+       busy={bulkBusy}
+       width="460px"
+       minHeight="220px">
+  {#if bulkPhases.length === 0}
+    <Field label="GL code">
+      <input type="text" class="plain-input" bind:value={bulkGlCode} placeholder="e.g. 2140" autofocus />
+    </Field>
+  {:else}
+    {@render phaseList()}
+  {/if}
+  {#snippet footer()}
+    {#if bulkPhases.length === 0}
+      <Button variant="ghost" size="sm" onclick={closeBulkDialog} disabled={bulkBusy}>Cancel</Button>
+      <Button size="sm" onclick={() => runBulkUpdate({ accounting_gl_code: bulkGlCode.trim() || null }, null, 'Setting GL code')} disabled={bulkBusy}>Apply</Button>
+    {:else}
+      <Button size="sm" onclick={closeBulkDialog} disabled={bulkBusy}>{bulkBusy ? 'Applying…' : 'Close'}</Button>
+    {/if}
+  {/snippet}
+</Modal>
+
+<Modal open={bulkDialog === 'tax'}
+       title={`Set tax on ${selectedIds.size} item${selectedIds.size === 1 ? '' : 's'}`}
+       onClose={closeBulkDialog}
+       busy={bulkBusy}
+       width="500px"
+       minHeight="240px">
+  <p class="muted small">Sets tax code and/or tax percentage. Leave a field blank to skip it.</p>
+  {#if bulkPhases.length === 0}
+    <FieldGrid cols={2}>
+      <Field label="Tax code">
+        <input type="text" class="plain-input" bind:value={bulkTaxCode} placeholder="e.g. VAT" />
+      </Field>
+      <Field label="Tax %">
+        <input type="text" inputmode="decimal" class="plain-input" bind:value={bulkTaxPct} placeholder="e.g. 15.00" />
+      </Field>
+    </FieldGrid>
+  {:else}
+    {@render phaseList()}
+  {/if}
+  {#snippet footer()}
+    {#if bulkPhases.length === 0}
+      <Button variant="ghost" size="sm" onclick={closeBulkDialog} disabled={bulkBusy}>Cancel</Button>
+      <Button size="sm"
+              onclick={() => {
+                const patch: Record<string, unknown> = {}
+                if (bulkTaxCode.trim()) patch.accounting_tax_code = bulkTaxCode.trim()
+                if (bulkTaxPct.trim())  patch.accounting_tax_percentage = Number(bulkTaxPct)
+                if (Object.keys(patch).length === 0) { bulkError = 'Enter a tax code or %'; return }
+                runBulkUpdate(patch, null, 'Setting tax')
+              }}
+              disabled={bulkBusy || (!bulkTaxCode.trim() && !bulkTaxPct.trim())}>Apply</Button>
+    {:else}
+      <Button size="sm" onclick={closeBulkDialog} disabled={bulkBusy}>{bulkBusy ? 'Applying…' : 'Close'}</Button>
+    {/if}
+  {/snippet}
+</Modal>
+
+<Modal open={bulkDialog === 'active'}
+       title={`Set active on ${selectedIds.size} item${selectedIds.size === 1 ? '' : 's'}`}
+       onClose={closeBulkDialog}
+       busy={bulkBusy}
+       width="420px"
+       minHeight="220px">
+  {#if bulkPhases.length === 0}
+    <Field label="Active">
+      <Select value={bulkActive} options={yesNo} onchange={(v) => (bulkActive = v as 'true' | 'false')} />
+    </Field>
+  {:else}
+    {@render phaseList()}
+  {/if}
+  {#snippet footer()}
+    {#if bulkPhases.length === 0}
+      <Button variant="ghost" size="sm" onclick={closeBulkDialog} disabled={bulkBusy}>Cancel</Button>
+      <Button size="sm" onclick={() => runBulkUpdate({ active: bulkActive === 'true' }, null, `Setting active ${bulkActive}`)} disabled={bulkBusy}>Apply</Button>
+    {:else}
+      <Button size="sm" onclick={closeBulkDialog} disabled={bulkBusy}>{bulkBusy ? 'Applying…' : 'Close'}</Button>
+    {/if}
+  {/snippet}
+</Modal>
+
+<Modal open={bulkDialog === 'delete'}
+       title={`Delete ${selectedIds.size} item${selectedIds.size === 1 ? '' : 's'}`}
+       onClose={closeBulkDialog}
+       busy={bulkBusy}
+       width="500px"
+       minHeight="280px">
+  {#if bulkPhases.length === 0}
+    <div class="danger-banner">
+      <span class="danger-icon" aria-hidden="true">⚠</span>
+      <div>
+        <strong>This will soft-delete {selectedIds.size} item{selectedIds.size === 1 ? '' : 's'}.</strong>
+        <p class="muted small">Deleted items hide from all lists but remain recoverable via undo or admin trash for 90 days, after which they are permanently purged.</p>
+      </div>
+    </div>
+    <Field label='Type DELETE to confirm'>
+      <input
+        type="text"
+        class="delete-confirm-input"
+        bind:value={bulkDeleteConfirm}
+        placeholder="DELETE"
+        autocomplete="off"
+        spellcheck="false"
+      />
+    </Field>
+  {:else}
+    {@render phaseList()}
+  {/if}
+  {#snippet footer()}
+    {#if bulkPhases.length === 0}
+      <Button variant="ghost" size="sm" onclick={closeBulkDialog} disabled={bulkBusy}>Cancel</Button>
+      <button type="button" class="danger-apply" disabled={bulkBusy || bulkDeleteConfirm !== 'DELETE'} onclick={runBulkSoftDelete}>
+        Delete {selectedIds.size} item{selectedIds.size === 1 ? '' : 's'}
+      </button>
+    {:else}
+      <Button size="sm" onclick={closeBulkDialog} disabled={bulkBusy}>{bulkBusy ? 'Deleting…' : 'Close'}</Button>
+    {/if}
+  {/snippet}
+</Modal>
+
+{#if lastBulkSummary && !bulkDialog}
+  <div class="bulk-flash" role="status">
+    <span>{lastBulkSummary}</span>
+    {#if lastBulkActionId}
+      <Button size="xs" variant="ghost" onclick={undoLastBulk} disabled={undoBusy} loading={undoBusy}>Undo</Button>
+    {/if}
+    <button type="button" class="bulk-flash-close" onclick={() => (lastBulkSummary = null)} aria-label="Dismiss">×</button>
+  </div>
+{/if}
 
 <style>
   .create-wrap { margin-bottom: var(--space-6); }
@@ -933,4 +1564,268 @@
 
   @media (max-width: 640px) { .hide-sm { display: none; } }
   @media (max-width: 900px) { .hide-md { display: none; } }
+
+  /* ── Bulk actions ───────────────────────────────────────────────── */
+  .bulk-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: 10px 14px;
+    margin-bottom: var(--space-3);
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+    border-radius: var(--radius-md);
+    position: sticky;
+    top: var(--topnav-height, 0);
+    z-index: 20;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+  }
+  .bulk-count {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: var(--text-sm);
+    color: var(--text);
+    flex-wrap: wrap;
+  }
+  .bulk-count strong { font-weight: var(--weight-bold); color: var(--accent); }
+  .bulk-link {
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .bulk-actions {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .bulk-delete-btn {
+    margin-left: auto;
+    height: 28px;
+    padding: 0 0.9rem;
+    border: 1px solid var(--danger, #c0392b);
+    background: transparent;
+    color: var(--danger, #c0392b);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    transition: background var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
+  }
+  .bulk-delete-btn:hover:not(:disabled) {
+    background: var(--danger, #c0392b);
+    color: var(--surface, #fff);
+  }
+  .bulk-delete-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .danger-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    margin-bottom: var(--space-3);
+    background: color-mix(in srgb, var(--danger, #c0392b) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--danger, #c0392b) 25%, transparent);
+    border-radius: var(--radius-md, 6px);
+  }
+  .danger-icon {
+    color: var(--danger, #c0392b);
+    font-size: 1.4em;
+    line-height: 1;
+  }
+  .danger-banner strong { color: var(--danger, #c0392b); }
+  .danger-banner p { margin: 4px 0 0 0; }
+
+  .delete-confirm-input {
+    width: 100%;
+    height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md, 6px);
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--font-mono, monospace);
+    font-size: var(--text-sm);
+    letter-spacing: 0.06em;
+  }
+  .delete-confirm-input:focus {
+    outline: none;
+    border-color: var(--danger, #c0392b);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger, #c0392b) 20%, transparent);
+  }
+
+  .danger-apply {
+    height: 32px;
+    padding: 0 1rem;
+    border: 1px solid var(--danger, #c0392b);
+    background: var(--danger, #c0392b);
+    color: var(--surface, #fff);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+    border-radius: var(--radius-md, 6px);
+    cursor: pointer;
+    transition: opacity var(--motion-fast) var(--ease-out);
+  }
+  .danger-apply:hover:not(:disabled) { opacity: 0.9; }
+  .danger-apply:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .name-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .row-check-wrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 10px;
+    margin: -8px -6px -8px -10px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .row-check {
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    accent-color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .tracking-list {
+    max-height: 40vh;
+    overflow-y: auto;
+  }
+
+  .plain-input {
+    display: block;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    font-size: 14px;
+    font-family: inherit;
+  }
+  .plain-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+  }
+
+  .phase-list {
+    list-style: none;
+    margin: 14px 0 10px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .phase {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--surface-2) 60%, transparent);
+    transition: background 160ms ease;
+  }
+  .phase-icon {
+    display: inline-flex;
+    width: 18px;
+    height: 18px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    background: var(--surface-3);
+    color: var(--text-muted);
+    flex: 0 0 auto;
+  }
+  .phase-label { flex: 0 0 auto; color: var(--text-muted); }
+  .phase-detail {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+  }
+  .phase-active { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+  .phase-active .phase-icon { background: var(--accent); color: white; }
+  .phase-active .phase-label { color: var(--text); font-weight: 600; }
+  .phase-done .phase-icon { background: color-mix(in srgb, var(--accent) 85%, #000); color: white; }
+  .phase-done .phase-label { color: var(--text); }
+  .phase-error .phase-icon { background: #c0392b; color: white; }
+  .phase-error .phase-label { color: #c0392b; font-weight: 600; }
+  .phase-skipped .phase-icon { background: var(--surface-3); color: var(--text-muted); }
+
+  .spin {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: white;
+    border-radius: 999px;
+    animation: phase-spin 720ms linear infinite;
+  }
+  @keyframes phase-spin { to { transform: rotate(360deg); } }
+
+  .phase-summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+  }
+  .phase-summary.ok {
+    background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  }
+  .phase-summary.err {
+    background: color-mix(in srgb, #c0392b 10%, var(--surface));
+    border: 1px solid color-mix(in srgb, #c0392b 40%, var(--border));
+    color: #c0392b;
+  }
+
+  .bulk-flash {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 var(--space-3);
+    padding: 10px 14px;
+    background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+    border-radius: var(--radius-md);
+    font-size: 13px;
+  }
+  .bulk-flash-close {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    font-size: 18px;
+    line-height: 1;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px 6px;
+  }
+  .bulk-flash-close:hover { color: var(--text); }
 </style>

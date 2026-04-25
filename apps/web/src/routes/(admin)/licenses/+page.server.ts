@@ -9,10 +9,10 @@ export const load = async ({ cookies, locals }) => {
   const licenses = await licensesService.listAll()
   const [{ data: items }, { data: orgs }, { data: locations }, { data: persons }] =
     await Promise.all([
-      supabase.from('items').select('id, name').order('name'),
-      supabase.from('organisations').select('id, name').order('name'),
-      supabase.from('locations').select('id, name, short_name').order('name'),
-      supabase.from('persons').select('id, first_name, last_name').order('first_name')
+      supabase.from('items').select('id, name').is('deleted_at', null).order('name'),
+      supabase.from('organisations').select('id, name').is('deleted_at', null).order('name'),
+      supabase.from('locations').select('id, name, short_name').is('deleted_at', null).order('name'),
+      supabase.from('persons').select('id, first_name, last_name').is('deleted_at', null).order('first_name')
     ])
 
   return {

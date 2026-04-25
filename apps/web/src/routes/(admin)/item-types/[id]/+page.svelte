@@ -11,7 +11,8 @@
     Field,
     Select,
     Badge,
-    SubmitButton
+    SubmitButton,
+    RecordHistory
   } from '$lib/components/ui'
 
   type FieldKind = 'text' | 'number' | 'integer' | 'boolean' | 'date' | 'enum' | 'long_text'
@@ -581,6 +582,8 @@
     />
   </div>
 {/if}
+
+<RecordHistory table="item_types" id={type?.id} />
 
 <style>
   .tabs {

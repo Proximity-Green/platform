@@ -80,16 +80,17 @@ export const load = async ({ params, cookies, locals }) => {
     legalEntitiesRes,
     personsRes
   ] = await Promise.all([
-    supabase.from('locations').select('*').eq('id', id).single(),
+    supabase.from('locations').select('*').eq('id', id).is('deleted_at', null).single(),
     supabase
       .from('tracking_codes')
       .select('*')
       .eq('location_id', id)
+      .is('deleted_at', null)
       .order('category', { ascending: true, nullsFirst: false })
       .order('is_primary', { ascending: false })
       .order('code', { ascending: true }),
-    supabase.from('legal_entities').select('id, name').order('name'),
-    supabase.from('persons').select('id, first_name, last_name').order('first_name')
+    supabase.from('legal_entities').select('id, name').is('deleted_at', null).order('name'),
+    supabase.from('persons').select('id, first_name, last_name').is('deleted_at', null).order('first_name')
   ])
 
   if (locationRes.error || !locationRes.data) throw error(404, 'Location not found')

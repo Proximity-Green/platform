@@ -12,7 +12,8 @@
     Select,
     Badge,
     SubmitButton,
-    RecordLive
+    RecordLive,
+    RecordHistory
   } from '$lib/components/ui'
   import { fmtMoneyWithCurrency } from '$lib/utils/money'
 
@@ -365,6 +366,8 @@
     </div>
   {/if}
 </div>
+
+<RecordHistory table="persons" id={person?.id} />
 
 <style>
   .summary {

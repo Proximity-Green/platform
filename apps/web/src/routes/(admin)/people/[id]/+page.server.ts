@@ -10,12 +10,14 @@ export const load = async ({ params, cookies, locals }) => {
     .from('persons')
     .select('*')
     .eq('id', params.id)
+    .is('deleted_at', null)
     .single()
   if (personRes.error || !personRes.data) throw error(404, 'Member not found')
 
   const organisationsPromise = supabase
     .from('organisations')
     .select('id, name')
+    .is('deleted_at', null)
     .order('name')
     .then(r => r.data ?? [])
 
@@ -23,6 +25,9 @@ export const load = async ({ params, cookies, locals }) => {
     .from('subscription_lines')
     .select('id, status, base_rate, currency, quantity, started_at, ended_at, item_id, organisation_id, items(name), organisations(name)')
     .eq('person_id', params.id)
+    .is('deleted_at', null)
+    .is('items.deleted_at', null)
+    .is('organisations.deleted_at', null)
     .order('started_at', { ascending: false })
     .then(r => r.data ?? [])
 

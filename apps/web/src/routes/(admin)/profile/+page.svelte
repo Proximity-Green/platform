@@ -33,6 +33,7 @@
       .from('persons')
       .select('*')
       .eq('email', session.user.email)
+      .is('deleted_at', null)
       .single()
 
     if (person) {

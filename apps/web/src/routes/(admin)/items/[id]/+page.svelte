@@ -10,7 +10,9 @@
     Field,
     FieldGrid,
     Select,
-    Badge
+    Badge,
+    ErrorBanner,
+    RecordHistory
   } from '$lib/components/ui'
   import { fmtMoneyWithCurrency } from '$lib/utils/money'
   import { resolvePrice, type PricingParams } from '$lib/services/pricing.service'
@@ -487,7 +489,10 @@
   {/if}
 </PageHead>
 
-<Toast error={form?.error} success={form?.success} message={form?.message} />
+<Toast success={form?.success} message={form?.success ? form?.message : undefined} />
+{#if form?.error || form?.actionable}
+  <ErrorBanner error={form?.actionable ?? form?.error} showRaw />
+{/if}
 
 <nav class="tabs" aria-label="Item sections">
   {#each TABS as t}
@@ -751,6 +756,8 @@
     </div>
   </form>
 </div>
+
+<RecordHistory table="items" id={item?.id} />
 
 <style>
   .tabs {

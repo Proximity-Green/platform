@@ -29,6 +29,7 @@
       .select('*')
       .eq('entity_type', entityType)
       .eq('entity_id', entityId)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false })
     if (data) notes = data
     loading = false
@@ -51,7 +52,9 @@
   }
 
   async function deleteNote(id: string) {
-    await supabase.from('notes').delete().eq('id', id)
+    // Soft-delete: flip deleted_at instead of hard-deleting. Stays in sync
+    // with the platform-wide tier-1 convention; recoverable from /changelog.
+    await supabase.from('notes').update({ deleted_at: new Date().toISOString() }).eq('id', id)
     notes = notes.filter(n => n.id !== id)
   }
 

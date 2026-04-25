@@ -53,6 +53,7 @@ export async function POST({ request, cookies, locals }) {
           .from('persons')
           .select('id, user_id')
           .in('id', person_ids)
+          .is('deleted_at', null)
         if (lookupErr) throw new Error(lookupErr.message)
         const linked = (rows ?? []).filter(r => !!r.user_id)
         const skippedNoUser = (rows ?? []).length - linked.length

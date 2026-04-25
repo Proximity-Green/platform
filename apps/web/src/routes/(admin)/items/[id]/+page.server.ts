@@ -64,7 +64,7 @@ const TYPE_TABLES: Partial<Record<TypeSlug, string>> = {
 }
 
 async function getTypeSlug(itemTypeId: string): Promise<TypeSlug | null> {
-  const { data } = await supabase.from('item_types').select('slug').eq('id', itemTypeId).single()
+  const { data } = await supabase.from('item_types').select('slug').eq('id', itemTypeId).is('deleted_at', null).single()
   const s = (data as { slug: string } | null)?.slug
   return (s && (s in TYPE_TABLES)) ? (s as TypeSlug) : null
 }
@@ -205,6 +205,9 @@ export const load = async ({ params, cookies, locals }) => {
     .from('items')
     .select('*, item_types(slug, name, pricing_params), locations(name, short_name)')
     .eq('id', id)
+    .is('deleted_at', null)
+    .is('item_types.deleted_at', null)
+    .is('locations.deleted_at', null)
     .single()
   if (itemRes.error || !itemRes.data) throw error(404, 'Item not found')
 
@@ -228,6 +231,8 @@ export const load = async ({ params, cookies, locals }) => {
     .from('subscription_lines')
     .select('id, status, base_rate, currency, quantity, started_at, ended_at, organisation_id, organisations(name)')
     .eq('item_id', id)
+    .is('deleted_at', null)
+    .is('organisations.deleted_at', null)
     .order('started_at', { ascending: false })
     .then(r => r.data ?? [])
 

@@ -6,8 +6,8 @@ export const load = async ({ cookies, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)
   if (userId) await requirePermission(userId, 'locations', 'read')
   const locations = await locationsService.listLocations()
-  const { data: legalEntities } = await supabase.from('legal_entities').select('id, name').order('name')
-  const { data: persons } = await supabase.from('persons').select('id, first_name, last_name').order('first_name')
+  const { data: legalEntities } = await supabase.from('legal_entities').select('id, name').is('deleted_at', null).order('name')
+  const { data: persons } = await supabase.from('persons').select('id, first_name, last_name').is('deleted_at', null).order('first_name')
   return {
     locations,
     legalEntities: legalEntities ?? [],

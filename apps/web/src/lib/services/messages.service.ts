@@ -26,6 +26,7 @@ export async function listTemplates(): Promise<ServiceResult<Template[]>> {
   const { data, error } = await supabase
     .from('message_templates')
     .select('*')
+    .is('deleted_at', null)
     .order('channel, name')
   if (error) return { ok: false, error: error.message }
   return { ok: true, data: data ?? [] }
@@ -100,7 +101,7 @@ export async function sendTestEmail(
   }
   const MAILGUN_API_KEY = CONFIGURED_MAILGUN_API_KEY
 
-  const { data: template } = await supabase.from('message_templates').select('*').eq('id', templateId).single<Template>()
+  const { data: template } = await supabase.from('message_templates').select('*').eq('id', templateId).is('deleted_at', null).single<Template>()
   if (!template) return { ok: false, error: 'Template not found' }
 
   const vars = buildTestVars(template, testEmail)

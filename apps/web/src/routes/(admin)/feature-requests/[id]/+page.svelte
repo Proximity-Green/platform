@@ -2,7 +2,7 @@
   import { enhance } from '$app/forms'
   import { invalidateAll } from '$app/navigation'
   import { marked } from 'marked'
-  import { Badge, Button, PageHead, Toast, Field, FieldGrid, Select, SubmitButton } from '$lib/components/ui'
+  import { Badge, Button, PageHead, Toast, Field, FieldGrid, Select, SubmitButton, RecordHistory } from '$lib/components/ui'
   import type { FeatureRequest, FeatureRequestKind, FeatureRequestStatus, Tag } from '$lib/services/feature-requests.service'
 
   let { data, form } = $props()
@@ -293,6 +293,8 @@
     </div>
   </aside>
 </div>
+
+<RecordHistory table="feature_requests" id={request?.id} />
 
 <style>
   .grid {

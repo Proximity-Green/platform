@@ -33,6 +33,8 @@ export async function listAll(): Promise<WalletRow[]> {
   const { data: wallets, error } = await supabase
     .from('wallets')
     .select('*, organisations(name)')
+    .is('deleted_at', null)
+    .is('organisations.deleted_at', null)
     .order('created_at', { ascending: false })
   if (error || !wallets) return []
 
@@ -88,6 +90,7 @@ export async function addTransaction(input: WalletTxnInput, actorId: string | nu
     .from('wallets')
     .select('balance')
     .eq('id', input.wallet_id)
+    .is('deleted_at', null)
     .single()
   if (wErr || !wallet) return { ok: false, error: wErr?.message ?? 'Wallet not found' }
 

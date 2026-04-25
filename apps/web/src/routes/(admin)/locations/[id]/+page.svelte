@@ -13,7 +13,8 @@
     FieldGrid,
     Select,
     Badge,
-    Copyable
+    Copyable,
+    RecordHistory
   } from '$lib/components/ui'
 
   let { data, form } = $props()
@@ -26,7 +27,25 @@
   let addingCode = $state(false)
   let editingCodeId = $state<string | null>(null)
 
-  $effect(() => { if (form?.success) { saving = false; addingCode = false; editingCodeId = null } })
+  // New-tracking-code form state. Name auto-derives from code as "<CODE> at <short>"
+  // until the user manually edits Name; from then on, we leave it alone.
+  let newTcCode = $state('')
+  let newTcName = $state('')
+  let newTcNameTouched = $state(false)
+  function resetNewTcFields() {
+    newTcCode = ''
+    newTcName = ''
+    newTcNameTouched = false
+  }
+
+  $effect(() => {
+    if (form?.success) {
+      saving = false
+      addingCode = false
+      editingCodeId = null
+      resetNewTcFields()
+    }
+  })
 
   const TABS = [
     { key: 'properties', label: 'Properties' },
@@ -349,9 +368,19 @@
           onSubmit={() => { saving = true }}
           onResult={() => { saving = false }}>
           <FieldGrid cols={3}>
-            <Field name="category" label="Category" placeholder="e.g. Region" />
-            <Field name="code" label="Code" required placeholder="e.g. WC" />
-            <Field name="name" label="Name" required placeholder="e.g. Western Cape" />
+            <Field name="category" label="Category" value="Location" placeholder="e.g. Region" />
+            <Field name="code" label="Code" required placeholder="e.g. WC"
+                   value={newTcCode}
+                   oninput={(v) => {
+                     newTcCode = v
+                     if (!newTcNameTouched) {
+                       const here = loc.short_name ?? loc.name
+                       newTcName = v ? `${v} at ${here}` : ''
+                     }
+                   }} />
+            <Field name="name" label="Name" required placeholder="e.g. Western Cape"
+                   value={newTcName}
+                   oninput={(v) => { newTcName = v; newTcNameTouched = true }} />
             <Field name="accounting_external_category_id" label="External Category ID" placeholder="accounting-provider-specific" />
             <Field name="accounting_external_option_id" label="External Option ID" placeholder="accounting-provider-specific" />
           </FieldGrid>
@@ -376,18 +405,20 @@
               <h3 class="cat-head" class:is-uncat={group.isUncategorised}>{group.category}</h3>
               <div class="tc-table-wrap">
                 <table class="tc-table">
-                  <thead>
-                    <tr>
-                      <th class="primary-col" aria-label="Primary"></th>
-                      <th class="code-col">Code</th>
-                      <th>Name</th>
-                      <th class="hide-md">Category ID</th>
-                      <th class="hide-md">Option ID</th>
-                      <th class="active-col">Active</th>
-                      <th class="row-actions-col"></th>
-                      <th class="row-actions-col"></th>
-                    </tr>
-                  </thead>
+                  {#if !(group.rows.length === 1 && editingCodeId === group.rows[0].id)}
+                    <thead>
+                      <tr>
+                        <th class="primary-col" aria-label="Primary"></th>
+                        <th class="code-col">Code</th>
+                        <th>Name</th>
+                        <th class="hide-md">Category ID</th>
+                        <th class="hide-md">Option ID</th>
+                        <th class="active-col">Active</th>
+                        <th class="row-actions-col"></th>
+                        <th class="row-actions-col"></th>
+                      </tr>
+                    </thead>
+                  {/if}
                   <tbody>
                     {#each group.rows as r (r.id)}
                       {#if editingCodeId === r.id}
@@ -510,6 +541,8 @@
     </section>
   {/if}
 </div>
+
+<RecordHistory table="locations" id={loc?.id} />
 
 <style>
   .tabs {

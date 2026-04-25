@@ -9,8 +9,8 @@ export const load = async ({ cookies, locals }) => {
   const [invoices, linesByInvoiceId, { data: orgs }, { data: locations }] = await Promise.all([
     invoicesService.listAll(),
     invoicesService.listAllLinesGrouped(),
-    supabase.from('organisations').select('id, name').order('name'),
-    supabase.from('locations').select('id, name, short_name').order('name')
+    supabase.from('organisations').select('id, name').is('deleted_at', null).order('name'),
+    supabase.from('locations').select('id, name, short_name').is('deleted_at', null).order('name')
   ])
 
   return {

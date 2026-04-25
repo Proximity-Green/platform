@@ -8,8 +8,8 @@ export const load = async ({ cookies, locals }) => {
   if (userId) await requirePermission(userId, 'locations', 'read')
   const spaces = await spacesService.listSpaces()
   const [{ data: itemTypes }, { data: locations }] = await Promise.all([
-    supabase.from('item_types').select('id, slug, name').order('name'),
-    supabase.from('locations').select('id, name, short_name').order('name')
+    supabase.from('item_types').select('id, slug, name').is('deleted_at', null).order('name'),
+    supabase.from('locations').select('id, name, short_name').is('deleted_at', null).order('name')
   ])
   return { spaces, itemTypes: itemTypes ?? [], locations: locations ?? [] }
 }

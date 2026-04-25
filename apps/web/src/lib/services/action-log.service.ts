@@ -1,5 +1,6 @@
 import { fail } from '@sveltejs/kit'
 import { log } from './system-log.service'
+import { translate } from './errors'
 
 // Normalise anything a Supabase client / SDK / throw site can produce
 // into a readable message string. Without this, passing a PostgrestError
@@ -46,5 +47,9 @@ export async function logFail(
   } catch (logErr) {
     console.error(`[logFail] failed to write ${scope} error to system_logs:`, logErr)
   }
-  return fail(status, { error: message })
+  // Translate to ActionableError so the UI can show a clean banner with
+  // a code, suggested fixes, and a copy button. Keep `error` (raw message)
+  // populated for any older consumer that still reads form?.error.
+  const actionable = await translate(error)
+  return fail(status, { error: message, actionable })
 }

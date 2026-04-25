@@ -7,7 +7,7 @@ export const load = async ({ cookies, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)
   if (userId) await requirePermission(userId, 'persons', 'read')
   const persons = await personsService.listPersons()
-  const { data: orgs }  = await supabase.from('organisations').select('id, name').order('name')
+  const { data: orgs }  = await supabase.from('organisations').select('id, name').is('deleted_at', null).order('name')
   const { data: roles } = await supabase.from('roles').select('id, name').order('name')
   return { persons, organisations: orgs ?? [], roles: roles ?? [] }
 }
@@ -105,6 +105,7 @@ export const actions = {
       .from('persons')
       .select('id, email, user_id')
       .in('id', ids)
+      .is('deleted_at', null)
     const targets = (rows ?? []).filter(r => !r.user_id)
     if (targets.length === 0) {
       return { success: true, message: 'All selected members already have user accounts.' }
@@ -148,6 +149,7 @@ export const actions = {
       .from('persons')
       .select('id, first_name, last_name, user_id')
       .in('id', ids)
+      .is('deleted_at', null)
     if (lookupErr) {
       console.log('[bulkSetRole] lookup error:', lookupErr.message)
       return fail(400, { error: lookupErr.message })

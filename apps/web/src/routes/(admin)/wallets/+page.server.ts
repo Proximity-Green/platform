@@ -8,7 +8,7 @@ export const load = async ({ cookies, locals }) => {
 
   const [wallets, { data: orgs }, { data: txns }] = await Promise.all([
     walletsService.listAll(),
-    supabase.from('organisations').select('id, name').order('name'),
+    supabase.from('organisations').select('id, name').is('deleted_at', null).order('name'),
     supabase
       .from('wallet_transactions')
       .select('*')

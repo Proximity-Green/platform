@@ -91,6 +91,12 @@ export async function listAll(): Promise<SubscriptionLineEnriched[]> {
       locations(name),
       persons:user_id(first_name, last_name)
     `)
+    .is('deleted_at', null)
+    .is('items.deleted_at', null)
+    .is('licenses.deleted_at', null)
+    .is('organisations.deleted_at', null)
+    .is('locations.deleted_at', null)
+    .is('persons.deleted_at', null)
     .order('created_at', { ascending: false })
 
   return (data ?? []).map((row: any) => ({
@@ -166,6 +172,12 @@ export async function convertToInvoice(
       licenses(item_id, items(name, accounting_gl_code, accounting_item_code, accounting_tax_code, item_tracking_codes(tracking_codes(code))))
     `)
     .eq('id', subscriptionLineId)
+    .is('deleted_at', null)
+    .is('items.deleted_at', null)
+    .is('items.item_tracking_codes.tracking_codes.deleted_at', null)
+    .is('licenses.deleted_at', null)
+    .is('licenses.items.deleted_at', null)
+    .is('licenses.items.item_tracking_codes.tracking_codes.deleted_at', null)
     .single()
 
   if (subErr || !sub) return { ok: false, error: subErr?.message ?? 'Subscription not found' }

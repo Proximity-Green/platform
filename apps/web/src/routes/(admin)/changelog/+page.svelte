@@ -1,6 +1,8 @@
 <script lang="ts">
   import { permStore, canDo } from '$lib/stores/permissions'
   import { invalidateAll } from '$app/navigation'
+  import { page } from '$app/stores'
+  import { tick } from 'svelte'
   import {
     PageHead,
     Toast,
@@ -43,6 +45,19 @@
   let undoingId = $state<string | null>(null)
   let undoError = $state<string | null>(null)
   let activeTab = $state<'single' | 'bulk'>('single')
+
+  // Deep-link: /changelog?entry=<id> auto-expands that entry and scrolls
+  // to it. Powers "Open in change log" links from <RecordHistory />.
+  $effect(() => {
+    const targetId = $page.url.searchParams.get('entry')
+    if (!targetId) return
+    if (!entries.some(e => e.id === targetId)) return
+    activeTab = 'single'
+    expandedId = targetId
+    tick().then(() => {
+      document.getElementById(`entry-${targetId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+  })
 
   const emailByUserId = new Map<string, string>()
   for (const e of data.entries as Entry[]) {
@@ -251,7 +266,7 @@
   onRowClick={(e) => expandedId = expandedId === e.id ? null : e.id}
 >
   {#snippet row(entry)}
-    <td><Badge tone={actionTone[entry.action] ?? 'default'}>{entry.action}</Badge></td>
+    <td id="entry-{entry.id}"><Badge tone={actionTone[entry.action] ?? 'default'}>{entry.action}</Badge></td>
     <td class="record-label">{entry.record_label}</td>
     <td><span class="table-chip">{entry.table_name}</span></td>
     <td class="muted mono">{entry.changed_by_email}</td>
@@ -335,6 +350,26 @@
             </div>
           {/each}
         </div>
+        {#if can('audit_log', 'manage') && entry.old_values}
+          <div class="restore-action">
+            <SubmitButton
+              action="?/restore"
+              label="Restore deleted record"
+              pendingLabel="Restoring…"
+              variant="secondary"
+              size="sm"
+              fields={{
+                table_name: entry.table_name,
+                record_id: entry.record_id,
+                old_values: JSON.stringify(entry.old_values)
+              }}
+              confirm={{
+                title: 'Restore record?',
+                message: `Recreate this ${entry.table_name} record from the snapshot taken when it was deleted?`
+              }}
+            />
+          </div>
+        {/if}
       {/if}
     </div>
   {/snippet}

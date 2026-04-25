@@ -36,6 +36,7 @@ export async function POST({ request, cookies, locals }) {
           .from('feature_requests')
           .select('id')
           .in('id', fr_ids)
+          .is('deleted_at', null)
         if (lookupErr) throw new Error(lookupErr.message)
         const ids = (rows ?? []).map((r) => r.id as string)
         emit({ phase: 'resolved', linked: ids.length, skipped_no_user: fr_ids.length - ids.length })
@@ -54,6 +55,7 @@ export async function POST({ request, cookies, locals }) {
               .from('tags')
               .select('id')
               .ilike('name', name)
+              .is('deleted_at', null)
               .maybeSingle()
             if (existing) allTagIds.push(existing.id as string)
           } else if (created) {

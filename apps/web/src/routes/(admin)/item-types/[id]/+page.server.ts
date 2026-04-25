@@ -26,6 +26,7 @@ export const load = async ({ params, cookies, locals }) => {
     .from('item_types')
     .select('*')
     .eq('id', id)
+    .is('deleted_at', null)
     .single()
   if (typeRes.error || !typeRes.data) throw error(404, 'Item type not found')
 
@@ -49,6 +50,8 @@ export const load = async ({ params, cookies, locals }) => {
       .from('items')
       .select('id, name, location_id, base_rate, active, locations(name, short_name)')
       .eq('item_type_id', id)
+      .is('deleted_at', null)
+      .is('locations.deleted_at', null)
       .order('name')
     const list = (itemRows ?? []) as any[]
     if (!detailsTable || list.length === 0) {

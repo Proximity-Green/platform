@@ -44,6 +44,7 @@
             .from('persons')
             .select('first_name, last_name, email')
             .eq('user_id', row.changed_by)
+            .is('deleted_at', null)
             .maybeSingle()
           if (person) {
             const name = [person.first_name, person.last_name].filter(Boolean).join(' ').trim()

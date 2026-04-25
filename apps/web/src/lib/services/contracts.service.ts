@@ -46,6 +46,9 @@ export async function listAll(): Promise<ContractRow[]> {
   const { data: contracts, error } = await supabase
     .from('contracts')
     .select('*, organisations(name), persons!contracts_signed_by_person_id_fkey(first_name, last_name)')
+    .is('deleted_at', null)
+    .is('organisations.deleted_at', null)
+    .is('persons.deleted_at', null)
     .order('created_at', { ascending: false })
   if (error || !contracts) return []
 
@@ -78,6 +81,7 @@ export async function listLinked(contract_id: string) {
     .from('contract_subscription_lines')
     .select('subscription_line_id, created_at, subscription_lines(*)')
     .eq('contract_id', contract_id)
+    .is('subscription_lines.deleted_at', null)
     .order('created_at', { ascending: true })
   return data ?? []
 }

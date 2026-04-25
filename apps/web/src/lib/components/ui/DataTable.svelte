@@ -17,11 +17,41 @@
     ellipsis?: boolean
   }
 
-  export type Filter<R> = {
-    key: string
-    label: string
-    test?: (row: R) => boolean
-  }
+  export type FilterOption = { value: string; label: string }
+  export type FilterState = Record<string, string[]>
+
+  /**
+   * A Filter is either:
+   *  - a chip (boolean test, mutually exclusive — only one chip filter active at a time)
+   *  - a select (dropdown popover with options, can stack with chips and other selects).
+   *
+   * Select filters support **two-way faceted cascading**: pass `options` as a
+   * function and it receives both the current FilterState and `availableRows`
+   * — the rows that pass *every other* active filter. This means each
+   * dropdown's options auto-narrow to only what's actually reachable given
+   * the rest of the filter state.
+   */
+  export type Filter<R> =
+    | {
+        kind?: 'chip'
+        key: string
+        label: string
+        test?: (row: R) => boolean
+      }
+    | {
+        kind: 'select'
+        key: string
+        label: string
+        /** Static array OR a function. The function is called with the current
+         *  filter state and the rows that pass every OTHER active filter.
+         *  Use `availableRows` to scope options to what's actually reachable. */
+        options: FilterOption[] | ((state: FilterState, availableRows: R[]) => FilterOption[])
+        /** Returns true if the row passes when these values are selected.
+         *  Called only when at least one value is selected. */
+        test: (row: R, selectedValues: string[]) => boolean
+        /** Allow multi-select. Default false (single value, click-to-replace). */
+        multi?: boolean
+      }
 </script>
 
 <script lang="ts" generics="T extends Record<string, any>">
@@ -62,6 +92,10 @@
         full filtered list (not paginated). Useful for bulk-action toolbars
         that need "Select found set". */
     onFilteredChange?: (rows: T[]) => void
+    /** Fires when any filter (chip filter, select pill, or Clear all) changes.
+        Use this to drop stale bulk selection so it stays in sync with what's
+        visible. Doesn't fire on data refreshes. */
+    onFiltersChanged?: () => void
     /** Field used for type-to-jump (defaults to first searchField) */
     typeAheadField?: string
     /** Returns true for rows that should render their `expanded` snippet below */
@@ -101,6 +135,7 @@
     onActivate,
     onRowClick,
     onFilteredChange,
+    onFiltersChanged,
     typeAheadField,
     isExpandedRow,
     row,
@@ -208,6 +243,126 @@
     return path.split('.').reduce((acc, k) => (acc == null ? acc : acc[k]), obj)
   }
 
+  // Per-key selected values for `kind: 'select'` filters. Persisted in
+  // sessionStorage so navigating to a detail page and back restores filters.
+  // (URL serialisation deferred — see deferred phase-2 list.)
+  const sessionKey = `dt.${table}.selectFilters`
+  function readSession(): FilterState {
+    if (typeof window === 'undefined') return {}
+    try {
+      const raw = sessionStorage.getItem(sessionKey)
+      if (!raw) return {}
+      const parsed = JSON.parse(raw)
+      return parsed && typeof parsed === 'object' ? parsed : {}
+    } catch { return {} }
+  }
+  let selectFilterState = $state<FilterState>(readSession())
+  $effect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      if (Object.keys(selectFilterState).length === 0) {
+        sessionStorage.removeItem(sessionKey)
+      } else {
+        sessionStorage.setItem(sessionKey, JSON.stringify(selectFilterState))
+      }
+    } catch {}
+  })
+
+  function setSelectFilter(key: string, values: string[]) {
+    selectFilterState = { ...selectFilterState, [key]: values }
+  }
+  function clearSelectFilter(key: string) {
+    const { [key]: _drop, ...rest } = selectFilterState
+    selectFilterState = rest
+  }
+  function clearAllFilters() {
+    selectFilterState = {}
+    if (p.filter && p.filter !== 'all') ts.setFilter('all')
+  }
+  const hasActiveFilters = $derived(
+    Object.keys(selectFilterState).length > 0 || (p.filter && p.filter !== 'all')
+  )
+  function toggleSelectValue(key: string, value: string, multi: boolean) {
+    const current = selectFilterState[key] ?? []
+    if (multi) {
+      const next = current.includes(value) ? current.filter(v => v !== value) : [...current, value]
+      if (next.length === 0) clearSelectFilter(key)
+      else setSelectFilter(key, next)
+    } else {
+      // Single-select: clicking the active value clears; clicking another replaces.
+      if (current[0] === value) clearSelectFilter(key)
+      else setSelectFilter(key, [value])
+    }
+  }
+  // Apply search + chip + every select filter except an optional skipped key.
+  // Used to compute the "what rows would still be in play if I removed this
+  // filter?" view that drives faceted cascading options.
+  function rowsExcept(skipKey: string | null): T[] {
+    let list = data as T[]
+    const q = p.q.trim().toLowerCase()
+    if (q && searchFields.length) {
+      const terms = q.split(/\s+/).filter(Boolean)
+      list = list.filter(row => {
+        const haystack = searchFields
+          .map(f => String(resolvePath(row, f) ?? '').toLowerCase())
+          .join(' ')
+        return terms.every(t => haystack.includes(t))
+      })
+    }
+    if (p.filter && p.filter !== 'all') {
+      const f = filters.find(x => x.key === p.filter && (x.kind ?? 'chip') === 'chip') as
+        Extract<Filter<T>, { kind?: 'chip' }> | undefined
+      if (f?.test) list = list.filter(f.test)
+    }
+    for (const f of filters) {
+      if (f.kind !== 'select') continue
+      if (f.key === skipKey) continue
+      const values = selectFilterState[f.key]
+      if (!values?.length) continue
+      list = list.filter(row => f.test(row, values))
+    }
+    return list
+  }
+
+  function resolveOptions(f: Extract<Filter<T>, { kind: 'select' }>): FilterOption[] {
+    if (typeof f.options !== 'function') return f.options
+    return f.options(selectFilterState, rowsExcept(f.key))
+  }
+
+  // When cascading options shrink (e.g. another filter narrowed the set), prune
+  // any selected values no longer valid. Two-way faceted cascading.
+  $effect(() => {
+    let dirty = false
+    const next: FilterState = { ...selectFilterState }
+    for (const f of filters) {
+      if (f.kind !== 'select' || typeof f.options !== 'function') continue
+      const allowed = new Set(resolveOptions(f).map(o => o.value))
+      const cur = next[f.key]
+      if (!cur) continue
+      const kept = cur.filter(v => allowed.has(v))
+      if (kept.length !== cur.length) {
+        if (kept.length === 0) delete next[f.key]
+        else next[f.key] = kept
+        dirty = true
+      }
+    }
+    if (dirty) selectFilterState = next
+  })
+
+  // Which dropdown popover is open (one at a time).
+  let openSelect = $state<string | null>(null)
+  let selectQuery = $state('')
+  function toggleOpen(key: string) {
+    if (openSelect === key) { openSelect = null }
+    else { openSelect = key; selectQuery = '' }
+  }
+  function closeSelect() { openSelect = null; selectQuery = '' }
+  function filterOpts(opts: FilterOption[], q: string): FilterOption[] {
+    const t = q.trim().toLowerCase()
+    if (!t) return opts
+    return opts.filter(o => o.label.toLowerCase().includes(t))
+  }
+
   const filtered = $derived.by(() => {
     const q = p.q.trim().toLowerCase()
     let list = data as T[]
@@ -221,8 +376,16 @@
       })
     }
     if (p.filter && p.filter !== 'all') {
-      const f = filters.find(x => x.key === p.filter)
+      const f = filters.find(x => x.key === p.filter && (x.kind ?? 'chip') === 'chip') as
+        Extract<Filter<T>, { kind?: 'chip' }> | undefined
       if (f?.test) list = list.filter(f.test)
+    }
+    // Apply each select filter in turn (AND across keys, OR within multi).
+    for (const f of filters) {
+      if (f.kind !== 'select') continue
+      const values = selectFilterState[f.key]
+      if (!values?.length) continue
+      list = list.filter(row => f.test(row, values))
     }
     if (p.sort) {
       const col = columns.find(c => c.key === p.sort)
@@ -250,6 +413,17 @@
       }
     }
     return list
+  })
+
+  // Notify parent when any filter changes so it can drop stale bulk
+  // selection. Skip the initial run so the page doesn't clear selection on
+  // mount.
+  let filtersChangedReady = false
+  $effect(() => {
+    void p.filter
+    void selectFilterState
+    if (filtersChangedReady) onFiltersChanged?.()
+    filtersChangedReady = true
   })
 
   // Emit filtered list to the parent (for bulk "Select found" UIs, etc.)
@@ -448,9 +622,101 @@
   />
   {#if filters.length}
     <div class="filters">
-      {#each filters as f}
-        <button class="chip" class:is-on={p.filter === f.key} onclick={() => ts.setFilter(f.key)}>{f.label}</button>
+      {#each filters as f (f.key)}
+        {#if (f.kind ?? 'chip') === 'chip'}
+          <button class="chip" class:is-on={p.filter === f.key} onclick={() => ts.setFilter(f.key)}>{f.label}</button>
+        {:else}
+          {@const sf = f as Extract<Filter<T>, { kind: 'select' }>}
+          {@const selected = selectFilterState[sf.key] ?? []}
+          {@const opts = resolveOptions(sf)}
+          {@const labelFor = (v: string) => opts.find(o => o.value === v)?.label ?? v}
+          <div class="select-wrap">
+            <div class="chip select-pill" class:is-on={selected.length > 0}>
+              <button
+                class="select-pill-main"
+                onclick={() => toggleOpen(sf.key)}
+                type="button"
+              >
+                <span class="chip-label">{sf.label}</span>
+                {#if selected.length === 1}
+                  <span class="chip-value">: {labelFor(selected[0])}</span>
+                {:else if selected.length > 1}
+                  <span class="chip-value">: {selected.length}</span>
+                {/if}
+                <span class="chip-caret" aria-hidden="true">▾</span>
+              </button>
+              {#if selected.length > 0}
+                <button
+                  class="select-pill-clear"
+                  type="button"
+                  aria-label={`Clear ${sf.label} filter`}
+                  title="Clear filter"
+                  onclick={(e) => { e.stopPropagation(); clearSelectFilter(sf.key) }}
+                >×</button>
+              {/if}
+            </div>
+            {#if openSelect === sf.key}
+              <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+              <div class="select-backdrop" onclick={closeSelect}></div>
+              {@const visible = filterOpts(opts, selectQuery)}
+              <div class="select-panel" role="listbox" aria-label={sf.label}>
+                <div class="search-row">
+                  <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7"/>
+                    <path d="m20 20-3.5-3.5"/>
+                  </svg>
+                  <!-- svelte-ignore a11y_autofocus -->
+                  <input
+                    type="text"
+                    class="search-input"
+                    placeholder="Search…"
+                    bind:value={selectQuery}
+                    autocomplete="off"
+                    autofocus
+                  />
+                </div>
+                <ul class="select-list">
+                  {#if visible.length === 0}
+                    <li class="select-empty">No matches</li>
+                  {:else}
+                    {#each visible as o (o.value)}
+                      {@const isOn = selected.includes(o.value)}
+                      <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
+                      <li
+                        class="select-option"
+                        class:is-selected={isOn}
+                        role="option"
+                        aria-selected={isOn}
+                        onclick={() => {
+                          toggleSelectValue(sf.key, o.value, !!sf.multi)
+                          if (!sf.multi) closeSelect()
+                        }}
+                      >
+                        <span class="opt-check" aria-hidden="true">
+                          {#if isOn}
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                              <path d="M3 7.5 6 10.5 11 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                          {/if}
+                        </span>
+                        <span class="opt-label">{o.label}</span>
+                      </li>
+                    {/each}
+                  {/if}
+                </ul>
+              </div>
+            {/if}
+          </div>
+        {/if}
       {/each}
+      {#if hasActiveFilters}
+        <button
+          type="button"
+          class="clear-all-filters"
+          onclick={clearAllFilters}
+          title="Clear all filters"
+        >Clear all</button>
+      {/if}
     </div>
   {/if}
   {#if realtimeTable}
@@ -740,6 +1006,207 @@
     font-weight: var(--weight-semibold);
   }
   .chip.is-on:hover { background: var(--accent-soft); }
+
+  .clear-all-filters {
+    height: 28px;
+    padding: 0 0.6rem;
+    margin-left: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-body);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-color: var(--border);
+    text-underline-offset: 3px;
+    transition: color var(--motion-fast) var(--ease-out);
+  }
+  .clear-all-filters:hover {
+    color: var(--accent);
+    text-decoration-color: var(--accent);
+  }
+
+  /* ── Select-style filter chip + popover ─────────────────────────── */
+  /* Toggle chips (kind:'chip') stay text-only by default and only fill in
+     when active or hovered. Select pills (kind:'select') are always visible
+     with a permanent border so they read as "dropdowns to open" — visually
+     distinct from the toggles even when no value is selected. */
+  .select-wrap {
+    position: relative;
+    display: inline-block;
+  }
+  /* Visual divider between toggle chips and dropdown filters. */
+  .filters > .select-wrap:first-of-type {
+    margin-left: 10px;
+    padding-left: 10px;
+    border-left: 1px solid var(--border);
+  }
+  /* Pill is a flex container hosting two buttons: main (open popover) and × (clear). */
+  .select-pill {
+    display: inline-flex;
+    align-items: stretch;
+    padding: 0;
+    overflow: hidden;
+    /* Always-visible solid border so an empty dropdown still reads as a
+       button-shaped control. Override the .chip's transparent border. */
+    border: 1px solid var(--border) !important;
+    background: var(--surface-sunk, #f4f4f4);
+    color: var(--text);
+    box-shadow: inset 0 -1px 0 rgba(0,0,0,0.04);
+  }
+  .select-pill:hover {
+    border-color: var(--accent) !important;
+    background: var(--surface-hover);
+  }
+  .select-pill.is-on {
+    border-color: var(--accent) !important;
+    background: var(--accent-soft);
+    color: var(--accent-hover, var(--accent));
+    font-weight: var(--weight-semibold);
+  }
+  .select-pill-main {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    color: inherit;
+    font: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+    padding: 0 12px;
+    cursor: pointer;
+    line-height: 1.6;
+  }
+  .select-pill-main .chip-label { font-weight: var(--weight-medium); }
+  .select-pill-main .chip-value { color: inherit; opacity: 0.85; }
+  .select-pill-main .chip-caret {
+    font-size: 14px;
+    line-height: 1;
+    opacity: 0.85;
+    margin-left: 4px;
+    transform: translateY(1px);
+  }
+
+  .select-pill-clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    border-left: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+    color: inherit;
+    cursor: pointer;
+    padding: 0 8px;
+    font-size: 14px;
+    line-height: 1;
+    opacity: 0.7;
+    transition: opacity 120ms ease, background 120ms ease;
+  }
+  .select-pill-clear:hover { opacity: 1; background: color-mix(in srgb, currentColor 12%, transparent); }
+
+  .select-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: transparent;
+    cursor: default;
+  }
+  /* Filter popover matches the universal Select component look (same search
+     row, list, option styling). */
+  .select-panel {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 51;
+    min-width: 260px;
+    max-width: 420px;
+    padding: 4px;
+    background: var(--surface-raised, #ffffff);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .search-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+  }
+  .search-icon { color: var(--text-muted); flex-shrink: 0; }
+  .search-input {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    padding: 2px 0;
+    min-width: 0;
+    text-transform: none;
+    letter-spacing: normal;
+  }
+  .search-input::placeholder { color: var(--text-muted); }
+
+  .select-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: min(60vh, 420px);
+    overflow-y: auto;
+  }
+  .select-empty {
+    padding: 10px 12px;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    text-align: center;
+  }
+  .select-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: var(--text-sm);
+    color: var(--text);
+    cursor: pointer;
+    line-height: 1.2;
+    user-select: none;
+    text-transform: none;
+    letter-spacing: normal;
+    font-weight: var(--weight-normal, 400);
+  }
+  .select-option:hover { background: var(--surface-sunk, #f4f4f4); }
+  .select-option.is-selected {
+    font-weight: var(--weight-semibold);
+    color: var(--accent);
+    background: transparent;
+  }
+  .select-option.is-selected:hover { background: var(--accent-soft); }
+  .opt-check {
+    width: 14px;
+    height: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--accent);
+  }
+  .opt-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .count {
     margin-left: auto;
     font-size: var(--text-xs);

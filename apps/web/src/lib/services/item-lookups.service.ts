@@ -22,6 +22,7 @@ export async function listItemTypes() {
   const { data } = await supabase
     .from('item_types')
     .select('id, slug, name')
+    .is('deleted_at', null)
     .order('name')
   const value = data ?? []
   itemTypesCache = { at: Date.now(), value }
@@ -34,6 +35,7 @@ export async function listLocationsLite() {
   const { data } = await supabase
     .from('locations')
     .select('id, name, short_name')
+    .is('deleted_at', null)
     .order('name')
   const value = data ?? []
   locationsCache = { at: Date.now(), value }
@@ -47,6 +49,7 @@ export async function listActiveTrackingCodes() {
     .from('tracking_codes')
     .select('id, location_id, category, code, name, is_primary, active')
     .eq('active', true)
+    .is('deleted_at', null)
     .order('is_primary', { ascending: false })
     .order('category')
     .order('code')

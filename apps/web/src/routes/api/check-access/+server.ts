@@ -29,6 +29,7 @@ export const POST = async ({ request }) => {
     .from('approved_domains')
     .select('id')
     .eq('domain', domain)
+    .is('deleted_at', null)
     .maybeSingle()
 
   debug.domainQuery = domainErr ? { error: domainErr.message } : { rowFound: !!approvedDomain }

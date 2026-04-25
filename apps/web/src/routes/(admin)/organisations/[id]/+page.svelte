@@ -17,7 +17,8 @@
     Select,
     Badge,
     Copyable,
-    RecordLive
+    RecordLive,
+    RecordHistory
   } from '$lib/components/ui'
   import type { Column, Filter } from '$lib/components/ui/DataTable.svelte'
   import { fmtMoney, fmtMoneyWithCurrency } from '$lib/utils/money'
@@ -502,6 +503,8 @@
         </span>
       {/snippet}
     </FormCard>
+
+    <RecordHistory aggregateRoot="organisations" id={org?.id} label="organisation history" />
 
   {:else if activeTab === 'licences'}
     <!-- LICENCES -->

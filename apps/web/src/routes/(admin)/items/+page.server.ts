@@ -176,6 +176,7 @@ async function getTypeSlug(itemTypeId: string): Promise<TypeSlug | null> {
     .from('item_types')
     .select('slug')
     .eq('id', itemTypeId)
+    .is('deleted_at', null)
     .single()
   const s = (data as { slug: string } | null)?.slug
   return (s && (s in TYPE_TABLES)) ? (s as TypeSlug) : null
@@ -252,6 +253,7 @@ export const load = async ({ cookies, locals }) => {
     .from('subscription_lines')
     .select('item_id')
     .eq('status', 'signed')
+    .is('deleted_at', null)
     .not('item_id', 'is', null)
     .then(res => {
       const ids = new Set<string>()

@@ -36,11 +36,12 @@
       .select('tag_id, tags(id, name, color)')
       .eq('entity_type', entityType)
       .eq('entity_id', entityId)
+      .is('tags.deleted_at', null)
     if (data) assignedTags = data.map((d: any) => d.tags).filter(Boolean)
   }
 
   async function loadAllTags() {
-    const { data } = await supabase.from('tags').select('*').order('name')
+    const { data } = await supabase.from('tags').select('*').is('deleted_at', null).order('name')
     if (data) allTags = data
   }
 

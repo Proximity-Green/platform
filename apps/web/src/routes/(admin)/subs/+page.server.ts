@@ -10,11 +10,11 @@ export const load = async ({ cookies, locals }) => {
   const subs = await subsService.listAll()
   const [{ data: items }, { data: licenses }, { data: orgs }, { data: locations }, { data: persons }] =
     await Promise.all([
-      supabase.from('items').select('id, name, location_id, item_types(slug, requires_license, sellable_recurring)').order('name'),
-      supabase.from('licenses').select('id, item_id, location_id, items(name), organisation_id').order('created_at', { ascending: false }),
-      supabase.from('organisations').select('id, name').order('name'),
-      supabase.from('locations').select('id, name, short_name, currency').order('name'),
-      supabase.from('persons').select('id, first_name, last_name').order('first_name')
+      supabase.from('items').select('id, name, location_id, item_types(slug, requires_license, sellable_recurring)').is('deleted_at', null).is('item_types.deleted_at', null).order('name'),
+      supabase.from('licenses').select('id, item_id, location_id, items(name), organisation_id').is('deleted_at', null).is('items.deleted_at', null).order('created_at', { ascending: false }),
+      supabase.from('organisations').select('id, name').is('deleted_at', null).order('name'),
+      supabase.from('locations').select('id, name, short_name, currency').is('deleted_at', null).order('name'),
+      supabase.from('persons').select('id, first_name, last_name').is('deleted_at', null).order('first_name')
     ])
 
   const licensesEnriched = (licenses ?? []).map((l: any) => ({

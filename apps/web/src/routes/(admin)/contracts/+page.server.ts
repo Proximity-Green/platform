@@ -8,11 +8,12 @@ export const load = async ({ cookies, locals }) => {
 
   const [contracts, { data: orgs }, { data: persons }, { data: links }] = await Promise.all([
     contractsService.listAll(),
-    supabase.from('organisations').select('id, name').order('name'),
-    supabase.from('persons').select('id, first_name, last_name').order('first_name'),
+    supabase.from('organisations').select('id, name').is('deleted_at', null).order('name'),
+    supabase.from('persons').select('id, first_name, last_name').is('deleted_at', null).order('first_name'),
     supabase
       .from('contract_subscription_lines')
       .select('contract_id, subscription_line_id, subscription_lines(id, description, quantity, unit_price, currency)')
+      .is('subscription_lines.deleted_at', null)
   ])
 
   const linksByContractId: Record<string, any[]> = {}

@@ -32,6 +32,7 @@ export async function listAll(): Promise<ItemType[]> {
   const { data } = await supabase
     .from('item_types')
     .select('*')
+    .is('deleted_at', null)
     .order('name', { ascending: true })
   return data ?? []
 }

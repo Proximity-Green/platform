@@ -48,14 +48,15 @@ export type ServiceResult = { ok: true } | { ok: false; error: string }
 export async function listAll(): Promise<ItemEnriched[]> {
   const { data } = await supabase
     .from('items')
-    .select('*, item_types!inner(slug, name), locations(name)')
+    .select('*, item_types!inner(slug, name), locations(name, short_name)')
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
 
   return (data ?? []).map((row: any) => ({
     ...row,
     item_type_name: row.item_types?.name ?? null,
     item_type_slug: row.item_types?.slug ?? null,
-    location_name: row.locations?.name ?? null
+    location_name: row.locations?.short_name ?? row.locations?.name ?? null
   })) as ItemEnriched[]
 }
 

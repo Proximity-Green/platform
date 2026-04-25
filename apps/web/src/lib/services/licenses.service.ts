@@ -43,6 +43,11 @@ export async function listAll(): Promise<LicenseEnriched[]> {
       locations(name),
       persons:user_id(first_name, last_name)
     `)
+    .is('deleted_at', null)
+    .is('items.deleted_at', null)
+    .is('organisations.deleted_at', null)
+    .is('locations.deleted_at', null)
+    .is('persons.deleted_at', null)
     .order('created_at', { ascending: false })
 
   return (data ?? []).map((row: any) => ({

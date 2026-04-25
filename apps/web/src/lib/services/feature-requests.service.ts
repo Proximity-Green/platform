@@ -47,6 +47,7 @@ async function tagsByEntityIds(entityIds: string[]): Promise<Record<string, Tag[
     .select('entity_id, tag_id, tags(id, name, color)')
     .eq('entity_type', ENTITY)
     .in('entity_id', entityIds)
+    .is('tags.deleted_at', null)
   if (error || !data) return {}
   const byEntity: Record<string, Tag[]> = {}
   for (const row of data as any[]) {
@@ -63,6 +64,7 @@ async function authorsByUserIds(userIds: string[]): Promise<Record<string, strin
     .from('persons')
     .select('user_id, email, first_name, last_name')
     .in('user_id', ids)
+    .is('deleted_at', null)
   const map: Record<string, string> = {}
   for (const p of (data ?? []) as any[]) {
     const name = [p.first_name, p.last_name].filter(Boolean).join(' ').trim()
@@ -104,6 +106,7 @@ export async function listAll(
   let query = supabase
     .from('feature_requests')
     .select('id, kind, title, summary, status, created_by, created_at, updated_at')
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
   if (kind) query = query.eq('kind', kind)
   const { data, error } = await query
@@ -141,6 +144,7 @@ export async function getById(id: string, viewerId: string | null): Promise<Feat
     .from('feature_requests')
     .select('*')
     .eq('id', id)
+    .is('deleted_at', null)
     .maybeSingle()
   if (error || !data) return null
   const r = data as any
@@ -249,7 +253,7 @@ export async function removeVote(requestId: string, userId: string): Promise<Ser
 }
 
 export async function listTags(): Promise<Tag[]> {
-  const { data } = await supabase.from('tags').select('id, name, color').order('name')
+  const { data } = await supabase.from('tags').select('id, name, color').is('deleted_at', null).order('name')
   return (data ?? []) as Tag[]
 }
 
@@ -260,6 +264,7 @@ export async function findTagByName(name: string): Promise<Tag | null> {
     .from('tags')
     .select('id, name, color')
     .ilike('name', trimmed)
+    .is('deleted_at', null)
     .maybeSingle()
   return (data as Tag | null) ?? null
 }

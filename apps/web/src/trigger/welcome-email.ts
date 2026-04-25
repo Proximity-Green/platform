@@ -79,6 +79,7 @@ export const sendWelcomeEmail = task({
       .from('message_templates')
       .select('subject, html_body')
       .eq('slug', 'welcome-member')
+      .is('deleted_at', null)
       .single()
 
     if (!template) throw new Error('Template "welcome-member" not found in message_templates')
