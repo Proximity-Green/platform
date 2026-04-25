@@ -49,6 +49,11 @@ let cssFiles = 0
 let routes = 0
 let components = 0
 
+// Path filters use /-rooted segments that match in both layouts:
+//   monorepo dev:    .../platform/apps/web/src/routes/...
+//   docker context:  /app/src/routes/...
+// Match on the trailing segment instead of the leading prefix so they work
+// regardless of which level of the tree the build runs from.
 for (const f of allFiles) {
   const ext = extOf(f)
   if (!EXTS_CODE.has(ext)) continue
@@ -57,11 +62,11 @@ for (const f of allFiles) {
   if (ext === '.ts') tsFiles++
   if (ext === '.sql') sqlFiles++
   if (ext === '.css') cssFiles++
-  if (f.includes('/apps/web/src/routes/') && (f.endsWith('+page.svelte') || f.endsWith('+server.ts'))) routes++
-  if (f.includes('/apps/web/src/lib/components/')) components++
+  if (f.includes('/src/routes/') && (f.endsWith('+page.svelte') || f.endsWith('+server.ts'))) routes++
+  if (f.includes('/src/lib/components/')) components++
 }
 
-const migrations = allFiles.filter(f => f.includes('/packages/database/migrations/') && f.endsWith('.sql')).length
+const migrations = allFiles.filter(f => f.includes('/migrations/') && f.endsWith('.sql')).length
 // In Docker the build container has no git binary; fall back to the env vars
 // Coolify (and most CI) provide so the prod build still gets a real SHA.
 const envCommit = (process.env.SOURCE_COMMIT ?? '').trim()
