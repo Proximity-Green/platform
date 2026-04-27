@@ -1,5 +1,5 @@
 import { fail, error } from '@sveltejs/kit'
-import { requirePermission, getUserIdFromRequest, supabase } from '$lib/services/permissions.service'
+import { requirePermission, getUserIdFromRequest, supabase, sbForUser } from '$lib/services/permissions.service'
 import * as personsService from '$lib/services/persons.service'
 import { logFail } from '$lib/services/action-log.service'
 
@@ -32,10 +32,29 @@ export const load = async ({ params, cookies, locals }) => {
     .order('started_at', { ascending: false })
     .then(r => r.data ?? [])
 
+  // Licences this member holds — joined with item / location / org for the
+  // tab list. Same soft-delete fences as elsewhere on this page.
+  const licencesPromise = supabase
+    .from('licenses')
+    .select(`
+      id, started_at, ended_at, notes,
+      item_id, location_id, organisation_id,
+      items(name, item_type_id, item_types(slug, name)),
+      locations(name, short_name),
+      organisations(name)
+    `)
+    .eq('user_id', params.id)
+    .is('items.deleted_at', null)
+    .is('locations.deleted_at', null)
+    .is('organisations.deleted_at', null)
+    .order('started_at', { ascending: false })
+    .then(r => r.data ?? [])
+
   return {
     person: personRes.data,
     organisations: organisationsPromise,
     subscriptions: subscriptionsPromise,
+    licences: licencesPromise,
     viewerId: userId
   }
 }

@@ -51,16 +51,31 @@
     organisations: { name: string } | null
   }
 
+  type LicenceRow = {
+    id: string
+    started_at: string
+    ended_at: string | null
+    notes: string | null
+    item_id: string
+    location_id: string
+    organisation_id: string
+    items: { name: string; item_type_id: string; item_types: { slug: string; name: string } | null } | null
+    locations: { name: string; short_name: string | null } | null
+    organisations: { name: string } | null
+  }
+
   let { data, form } = $props()
   const person = $derived(data.person as Person)
 
   let saving = $state(false)
   let organisations = $state<{ id: string; name: string }[]>([])
   let subscriptions = $state<Subscription[]>([])
+  let licences = $state<LicenceRow[]>([])
 
   $effect(() => {
     Promise.resolve(data.organisations).then(v => (organisations = v as any))
     Promise.resolve(data.subscriptions).then(v => (subscriptions = v as any))
+    Promise.resolve(data.licences).then(v => (licences = v as any))
   })
 
   let perms = $state({ role: null as string | null, permissions: [] as any, loaded: false })
@@ -80,7 +95,8 @@
   const TABS = [
     { key: 'properties',   label: 'Properties' },
     { key: 'profile',      label: 'Profile' },
-    { key: 'privileges',   label: 'Privileges' },
+    { key: 'licences',     label: 'Licences' },
+    { key: 'permissions',  label: 'Permissions' },
     { key: 'printing',     label: 'Printing' },
     { key: 'wifi',         label: 'WiFi' },
     { key: 'wallets',      label: 'Wallets' },
@@ -306,10 +322,48 @@
       </FieldGrid>
     </div>
 
-    <!-- ── PRIVILEGES ── -->
-    <div class="pane" class:is-active={activeTab === 'privileges'}>
+    <!-- ── LICENCES (read-only) ── -->
+    <div class="pane" class:is-active={activeTab === 'licences'}>
+      <h3 class="section-title">Active &amp; past licences</h3>
+      {#if licences.length === 0}
+        <p class="muted">No licences for this member yet. Licences are managed under the organisation that holds them.</p>
+      {:else}
+        <table class="lic-tbl">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Membership / item</th>
+              <th>Location</th>
+              <th>Organisation</th>
+              <th>Started</th>
+              <th>Ended</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each licences as l (l.id)}
+              <tr>
+                <td class="muted">{l.items?.item_types?.name ?? '—'}</td>
+                <td>{l.items?.name ?? '—'}</td>
+                <td class="muted">{l.locations?.short_name ?? l.locations?.name ?? '—'}</td>
+                <td class="muted">{l.organisations?.name ?? '—'}</td>
+                <td class="muted small">{l.started_at ? new Date(l.started_at).toLocaleDateString('en-ZA') : '—'}</td>
+                <td class="muted small">{l.ended_at ? new Date(l.ended_at).toLocaleDateString('en-ZA') : 'open'}</td>
+                <td>
+                  <a class="manage-link" href={`/organisations/${l.organisation_id}?tab=licences`}>Manage in Org →</a>
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      {/if}
+      <p class="muted small lic-hint">Licences belong to organisations. Add or end them on the organisation's Licences tab.</p>
+    </div>
+
+    <!-- ── PERMISSIONS ── -->
+    <div class="pane" class:is-active={activeTab === 'permissions'}>
       <h3 class="section-title">Access & Roles</h3>
-      {@render placeholder('Privileges', 'User account, role assignments, and access scopes will live here once the ACL model is wired up. For now this member ' + (person.user_id ? 'has a linked user account.' : 'does not have a user account yet.'))}
+      {@render placeholder('Permissions', 'User account, role assignments, and access scopes will live here once the ACL model is wired up. For now this member ' + (person.user_id ? 'has a linked user account.' : 'does not have a user account yet.'))}
     </div>
 
     <!-- ── PRINTING ── -->
@@ -415,6 +469,37 @@
 
   .pane { display: none; }
   .pane.is-active { display: block; }
+
+  .lic-tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+    margin-bottom: var(--space-3);
+  }
+  .lic-tbl thead th {
+    text-align: left;
+    padding: 6px 10px;
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    font-weight: var(--weight-medium);
+    border-bottom: 1px solid var(--border);
+  }
+  .lic-tbl tbody td {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .small { font-size: var(--text-xs); }
+  .lic-hint { margin-top: var(--space-2); }
+  .manage-link {
+    color: var(--accent);
+    font-size: var(--text-xs);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .manage-link:hover { text-decoration: underline; }
 
   .section-title {
     font-size: var(--text-xs);

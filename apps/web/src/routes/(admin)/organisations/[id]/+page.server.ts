@@ -128,12 +128,21 @@ export const load = async ({ params, cookies, locals }) => {
       .order('first_name'),
     supabase
       .from('items')
-      .select('id, name, location_id, base_rate, accounting_tax_percentage, item_types(slug, requires_license, sellable_recurring, sellable_ad_hoc)')
+      .select('id, name, item_type_id, location_id, base_rate, accounting_tax_percentage, item_types(slug, requires_license, sellable_recurring, sellable_ad_hoc)')
       .eq('active', true)
       .is('deleted_at', null)
       .is('item_types.deleted_at', null)
       .order('name')
   ])
+
+  // Item-types lookup for the Licences cascading add form. Small enough to
+  // load up-front (~12 rows); avoids adding a new endpoint round-trip.
+  const itemTypesPromise = supabase
+    .from('item_types')
+    .select('id, slug, name')
+    .is('deleted_at', null)
+    .order('name')
+    .then(r => r.data ?? [])
 
   // Enrich licences
   const licences = (licencesRes.data ?? []).map((row: any) => ({
@@ -194,6 +203,29 @@ export const load = async ({ params, cookies, locals }) => {
 
   const members = membersRes.data ?? []
   const allPersons = personsRes.data ?? []
+  const allItemTypes = await itemTypesPromise
+
+  // Licences are reserved for licence-flow item types — currently the
+  // platform only uses the licences table for memberships, but the schema
+  // is permissive (any item_type with `requires_license = true` qualifies).
+  // Pre-compute the eligible items + types so the cascading add form
+  // doesn't have to know the rule.
+  const allItems = (itemsRes.data ?? []) as any[]
+  const licenceItemTypeIds = new Set(
+    allItems
+      .filter(i => i.item_types?.requires_license === true)
+      .map(i => i.item_type_id)
+      .filter(Boolean)
+  )
+  const licenceableItemTypes = allItemTypes.filter((t: any) => licenceItemTypeIds.has(t.id))
+  const licenceableItems = allItems
+    .filter(i => i.item_types?.requires_license === true)
+    .map(i => ({
+      id: i.id,
+      name: i.name,
+      item_type_id: i.item_type_id,
+      location_id: i.location_id
+    }))
 
   return {
     organisation,
@@ -209,6 +241,8 @@ export const load = async ({ params, cookies, locals }) => {
     organisations: (orgsRes.data ?? []).filter((o: any) => o.id !== id),
     persons: allPersons,
     items: itemsRes.data ?? [],
+    licenceableItems,
+    licenceableItemTypes,
     viewerId: userId
   }
 }
@@ -527,5 +561,47 @@ export const actions = {
     const { error: delErr } = await sbForUser(userId).from('organisations').delete().eq('id', params.id)
     if (delErr) return await logFail(userId, 'organisations.delete', delErr)
     throw redirect(303, '/organisations')
+  },
+
+  addLicence: async ({ request, params, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
+    if (userId) await requirePermission(userId, 'subscriptions', 'create')
+
+    const data = await request.formData()
+    const item_id = data.get('item_id') as string
+    const location_id = data.get('location_id') as string
+    const user_id = blank(data, 'user_id')   // person holding the licence — optional per schema
+    const started_at = data.get('started_at') as string
+    const ended_at = blank(data, 'ended_at')
+    const notes = blank(data, 'notes')
+
+    if (!item_id) return fail(400, { error: 'Pick a membership / item' })
+    if (!location_id) return fail(400, { error: 'Pick a location' })
+    if (!started_at) return fail(400, { error: 'Start date is required' })
+
+    const { error: insErr } = await sbForUser(userId).from('licenses').insert({
+      item_id,
+      location_id,
+      organisation_id: params.id,
+      user_id,
+      started_at,
+      ended_at,
+      notes
+    })
+    if (insErr) return await logFail(userId, 'organisations.addLicence', insErr, { org_id: params.id, item_id })
+    return { success: true, message: 'Licence added' }
+  },
+
+  removeLicence: async ({ request, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
+    if (userId) await requirePermission(userId, 'subscriptions', 'delete')
+
+    const data = await request.formData()
+    const id = data.get('id') as string
+    if (!id) return fail(400, { error: 'Missing id' })
+
+    const { error: delErr } = await sbForUser(userId).from('licenses').delete().eq('id', id)
+    if (delErr) return await logFail(userId, 'organisations.removeLicence', delErr, { id })
+    return { success: true, message: 'Licence removed' }
   }
 }

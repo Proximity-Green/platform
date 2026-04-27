@@ -18,7 +18,7 @@
     Badge,
     Copyable,
     RecordLive,
-    RecordHistory, ErrorBanner
+    RecordHistory, ErrorBanner, SubmitButton
   } from '$lib/components/ui'
   import type { Column, Filter } from '$lib/components/ui/DataTable.svelte'
   import { fmtMoney, fmtMoneyWithCurrency } from '$lib/utils/money'
@@ -33,6 +33,50 @@
   let addingTxnFor = $state<string | null>(null)
   let addingCustomer = $state(false)
   let editingSubId = $state<string | null>(null)
+
+  // ── Licence add-form state ──────────────────────────────────────────
+  // Cascading dropdowns: Item Type + Location filter the Membership/item
+  // list. Picking an item populates location_id automatically, so the
+  // submitted row stays internally consistent regardless of how the user
+  // narrowed the search. Restricted to items whose item_type has
+  // requires_license = true (memberships in current usage).
+  let showAddLicence = $state(false)
+  let licTypeId = $state<string>('')
+  let licLocationId = $state<string>('')
+  let licItemId = $state<string>('')
+  let licUserId = $state<string>('')
+  let licStartedAt = $state<string>(new Date().toISOString().slice(0, 10))
+  let licEndedAt = $state<string>('')
+  let licNotes = $state<string>('')
+
+  type LicenceableItem = { id: string; name: string; item_type_id: string; location_id: string }
+  const licenceableItems = $derived((data.licenceableItems as LicenceableItem[]) ?? [])
+  const licenceableTypes = $derived((data.licenceableItemTypes as { id: string; name: string; slug: string }[]) ?? [])
+  const filteredLicItems = $derived(
+    licenceableItems.filter(i =>
+      (!licTypeId || i.item_type_id === licTypeId) &&
+      (!licLocationId || i.location_id === licLocationId)
+    )
+  )
+  // Drop a stale item selection if the filters changed it out of view.
+  $effect(() => {
+    if (licItemId && !filteredLicItems.some(i => i.id === licItemId)) licItemId = ''
+  })
+
+  function resetLicForm() {
+    licTypeId = ''
+    licLocationId = ''
+    licItemId = ''
+    licUserId = ''
+    licStartedAt = new Date().toISOString().slice(0, 10)
+    licEndedAt = ''
+    licNotes = ''
+    showAddLicence = false
+  }
+
+  $effect(() => {
+    if (form?.success) resetLicForm()
+  })
   let addingProduct = $state(false)
   let addLocationId = $state<string>('')
   let addItemId = $state<string>('')
@@ -547,6 +591,92 @@
 
   {:else if activeTab === 'licences'}
     <!-- LICENCES -->
+    <div class="lic-tab-toolbar">
+      {#if can('subscriptions', 'create')}
+        <Button size="sm" onclick={() => (showAddLicence = !showAddLicence)}>
+          {showAddLicence ? 'Cancel' : '+ Add Licence'}
+        </Button>
+      {/if}
+    </div>
+
+    {#if showAddLicence && can('subscriptions', 'create')}
+      <Card padding="md">
+        <form
+          method="POST"
+          action="?/addLicence"
+          id="org-add-licence-form"
+          use:enhance={() => {
+            saving = true
+            return async ({ update }) => { await update({ reset: false }); saving = false }
+          }}
+        >
+          <FieldGrid cols={3}>
+            <Field label="Item Type">
+              <Select
+                value={licTypeId}
+                onchange={(v) => (licTypeId = v)}
+                placeholder="All licence types"
+                options={[{ value: '', label: 'All licence types' }, ...licenceableTypes.map(t => ({ value: t.id, label: t.name }))]}
+              />
+            </Field>
+            <Field label="Location">
+              <Select
+                value={licLocationId}
+                onchange={(v) => (licLocationId = v)}
+                placeholder="All locations"
+                options={[{ value: '', label: 'All locations' }, ...(data.locations as any[]).map(l => ({ value: l.id, label: l.short_name ?? l.name }))]}
+              />
+            </Field>
+            <Field label="Membership / item *">
+              <Select
+                name="item_id"
+                value={licItemId}
+                onchange={(v) => (licItemId = v)}
+                placeholder={filteredLicItems.length === 0 ? 'No matching items' : 'Pick an item'}
+                options={filteredLicItems.map(i => ({ value: i.id, label: i.name }))}
+              />
+            </Field>
+          </FieldGrid>
+          <FieldGrid cols={3}>
+            <Field label="Member (optional)">
+              <Select
+                name="user_id"
+                value={licUserId}
+                onchange={(v) => (licUserId = v)}
+                placeholder="No specific member"
+                options={[{ value: '', label: 'No specific member' }, ...((data.persons as any[]) ?? []).map(p => ({ value: p.id, label: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || p.email || p.id }))]}
+              />
+            </Field>
+            <Field name="started_at" label="Start *" type="date" value={licStartedAt} oninput={(v) => (licStartedAt = v)} />
+            <Field name="ended_at" label="End (optional)" type="date" value={licEndedAt} oninput={(v) => (licEndedAt = v)} />
+          </FieldGrid>
+          <FieldGrid cols={1}>
+            <Field name="notes" label="Notes" value={licNotes} oninput={(v) => (licNotes = v)} />
+          </FieldGrid>
+
+          <!-- location_id is taken from the picked item so the row is
+               internally consistent regardless of which location the
+               user used as a filter. -->
+          <input
+            type="hidden"
+            name="location_id"
+            value={
+              filteredLicItems.find(i => i.id === licItemId)?.location_id
+              ?? licLocationId
+              ?? ''
+            }
+          />
+
+          <div class="lic-form-actions">
+            <Button type="button" size="sm" variant="ghost" onclick={() => (showAddLicence = false)}>Cancel</Button>
+            <Button type="submit" size="sm" loading={saving} disabled={!licItemId || !licStartedAt}>
+              {saving ? 'Adding…' : 'Add licence'}
+            </Button>
+          </div>
+        </form>
+      </Card>
+    {/if}
+
     <DataTable
       data={data.licences as LicenceRow[]}
       columns={licenceColumns}
@@ -554,7 +684,7 @@
       searchFields={['item_name', 'user_name', 'location_name']}
       searchPlaceholder="Search item, member, location…"
       csvFilename={`org-${org.slug ?? org.id}-licences`}
-      empty="No licences yet — create via a Subscription proposal."
+      empty="No licences yet — click + Add Licence above."
       onRowClick={(l) => goto(`/licenses?id=${l.id}`)}
     >
       {#snippet row(l: any)}
@@ -566,6 +696,23 @@
         <td>{l.user_name ?? '—'}</td>
         <td class="date">{fmtDate(l.started_at)}</td>
         <td class="date hide-sm">{fmtDate(l.ended_at)}</td>
+      {/snippet}
+      {#snippet actions(l: any)}
+        {#if can('subscriptions', 'delete')}
+          <SubmitButton
+            action="?/removeLicence"
+            label="End"
+            pendingLabel="Ending…"
+            variant="danger"
+            size="sm"
+            fields={{ id: l.id }}
+            confirm={{
+              title: 'End licence?',
+              message: `Remove this licence for ${l.item_name ?? 'this item'}? It will disappear from the list.`,
+              variant: 'danger'
+            }}
+          />
+        {/if}
       {/snippet}
     </DataTable>
 
@@ -1489,5 +1636,17 @@
   }
   @media (max-width: 900px) {
     :global(.hide-md) { display: none; }
+  }
+
+  .lic-tab-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: var(--space-3);
+  }
+  .lic-form-actions {
+    display: flex;
+    gap: var(--space-2);
+    justify-content: flex-end;
+    margin-top: var(--space-3);
   }
 </style>
