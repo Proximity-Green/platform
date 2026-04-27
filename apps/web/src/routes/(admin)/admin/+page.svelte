@@ -435,6 +435,57 @@
   </div>
 </section>
 
+<section class="reports-section">
+  <h2 class="section-title">
+    Reported errors
+    <a class="section-link" href="/reported-errors">Triage queue →</a>
+  </h2>
+  {#await data.reportedErrors}
+    <p class="muted">Loading reports…</p>
+  {:then reports}
+    {#if !reports || (reports.openCount === 0 && reports.inProgressCount === 0 && reports.recent.length === 0)}
+      <p class="muted">No open error reports. ✓</p>
+    {:else}
+      <div class="report-counters">
+        <span class="rc rc-open">Open <strong>{reports.openCount}</strong></span>
+        <span class="rc rc-progress">In progress <strong>{reports.inProgressCount}</strong></span>
+      </div>
+      {#if reports.recent.length > 0}
+        <table class="reports-tbl">
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Code</th>
+              <th>Title</th>
+              <th>Reported by</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each reports.recent as r (r.id)}
+              <tr onclick={() => goto(`/reported-errors?entry=${r.id}`)}>
+                <td class="muted small">
+                  {r.reported_at ? new Date(r.reported_at).toLocaleString('en-ZA', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
+                </td>
+                <td class="mono small">{r.code}</td>
+                <td class="ellipsis">{r.title}</td>
+                <td class="muted small ellipsis">{r.reported_by_email ?? '—'}</td>
+                <td>
+                  <Badge tone={r.status === 'open' ? 'danger' : 'warning'}>
+                    {r.status === 'in_progress' ? 'In progress' : 'Open'}
+                  </Badge>
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      {/if}
+    {/if}
+  {:catch}
+    <p class="muted">Couldn't load reports.</p>
+  {/await}
+</section>
+
 <section class="commits-section">
   <h2 class="section-title">Recent commits</h2>
   {#await data.commits}
@@ -730,6 +781,67 @@
   }
 
   .commits-section { margin-top: var(--space-6); }
+  .reports-section { margin-top: var(--space-6); }
+  .section-link {
+    margin-left: var(--space-3);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-regular);
+    color: var(--accent);
+    text-decoration: none;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .section-link:hover { text-decoration: underline; }
+  .report-counters {
+    display: flex;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+  }
+  .rc {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+  .rc strong {
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+  }
+  .rc-open { border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); }
+  .rc-progress { border-color: color-mix(in srgb, var(--warning) 35%, var(--border)); }
+  .reports-tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+  .reports-tbl thead th {
+    text-align: left;
+    padding: 6px 10px;
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    font-weight: var(--weight-medium);
+  }
+  .reports-tbl tbody td {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .reports-tbl tbody tr { cursor: pointer; }
+  .reports-tbl tbody tr:hover { background: var(--surface-sunk); }
+  .reports-tbl .ellipsis {
+    max-width: 360px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .commits-tbl {
     width: 100%;
     border-collapse: separate;

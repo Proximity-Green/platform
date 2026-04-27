@@ -59,6 +59,16 @@ All known unclassified failures from this round have been classified.
 
 ## History — what changed and when
 
+### 2026-04-27 — Report-this-error pipeline + screenshots
+
+User-driven triage queue. The ErrorBanner gained a **Report error** button alongside Copy details and Show technical detail. Click → captures the visible viewport via `html2canvas-pro`, packages it with the existing details blob, POSTs to `/api/admin/report-error`, lands in `public.reported_errors`.
+
+- **Migration 052** — `reported_errors` table with RLS (insert-self, admin-read-all, admin-update-all). Status enum: `open` / `in_progress` / `resolved` / `wont_fix`. Permissions auto-seeded for admin/platform_admin/super_admin roles.
+- **Migration 053** — adds `screenshot text`, `viewport_w`, `viewport_h` columns. Data URLs capped at 2MB by the API.
+- **`/admin/reported-errors`** — triage page. Status counters, filterable list, expandable rows showing the full blob + screenshot, action row to mark in-progress / resolved (+ resolution note) / won't-fix / re-open / delete.
+- **`/admin` dashboard** — small widget: open & in-progress counters, 5 most recent open reports, link to the triage queue.
+- **`html2canvas-pro` dep** added (~30KB) — dynamic-imported only when the user clicks Report, so the success path on every page doesn't pay for it.
+
 ### 2026-04-27 — Wide expansion + restore_record fix
 
 Triggered by: `column "id" does not exist` showing as `unclassified` in `/changelog?filter=delete` when restoring a soft-deleted `item_tracking_codes` row.

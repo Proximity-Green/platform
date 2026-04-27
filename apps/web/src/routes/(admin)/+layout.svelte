@@ -70,6 +70,7 @@
 
   type NavItem = { href: string; label: string; guard?: string }
   const navItems: NavItem[] = [
+    { href: '/admin',         label: 'Dashboard',     guard: 'persons' },
     { href: '/feature-requests', label: 'Feedback',  guard: 'feature_requests' },
     { href: '/people',        label: 'Members',       guard: 'persons' },
     { href: '/organisations', label: 'Organisations', guard: 'organisations' },
@@ -87,6 +88,7 @@
     { href: '/messages',      label: 'Messages',      guard: 'settings' },
     { href: '/changelog',     label: 'Change Log',    guard: 'audit_log' },
     { href: '/system-logs',   label: 'System Logs',   guard: 'system_logs' },
+    { href: '/reported-errors', label: 'Reported Errors', guard: 'reported_errors' },
     { href: '/docs',          label: 'Docs' }
   ]
 </script>

@@ -63,6 +63,47 @@ async function fetchCommits(): Promise<CommitRow[] | null> {
   }
 }
 
+// Recent reported errors for the dashboard widget. Returns the 5 newest
+// open/in-progress reports plus aggregate counts so the widget can render
+// "12 open · 3 in progress" without a second query. Streamed (returns a
+// promise) so the rest of the dashboard paints immediately.
+async function fetchReportedErrors() {
+  const [openCountRes, ipCountRes, recentRes] = await Promise.all([
+    supabase.from('reported_errors').select('*', { count: 'exact', head: true }).eq('status', 'open'),
+    supabase.from('reported_errors').select('*', { count: 'exact', head: true }).eq('status', 'in_progress'),
+    supabase
+      .from('reported_errors')
+      .select('id, code, title, status, reported_at, url, reported_by')
+      .in('status', ['open', 'in_progress'])
+      .order('reported_at', { ascending: false })
+      .limit(5)
+  ])
+
+  // Resolve reporter emails so the widget shows "mark@..." not a uuid.
+  const ids = new Set<string>()
+  for (const r of (recentRes.data ?? []) as any[]) {
+    if (r.reported_by) ids.add(r.reported_by)
+  }
+  const emailMap: Record<string, string> = {}
+  if (ids.size > 0) {
+    try {
+      const { data: { users } } = await supabase.auth.admin.listUsers({ perPage: 1000 })
+      users?.forEach(u => { emailMap[u.id] = u.email ?? u.id })
+    } catch {
+      // Auth admin query failures are non-fatal — just show uuids.
+    }
+  }
+
+  return {
+    openCount: openCountRes.count ?? 0,
+    inProgressCount: ipCountRes.count ?? 0,
+    recent: ((recentRes.data ?? []) as any[]).map(r => ({
+      ...r,
+      reported_by_email: r.reported_by ? emailMap[r.reported_by] ?? null : null
+    }))
+  }
+}
+
 export const load = async ({ cookies, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)
   if (userId) await requirePermission(userId, 'persons', 'read')
@@ -108,6 +149,8 @@ export const load = async ({ cookies, locals }) => {
       licences
     },
     // Streamed: GitHub round-trip is ~1s+ so don't block the dashboard shell.
-    commits: fetchCommits()
+    commits: fetchCommits(),
+    // Streamed: reported_errors counts + recent are non-critical.
+    reportedErrors: fetchReportedErrors()
   }
 }

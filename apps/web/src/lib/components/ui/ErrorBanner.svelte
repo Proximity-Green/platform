@@ -8,6 +8,7 @@
    * action-completed-with-skipped-rows summary that's not a failure).
    */
   import type { ActionableError } from '$lib/services/errors'
+  import { page } from '$app/stores'
 
   type Tone = 'danger' | 'warning' | 'info'
   type Props = {
@@ -37,6 +38,8 @@
   // new error arrives (different title/raw) so the next failure isn't
   // pre-suppressed. Using title+raw as the identity key is good enough; the
   // chance of two consecutive failures sharing both is vanishingly small.
+  // We also reset the report-this-error state on the same trigger, since
+  // each new failure is its own report-able event.
   let dismissed = $state(false)
   let lastKey = $state<string | null>(null)
   $effect(() => {
@@ -44,6 +47,9 @@
     if (key !== lastKey) {
       lastKey = key
       dismissed = false
+      reportedId = null
+      reportError = null
+      reporting = false
     }
   })
 
@@ -54,6 +60,9 @@
 
   let rawOpen = $state(false)
   let copied = $state(false)
+  let reporting = $state(false)
+  let reportedId = $state<string | null>(null)
+  let reportError = $state<string | null>(null)
 
   // Map machine codes to short, lay-friendly labels for the chip. Anything
   // not mapped here still copies/logs as the raw code, so support can
@@ -78,22 +87,112 @@
     normalised ? (CODE_LABELS[normalised.code] ?? normalised.code) : ''
   )
 
-  async function copyAll() {
-    if (!normalised) return
-    const lines = [
+  // Single source of truth — both the Copy button and the "Show technical
+  // detail" panel render the same multiline blob, so what the user sees
+  // matches what they paste into a bug report.
+  const detailsBlob = $derived.by(() => {
+    if (!normalised) return ''
+    // Pull current user from the layout's session so support has the
+    // "who" alongside the "what" without the user having to remember to
+    // include it in the bug report. Falls through silently if the page
+    // isn't wrapped in a session-aware layout.
+    const user = ($page.data as any)?.session?.user as { id?: string; email?: string } | undefined
+    const userLine = user
+      ? `User: ${user.email ?? '(no email)'}${user.id ? ` (${user.id})` : ''}`
+      : 'User: (signed out)'
+    return [
       `Code: ${normalised.code}`,
       `Title: ${normalised.title}`,
       normalised.detail ? `Detail: ${normalised.detail}` : null,
       `When: ${new Date().toISOString()}`,
       `URL: ${typeof window !== 'undefined' ? window.location.href : ''}`,
+      userLine,
       normalised.raw && normalised.raw !== normalised.title ? `Raw: ${normalised.raw}` : null
     ].filter(Boolean).join('\n')
+  })
+
+  async function copyAll() {
+    if (!detailsBlob) return
     try {
-      await navigator.clipboard.writeText(lines)
+      await navigator.clipboard.writeText(detailsBlob)
       copied = true
       setTimeout(() => (copied = false), 1800)
     } catch { /* noop — older browsers / no clipboard permission */ }
   }
+
+  // Capture the visible viewport as a PNG data URL using html2canvas-pro.
+  // Dynamic-imported so the ~30KB lib only loads when the user actually
+  // hits Report — the success path on every page never pays for it.
+  // Returns null on any failure (huge browser, CORS-tainted image, etc.) so
+  // the report still goes through with text fields intact.
+  async function captureViewport(): Promise<{ dataUrl: string | null; w: number; h: number }> {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return { dataUrl: null, w: 0, h: 0 }
+    }
+    const w = window.innerWidth
+    const h = window.innerHeight
+    try {
+      const mod = await import('html2canvas-pro')
+      const html2canvas = (mod as any).default ?? mod
+      const canvas = await html2canvas(document.body, {
+        // Capture only what's currently scrolled into view — both keeps the
+        // image relevant ("the user saw this") and bounds the data-URL size.
+        x: window.scrollX,
+        y: window.scrollY,
+        width: w,
+        height: h,
+        windowWidth: document.documentElement.scrollWidth,
+        windowHeight: document.documentElement.scrollHeight,
+        scale: window.devicePixelRatio > 1 ? 1 : 1.25, // ~1× HiDPI / 1.25× LoDPI
+        backgroundColor: null,
+        logging: false,
+        useCORS: true
+      })
+      // PNG quality is irrelevant; switch to JPEG when the PNG is huge.
+      let dataUrl = canvas.toDataURL('image/png')
+      if (dataUrl.length > 1_500_000) {
+        dataUrl = canvas.toDataURL('image/jpeg', 0.78)
+      }
+      return { dataUrl, w, h }
+    } catch {
+      return { dataUrl: null, w, h }
+    }
+  }
+
+  async function reportError_() {
+    if (!normalised || reporting || reportedId) return
+    reporting = true
+    reportError = null
+    try {
+      const { dataUrl, w, h } = await captureViewport()
+      const res = await fetch('/api/admin/report-error', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: normalised.code,
+          title: normalised.title,
+          detail: normalised.detail,
+          raw: normalised.raw,
+          url: typeof window !== 'undefined' ? window.location.href : '',
+          user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+          screenshot: dataUrl,
+          viewport_w: w,
+          viewport_h: h
+        })
+      })
+      if (!res.ok) {
+        const t = await res.text().catch(() => '')
+        throw new Error(t || `HTTP ${res.status}`)
+      }
+      const json = await res.json().catch(() => ({} as any))
+      reportedId = json?.id ?? 'submitted'
+    } catch (e: any) {
+      reportError = e?.message ?? String(e)
+    } finally {
+      reporting = false
+    }
+  }
+
 </script>
 
 {#if normalised && !dismissed}
@@ -131,14 +230,26 @@
         <button type="button" class="error-copy-btn" onclick={copyAll} title="Copy error details">
           {copied ? '✓ Copied' : 'Copy details'}
         </button>
-        {#if showRaw && normalised.raw && normalised.raw !== normalised.title}
+        <button
+          type="button"
+          class="error-copy-btn"
+          onclick={reportError_}
+          disabled={reporting || !!reportedId}
+          title={reportedId ? 'Report submitted — visible on /admin/reported-errors' : 'Send this error to the triage queue'}
+        >
+          {reporting ? 'Reporting…' : reportedId ? '✓ Reported' : 'Report error'}
+        </button>
+        {#if showRaw}
           <button type="button" class="error-raw-toggle" onclick={() => (rawOpen = !rawOpen)}>
             {rawOpen ? 'Hide' : 'Show'} technical detail
           </button>
         {/if}
       </div>
-      {#if showRaw && rawOpen && normalised.raw && normalised.raw !== normalised.title}
-        <pre class="error-raw">{normalised.raw}</pre>
+      {#if reportError}
+        <div class="error-report-feedback">Couldn't submit report: {reportError}</div>
+      {/if}
+      {#if showRaw && rawOpen}
+        <pre class="error-raw">{detailsBlob}</pre>
       {/if}
     </div>
     {#if dismissable}
@@ -266,9 +377,18 @@
     cursor: pointer;
     transition: background var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
   }
-  .error-copy-btn:hover {
+  .error-copy-btn:hover:not(:disabled) {
     background: color-mix(in srgb, currentColor 8%, transparent);
     color: var(--text);
+  }
+  .error-copy-btn:disabled {
+    opacity: 0.7;
+    cursor: default;
+  }
+  .error-report-feedback {
+    margin-top: 6px;
+    font-size: var(--text-xs);
+    color: var(--danger);
   }
   .error-raw-toggle {
     background: none;
