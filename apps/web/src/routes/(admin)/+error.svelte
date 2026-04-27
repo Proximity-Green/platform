@@ -7,6 +7,13 @@
   let userRole = $state('')
   let requiredPerm = $state('')
 
+  // Pre-existing bug: `impersonating` was referenced in onMount() without
+  // being declared, so any error landing this page caused a second
+  // ReferenceError that masked the original error and forced SvelteKit to
+  // unwind the navigation. Declare it locally so the error page renders
+  // its own state cleanly.
+  let impersonating = $state<{ targetUserId?: string; targetEmail?: string; targetRole?: string } | null>(null)
+
   onMount(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     userEmail = session?.user?.email ?? ''
@@ -16,6 +23,7 @@
     if (cookie) {
       try {
         const imp = JSON.parse(decodeURIComponent(cookie.split('=').slice(1).join('=')))
+        impersonating = imp
         userEmail = imp.targetEmail
         userRole = imp.targetRole
       } catch {}
