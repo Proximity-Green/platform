@@ -62,11 +62,20 @@ export function createTableState(opts: TableStateOptions) {
     state.size = Number(sp.get('size') ?? def.size) || def.size
   }
 
+  // Params we own. Anything else in the URL (e.g. `?tab=licences` on a tabbed
+  // detail page, or a hash fragment) must round-trip untouched — otherwise a
+  // DataTable mounting inside a tab strips the tab param on its first
+  // writeToUrl and the tab snaps back to default.
+  const OWNED = new Set(['q', 'filter', 'sort', 'dir', 'page', 'size'])
+
   function writeToUrl(immediate = false) {
     if (!browser) return
     if (timer) { clearTimeout(timer); timer = null }
     const run = () => {
+      const url = get(page).url
       const sp = new URLSearchParams()
+      // Preserve foreign params (incl. multi-value entries via append).
+      for (const [k, v] of url.searchParams) if (!OWNED.has(k)) sp.append(k, v)
       if (state.q !== hardDef.q) sp.set('q', state.q)
       if (state.filter !== hardDef.filter) sp.set('filter', state.filter)
       if (state.sort !== hardDef.sort) sp.set('sort', state.sort)
@@ -74,11 +83,10 @@ export function createTableState(opts: TableStateOptions) {
       if (state.page !== hardDef.page) sp.set('page', String(state.page))
       if (state.size !== hardDef.size) sp.set('size', String(state.size))
       const qs = sp.toString()
-      goto(qs ? `?${qs}` : location.pathname, {
-        replaceState: true,
-        noScroll: true,
-        keepFocus: true
-      })
+      const next = `${url.pathname}${qs ? `?${qs}` : ''}${url.hash}`
+      const here = `${url.pathname}${url.search}${url.hash}`
+      if (next === here) return  // no-op: skip redundant replaceState
+      goto(next, { replaceState: true, noScroll: true, keepFocus: true })
     }
     if (immediate) run()
     else timer = setTimeout(run, debounceMs)
