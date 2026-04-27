@@ -460,7 +460,7 @@
             </Field>
             <Field name="legal_name" label="Legal Name" value={org.legal_name ?? ''} />
             <Field name="short_name" label="Short Name" value={org.short_name ?? ''} />
-            <input type="hidden" name="slug" value={org.slug ?? ''} />
+            <Field name="slug" label="UHID" value={org.slug ?? ''} />
             <Field label="Home Location">
               <div class="ro-input muted">{homeLocation?.name ?? 'Derived from active subscriptions'}</div>
             </Field>
