@@ -13,7 +13,7 @@
     Badge,
     KpiCard,
     Copyable,
-    SubmitButton
+    SubmitButton, ErrorBanner
   } from '$lib/components/ui'
   import type { Column, Filter } from '$lib/components/ui/DataTable.svelte'
   import { fmtMoneyWithCurrency } from '$lib/utils/money'
@@ -197,7 +197,10 @@
 
 <PageHead title="Invoices" lede="AR + AP unified — invoices, credit notes, and quotes across organisations." />
 
-<Toast error={form?.error} success={form?.success} message={form?.message} />
+<Toast success={form?.success} message={form?.success ? form?.message : undefined} />
+{#if form?.error || (form as any)?.actionable}
+  <ErrorBanner error={(form as any)?.actionable ?? form?.error} showRaw />
+{/if}
 
 <div class="kpi-grid">
   <KpiCard label="Total Invoices" value={String(totalInvoices)} />

@@ -268,7 +268,7 @@ export const actions = {
     if (!patch.name) return fail(400, { error: 'Name is required' })
 
     const { error: upErr } = await sbForUser(userId).from('organisations').update(patch).eq('id', id)
-    if (upErr) return fail(400, { error: upErr.message })
+    if (upErr) return await logFail(userId, 'organisations.update', upErr)
     return { success: true, message: 'Organisation updated' }
   },
 
@@ -292,7 +292,7 @@ export const actions = {
       accounting_external_customer_code: blank(data, 'accounting_external_customer_code'),
       is_primary: data.get('is_primary') === 'on'
     })
-    if (insErr) return fail(400, { error: insErr.message })
+    if (insErr) return await logFail(userId, 'organisations.addAccountingCustomer', insErr)
     return { success: true, message: 'Accounting customer linked' }
   },
 
@@ -331,7 +331,7 @@ export const actions = {
       amount,
       notes: blank(data, 'notes')
     }, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'organisations.addWalletTransaction', result.error)
     return { success: true, message: 'Transaction added' }
   },
 
@@ -353,7 +353,7 @@ export const actions = {
     if (data.has('notes')) patch.notes = blank(data, 'notes')
 
     const result = await subsService.update(id, patch, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'organisations.updateSub', result.error)
     return { success: true, message: 'Subscription line updated' }
   },
 
@@ -420,7 +420,7 @@ export const actions = {
       ended_at: blank(data, 'ended_at'),
       notes: blank(data, 'notes')
     } as any, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'organisations.createSub', result.error)
     return { success: true, message: 'Subscription line added' }
   },
 
@@ -525,7 +525,7 @@ export const actions = {
     if (userId) await requirePermission(userId, 'organisations', 'delete')
 
     const { error: delErr } = await sbForUser(userId).from('organisations').delete().eq('id', params.id)
-    if (delErr) return fail(400, { error: delErr.message })
+    if (delErr) return await logFail(userId, 'organisations.delete', delErr)
     throw redirect(303, '/organisations')
   }
 }

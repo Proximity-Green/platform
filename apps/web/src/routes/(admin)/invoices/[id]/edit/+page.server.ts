@@ -1,6 +1,7 @@
 import { fail, error, redirect } from '@sveltejs/kit'
 import { requirePermission, getUserIdFromRequest, supabase, sbForUser } from '$lib/services/permissions.service'
 import * as invoicesService from '$lib/services/invoices.service'
+import { logFail } from '$lib/services/action-log.service'
 
 const blank = (data: FormData, k: string): string | null => {
   const v = data.get(k)
@@ -83,7 +84,7 @@ export const actions = {
 
     const sb = sbForUser(userId)
     const { error: upErr } = await sb.from('invoices').update(patch).eq('id', id)
-    if (upErr) return fail(400, { error: upErr.message })
+    if (upErr) return await logFail(userId, 'invoices.save', upErr)
 
     // Recompute totals from current lines
     const { data: lines } = await sb.from('invoice_lines').select('*').eq('invoice_id', id)
@@ -110,7 +111,7 @@ export const actions = {
     if (status === 'paid') patch.paid_at = new Date().toISOString()
 
     const { error: upErr } = await sbForUser(userId).from('invoices').update(patch).eq('id', params.id)
-    if (upErr) return fail(400, { error: upErr.message })
+    if (upErr) return await logFail(userId, 'invoices.changeStatus', upErr)
     return { success: true, message: `Status set to ${status}` }
   },
 
@@ -161,7 +162,7 @@ export const actions = {
       accounting_tax_code: (item as any).accounting_tax_code,
       accounting_tracking_codes: trackingCodes.length ? trackingCodes : null
     })
-    if (insErr) return fail(400, { error: insErr.message })
+    if (insErr) return await logFail(userId, 'invoices.addLine', insErr)
 
     // Recompute totals
     const { data: lines } = await sb.from('invoice_lines').select('*').eq('invoice_id', params.id)
@@ -200,7 +201,7 @@ export const actions = {
     }
     const sb = sbForUser(userId)
     const { error: upErr } = await sb.from('invoice_lines').update(patch).eq('id', line_id)
-    if (upErr) return fail(400, { error: upErr.message })
+    if (upErr) return await logFail(userId, 'invoices.updateLine', upErr)
 
     const { data: lines } = await sb.from('invoice_lines').select('*').eq('invoice_id', params.id)
     const totals = recomputeTotals(lines ?? [])
@@ -223,7 +224,7 @@ export const actions = {
 
     const sb = sbForUser(userId)
     const { error: delErr } = await sb.from('invoice_lines').delete().eq('id', line_id)
-    if (delErr) return fail(400, { error: delErr.message })
+    if (delErr) return await logFail(userId, 'invoices.removeLine', delErr)
 
     const { data: lines } = await sb.from('invoice_lines').select('*').eq('invoice_id', params.id)
     const totals = recomputeTotals(lines ?? [])
@@ -240,7 +241,7 @@ export const actions = {
     const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'invoices', 'delete')
     const inv = await invoicesService.remove(params.id, userId)
-    if (!inv.ok) return fail(400, { error: inv.error })
+    if (!inv.ok) return await logFail(userId, 'invoices.delete', inv.error)
     throw redirect(303, '/invoices')
   }
 }

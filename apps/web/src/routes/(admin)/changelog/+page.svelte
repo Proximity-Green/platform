@@ -8,7 +8,8 @@
     Toast,
     Badge,
     DataTable,
-    SubmitButton
+    SubmitButton,
+    ErrorBanner
   } from '$lib/components/ui'
   import type { Column, Filter } from '$lib/components/ui/DataTable.svelte'
 
@@ -191,7 +192,13 @@
 
 <PageHead title="Change Log" lede="Every database change, with who and when. Click a row to inspect field-by-field." />
 
-<Toast error={form?.error} success={form?.success} message={form?.message} />
+<Toast success={form?.success} message={form?.success ? form?.message : undefined} />
+{#if form?.error || (form as any)?.actionable}
+  <ErrorBanner error={(form as any)?.actionable ?? form?.error} showRaw />
+{/if}
+{#if undoError}
+  <ErrorBanner error={undoError} onDismiss={() => (undoError = null)} />
+{/if}
 
 <div class="tabs-bar" role="tablist">
   <button type="button" role="tab" class="tab" class:active={activeTab === 'single'} aria-selected={activeTab === 'single'} onclick={() => (activeTab = 'single')}>

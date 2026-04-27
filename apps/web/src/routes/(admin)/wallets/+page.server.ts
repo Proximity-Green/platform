@@ -1,6 +1,7 @@
 import { fail } from '@sveltejs/kit'
 import { requirePermission, getUserIdFromRequest, supabase } from '$lib/services/permissions.service'
 import * as walletsService from '$lib/services/wallets.service'
+import { logFail } from '$lib/services/action-log.service'
 
 export const load = async ({ cookies, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)
@@ -56,7 +57,7 @@ export const actions = {
       currency,
       balance: num(data, 'balance') ?? 0
     }, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'wallets.create', result.error)
     return { success: true, message: 'Wallet created' }
   },
 
@@ -71,7 +72,7 @@ export const actions = {
     const result = await walletsService.update(id, {
       currency: blank(data, 'currency') ?? undefined
     }, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'wallets.update', result.error)
     return { success: true, message: 'Wallet updated' }
   },
 
@@ -81,7 +82,7 @@ export const actions = {
 
     const data = await request.formData()
     const result = await walletsService.remove(data.get('id') as string, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'wallets.delete', result.error)
     return { success: true, message: 'Wallet deleted' }
   },
 
@@ -103,7 +104,7 @@ export const actions = {
       amount,
       notes: blank(data, 'notes')
     }, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'wallets.addTransaction', result.error)
     return { success: true, message: 'Transaction added' }
   }
 }

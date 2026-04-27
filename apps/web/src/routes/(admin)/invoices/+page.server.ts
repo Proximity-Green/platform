@@ -1,6 +1,7 @@
 import { fail } from '@sveltejs/kit'
 import { requirePermission, getUserIdFromRequest, supabase } from '$lib/services/permissions.service'
 import * as invoicesService from '$lib/services/invoices.service'
+import { logFail } from '$lib/services/action-log.service'
 
 export const load = async ({ cookies, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)
@@ -58,7 +59,7 @@ export const actions = {
       due_at: blank(data, 'due_at'),
       tax_mode: (blank(data, 'tax_mode') ?? 'exclusive') as invoicesService.TaxMode
     }, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'invoices.create', result.error)
     return { success: true, message: 'Invoice created' }
   },
 
@@ -91,7 +92,7 @@ export const actions = {
       total: num(data, 'total') ?? undefined,
       notes: blank(data, 'notes')
     }, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'invoices.update', result.error)
     return { success: true, message: 'Invoice updated' }
   },
 
@@ -101,7 +102,7 @@ export const actions = {
 
     const data = await request.formData()
     const result = await invoicesService.remove(data.get('id') as string, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'invoices.delete', result.error)
     return { success: true, message: 'Invoice deleted' }
   },
 

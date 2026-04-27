@@ -1,6 +1,7 @@
 import { fail, error } from '@sveltejs/kit'
 import { requirePermission, getUserIdFromRequest, supabase } from '$lib/services/permissions.service'
 import * as personsService from '$lib/services/persons.service'
+import { logFail } from '$lib/services/action-log.service'
 
 export const load = async ({ params, cookies, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)
@@ -64,7 +65,7 @@ export const actions = {
       offboarded_at: blank('offboarded_at'),
       external_accounting_customer_id: blank('external_accounting_customer_id')
     }, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'people.update', result.error)
     return { success: true, message: 'Member updated' }
   },
 
@@ -72,7 +73,7 @@ export const actions = {
     const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'persons', 'delete')
     const result = await personsService.deletePerson(params.id, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'people.delete', result.error)
     return { success: true, message: 'Member deleted' }
   },
 
@@ -88,7 +89,7 @@ export const actions = {
       invitedByUserId: userId,
       inviterEmail: session?.user?.email ?? 'an administrator'
     })
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'people.inviteUser', result.error)
     return { success: true, message: 'Member invited' }
   }
 }

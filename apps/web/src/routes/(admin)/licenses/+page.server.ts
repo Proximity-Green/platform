@@ -1,6 +1,7 @@
 import { fail } from '@sveltejs/kit'
 import { requirePermission, getUserIdFromRequest, supabase } from '$lib/services/permissions.service'
 import * as licensesService from '$lib/services/licenses.service'
+import { logFail } from '$lib/services/action-log.service'
 
 export const load = async ({ cookies, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)
@@ -44,7 +45,7 @@ export const actions = {
       ended_at: blank(data, 'ended_at'),
       notes: blank(data, 'notes')
     }, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'licenses.create', result.error)
     return { success: true, message: 'Licence created' }
   },
 
@@ -62,7 +63,7 @@ export const actions = {
       ended_at: blank(data, 'ended_at'),
       notes: blank(data, 'notes')
     }, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'licenses.update', result.error)
     return { success: true, message: 'Licence updated' }
   },
 
@@ -72,7 +73,7 @@ export const actions = {
 
     const data = await request.formData()
     const result = await licensesService.remove(data.get('id') as string, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'licenses.delete', result.error)
     return { success: true, message: 'Licence deleted' }
   }
 }

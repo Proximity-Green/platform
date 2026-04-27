@@ -1,6 +1,7 @@
 import { fail } from '@sveltejs/kit'
 import { requirePermission, getUserIdFromRequest } from '$lib/services/permissions.service'
 import * as itemTypesService from '$lib/services/item-types.service'
+import { logFail } from '$lib/services/action-log.service'
 
 function blank(data: FormData, key: string): string | null {
   const v = data.get(key)
@@ -38,7 +39,7 @@ export const actions = {
       sellable_recurring: bool(data, 'sellable_recurring'),
       apply_pro_rata: bool(data, 'apply_pro_rata')
     }, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'item-types.create', result.error)
     return { success: true, message: 'Item type created' }
   },
 
@@ -59,7 +60,7 @@ export const actions = {
       sellable_recurring: bool(data, 'sellable_recurring'),
       apply_pro_rata: bool(data, 'apply_pro_rata')
     }, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'item-types.update', result.error)
     return { success: true, message: 'Item type updated' }
   },
 
@@ -72,7 +73,7 @@ export const actions = {
     if (!id) return fail(400, { error: 'Missing id' })
 
     const result = await itemTypesService.remove(id, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'item-types.delete', result.error)
     return { success: true, message: 'Item type deleted' }
   }
 }

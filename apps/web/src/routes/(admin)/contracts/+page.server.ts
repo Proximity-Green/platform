@@ -1,6 +1,7 @@
 import { fail } from '@sveltejs/kit'
 import { requirePermission, getUserIdFromRequest, supabase } from '$lib/services/permissions.service'
 import * as contractsService from '$lib/services/contracts.service'
+import { logFail } from '$lib/services/action-log.service'
 
 export const load = async ({ cookies, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)
@@ -57,7 +58,7 @@ export const actions = {
       ended_at: blank(data, 'ended_at'),
       status: (blank(data, 'status') ?? 'draft') as contractsService.ContractStatus
     }, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'contracts.create', result.error)
     return { success: true, message: 'Contract created' }
   },
 
@@ -82,7 +83,7 @@ export const actions = {
       status: blank(data, 'status') as contractsService.ContractStatus,
       notes: blank(data, 'notes')
     }, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'contracts.update', result.error)
     return { success: true, message: 'Contract updated' }
   },
 
@@ -92,7 +93,7 @@ export const actions = {
 
     const data = await request.formData()
     const result = await contractsService.remove(data.get('id') as string, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'contracts.delete', result.error)
     return { success: true, message: 'Contract deleted' }
   }
 }

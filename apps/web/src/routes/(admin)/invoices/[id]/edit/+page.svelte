@@ -11,7 +11,7 @@
     FieldGrid,
     Select,
     Badge,
-    Copyable
+    Copyable, ErrorBanner
   } from '$lib/components/ui'
   import { fmtMoney, fmtMoneyWithCurrency } from '$lib/utils/money'
 
@@ -107,7 +107,10 @@
   <Button variant="ghost" size="sm" href={`/organisations/${inv.organisation_id}?tab=invoices`}>← Back to Organisation</Button>
 </PageHead>
 
-<Toast error={form?.error} success={form?.success} message={form?.message} />
+<Toast success={form?.success} message={form?.success ? form?.message : undefined} />
+{#if form?.error || (form as any)?.actionable}
+  <ErrorBanner error={(form as any)?.actionable ?? form?.error} showRaw />
+{/if}
 
 <form method="POST" action="?/save" use:enhance={() => {
   saving = true

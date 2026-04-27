@@ -2,6 +2,7 @@ import { fail, error } from '@sveltejs/kit'
 import { requirePermission, getUserIdFromRequest, supabase, sbForUser } from '$lib/services/permissions.service'
 import * as locationsService from '$lib/services/locations.service'
 import { invalidateItemLookups } from '$lib/services/item-lookups.service'
+import { logFail } from '$lib/services/action-log.service'
 
 const blank = (data: FormData, k: string): string | null => {
   const v = data.get(k)
@@ -111,7 +112,7 @@ export const actions = {
     const data = await request.formData()
     const input = readLocationInput(data)
     const result = await locationsService.updateLocation(params.id, input, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'locations.update', result.error, { id: params.id })
     return { success: true, message: 'Location updated' }
   },
 
@@ -136,7 +137,7 @@ export const actions = {
         .update({ is_primary: false })
         .eq('location_id', params.id)
         .eq('is_primary', true)
-      if (unsetErr) return fail(400, { error: unsetErr.message })
+      if (unsetErr) return await logFail(userId, 'locations.addTrackingCode.unsetPrimary', unsetErr, { location_id: params.id })
     }
 
     const { error: insErr } = await sb.from('tracking_codes').insert({
@@ -148,7 +149,7 @@ export const actions = {
       accounting_external_option_id: blank(data, 'accounting_external_option_id'),
       is_primary: isPrimary
     })
-    if (insErr) return fail(400, { error: insErr.message })
+    if (insErr) return await logFail(userId, 'locations.addTrackingCode', insErr, { location_id: params.id, code })
     invalidateItemLookups()
     return { success: true, message: 'Tracking code added' }
   },
@@ -169,13 +170,13 @@ export const actions = {
       .update({ is_primary: false })
       .eq('location_id', params.id)
       .eq('is_primary', true)
-    if (demoteErr) return fail(400, { error: demoteErr.message })
+    if (demoteErr) return await logFail(userId, 'locations.setPrimary.demote', demoteErr, { location_id: params.id })
 
     const { error: promoteErr } = await sb
       .from('tracking_codes')
       .update({ is_primary: true })
       .eq('id', id)
-    if (promoteErr) return fail(400, { error: promoteErr.message })
+    if (promoteErr) return await logFail(userId, 'locations.setPrimary.promote', promoteErr, { id })
 
     invalidateItemLookups()
     return { success: true, message: 'Primary tracking code updated' }
@@ -194,7 +195,7 @@ export const actions = {
       .from('tracking_codes')
       .update({ active: !active })
       .eq('id', id)
-    if (upErr) return fail(400, { error: upErr.message })
+    if (upErr) return await logFail(userId, 'locations.toggleActive', upErr, { id })
     invalidateItemLookups()
     return { success: true, message: 'Tracking code updated' }
   },
@@ -222,7 +223,7 @@ export const actions = {
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
-    if (upErr) return fail(400, { error: upErr.message })
+    if (upErr) return await logFail(userId, 'locations.updateTrackingCode', upErr, { id })
     invalidateItemLookups()
     return { success: true, message: 'Tracking code updated' }
   },
@@ -235,8 +236,16 @@ export const actions = {
     const id = blank(data, 'id')
     if (!id) return fail(400, { error: 'Missing id' })
 
-    const { error: delErr } = await sbForUser(userId).from('tracking_codes').delete().eq('id', id)
-    if (delErr) return fail(400, { error: delErr.message })
+    // Soft-delete via the canonical bulk RPC so the action lands in
+    // bulk_actions and is reversible from /changelog. tracking_codes is
+    // a tier-1 table per CLAUDE.md, so a raw .delete() would skip the
+    // deleted_at lifecycle entirely.
+    const { error: rpcErr } = await sbForUser(userId).rpc('bulk_soft_delete_apply', {
+      p_table: 'tracking_codes',
+      p_ids: [id],
+      p_performed_by: userId
+    })
+    if (rpcErr) return await logFail(userId, 'locations.deleteTrackingCode', rpcErr, { id })
     invalidateItemLookups()
     return { success: true, message: 'Tracking code deleted' }
   }

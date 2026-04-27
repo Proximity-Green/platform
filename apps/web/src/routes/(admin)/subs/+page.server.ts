@@ -2,6 +2,7 @@ import { fail } from '@sveltejs/kit'
 import { requirePermission, getUserIdFromRequest, supabase } from '$lib/services/permissions.service'
 import * as subsService from '$lib/services/subscription-lines.service'
 import type { SubscriptionStatus, SubscriptionFrequency } from '$lib/services/subscription-lines.service'
+import { logFail } from '$lib/services/action-log.service'
 
 export const load = async ({ cookies, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)
@@ -76,7 +77,7 @@ export const actions = {
 
     const data = await request.formData()
     const result = await subsService.create(buildPayload(data))
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'subs.create', result.error)
     return { success: true, message: 'Subscription created' }
   },
 
@@ -86,7 +87,7 @@ export const actions = {
 
     const data = await request.formData()
     const result = await subsService.update(data.get('id') as string, buildPayload(data))
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'subs.update', result.error)
     return { success: true, message: 'Subscription updated' }
   },
 
@@ -99,7 +100,7 @@ export const actions = {
       data.get('id') as string,
       data.get('status') as SubscriptionStatus
     )
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'subs.setStatus', result.error)
     return { success: true, message: 'Status updated' }
   },
 
@@ -109,7 +110,7 @@ export const actions = {
 
     const data = await request.formData()
     const result = await subsService.remove(data.get('id') as string)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'subs.delete', result.error)
     return { success: true, message: 'Subscription deleted' }
   },
 
@@ -130,7 +131,7 @@ export const actions = {
     }
 
     const result = await subsService.convertToInvoice(id)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'subs.convertToInvoice', result.error)
     return { success: true, message: `Invoice created (${result.invoice_id.slice(0, 8)})` }
   }
 }

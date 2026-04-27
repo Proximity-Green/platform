@@ -1,6 +1,7 @@
 import { fail } from '@sveltejs/kit'
 import { requirePermission, getUserIdFromRequest } from '$lib/services/permissions.service'
 import * as rolesService from '$lib/services/roles.service'
+import { logFail } from '$lib/services/action-log.service'
 
 export const load = async ({ cookies, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)
@@ -19,7 +20,7 @@ export const actions = {
       data.get('description') as string,
       userId
     )
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'roles.createRole', result.error)
     return { success: true, message: result.message }
   },
 
@@ -34,7 +35,7 @@ export const actions = {
       data.get('description') as string,
       userId
     )
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'roles.updateRole', result.error)
     return { success: true, message: result.message }
   },
 
@@ -44,7 +45,7 @@ export const actions = {
 
     const data = await request.formData()
     const result = await rolesService.deleteRole(data.get('id') as string, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'roles.deleteRole', result.error)
     return { success: true, message: result.message }
   },
 
@@ -59,7 +60,7 @@ export const actions = {
       data.get('action') as string,
       userId
     )
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'roles.addPermission', result.error)
     return { success: true, message: result.message }
   },
 
@@ -73,7 +74,7 @@ export const actions = {
       data.get('role_id') as string,
       userId
     )
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'roles.detachUser', result.error)
     return { success: true, message: result.message }
   },
 
@@ -83,7 +84,7 @@ export const actions = {
 
     const data = await request.formData()
     const result = await rolesService.removePermission(data.get('id') as string, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'roles.removePermission', result.error)
     return { success: true, message: result.message }
   }
 }

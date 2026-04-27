@@ -15,10 +15,14 @@
     tone?: Tone
     /** Show the raw developer error string under the actions (collapsed). */
     showRaw?: boolean
-    /** Optional dismiss handler — renders an × in the corner if provided. */
+    /** Optional dismiss handler — fires when the user clicks the × button.
+     *  Banner self-dismisses regardless; this is just a notification hook. */
     onDismiss?: () => void
+    /** Hide the × button entirely (rare — use only when you need the
+     *  banner to stay until external state changes it). */
+    dismissable?: boolean
   }
-  let { error, tone = 'danger', showRaw = false, onDismiss }: Props = $props()
+  let { error, tone = 'danger', showRaw = false, onDismiss, dismissable = true }: Props = $props()
 
   // Normalise: a bare string becomes an ActionableError with title only.
   const normalised = $derived.by((): ActionableError | null => {
@@ -28,6 +32,25 @@
     }
     return error
   })
+
+  // Self-dismissal — when the user clicks ×, hide locally. Reset whenever a
+  // new error arrives (different title/raw) so the next failure isn't
+  // pre-suppressed. Using title+raw as the identity key is good enough; the
+  // chance of two consecutive failures sharing both is vanishingly small.
+  let dismissed = $state(false)
+  let lastKey = $state<string | null>(null)
+  $effect(() => {
+    const key = normalised ? `${normalised.title}::${normalised.raw ?? ''}` : null
+    if (key !== lastKey) {
+      lastKey = key
+      dismissed = false
+    }
+  })
+
+  function handleDismiss() {
+    dismissed = true
+    onDismiss?.()
+  }
 
   let rawOpen = $state(false)
   let copied = $state(false)
@@ -43,6 +66,11 @@
     duplicate_key: 'Already exists',
     permission_denied: 'No permission',
     ref_soft_deleted: 'Deleted record',
+    undefined_column: 'Server bug',
+    not_null_violation: 'Missing field',
+    check_violation: 'Invalid value',
+    string_too_long: 'Too long',
+    invalid_text_representation: 'Wrong format',
     unclassified: '',
     unknown: ''
   }
@@ -68,7 +96,7 @@
   }
 </script>
 
-{#if normalised}
+{#if normalised && !dismissed}
   <div class="error-banner is-{tone}" role="alert">
     <div class="error-icon" aria-hidden="true">
       {#if tone === 'danger'}!{:else if tone === 'warning'}⚠{:else}i{/if}
@@ -113,8 +141,8 @@
         <pre class="error-raw">{normalised.raw}</pre>
       {/if}
     </div>
-    {#if onDismiss}
-      <button type="button" class="error-dismiss" aria-label="Dismiss" onclick={onDismiss}>×</button>
+    {#if dismissable}
+      <button type="button" class="error-dismiss" aria-label="Dismiss" title="Dismiss" onclick={handleDismiss}>×</button>
     {/if}
   </div>
 {/if}

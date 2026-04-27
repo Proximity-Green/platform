@@ -12,7 +12,7 @@
     Select,
     Badge,
     SubmitButton,
-    RecordHistory
+    RecordHistory, ErrorBanner
   } from '$lib/components/ui'
 
   type FieldKind = 'text' | 'number' | 'integer' | 'boolean' | 'date' | 'enum' | 'long_text'
@@ -323,7 +323,10 @@
   {/if}
 </PageHead>
 
-<Toast error={form?.error} success={form?.success} message={form?.message} />
+<Toast success={form?.success} message={form?.success ? form?.message : undefined} />
+{#if form?.error || (form as any)?.actionable}
+  <ErrorBanner error={(form as any)?.actionable ?? form?.error} showRaw />
+{/if}
 
 <nav class="tabs" role="tablist">
   {#each TABS as t}

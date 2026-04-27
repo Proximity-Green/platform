@@ -13,7 +13,7 @@
     Badge,
     SubmitButton,
     RecordLive,
-    RecordHistory
+    RecordHistory, ErrorBanner
   } from '$lib/components/ui'
   import { fmtMoneyWithCurrency } from '$lib/utils/money'
 
@@ -170,7 +170,10 @@
   {/if}
 </PageHead>
 
-<Toast error={form?.error} success={form?.success} message={form?.message} />
+<Toast success={form?.success} message={form?.success ? form?.message : undefined} />
+{#if form?.error || (form as any)?.actionable}
+  <ErrorBanner error={(form as any)?.actionable ?? form?.error} showRaw />
+{/if}
 
 <div class="summary">
   <Badge tone={statusTone(person.status)}>{person.status}</Badge>

@@ -10,6 +10,11 @@ import { match as crossLocationTc } from './matchers/cross-location-tc'
 import { match as fkViolation } from './matchers/fk-violation'
 import { match as uniqueViolation } from './matchers/unique-violation'
 import { match as permissionDenied } from './matchers/permission-denied'
+import { match as undefinedColumn } from './matchers/undefined-column'
+import { match as notNullViolation } from './matchers/not-null-violation'
+import { match as checkViolation } from './matchers/check-violation'
+import { match as stringTooLong } from './matchers/string-too-long'
+import { match as invalidTextRepresentation } from './matchers/invalid-text-representation'
 
 /**
  * Order matters — the first matcher that returns a non-null result wins.
@@ -19,10 +24,15 @@ import { match as permissionDenied } from './matchers/permission-denied'
  * here, and append it to this array. No other code needs to change.
  */
 const matchers: Matcher[] = [
-  crossLocationTc,    // very specific trigger message
-  permissionDenied,   // requirePermission / RLS
-  uniqueViolation,    // Postgres unique constraint
-  fkViolation         // Postgres FK (also detects soft-deleted refs)
+  crossLocationTc,            // very specific trigger message
+  permissionDenied,           // requirePermission / RLS
+  uniqueViolation,            // 23505 — duplicate
+  fkViolation,                // 23503 — FK + soft-deleted refs
+  notNullViolation,           // 23502 — required field empty
+  checkViolation,             // 23514 — CHECK constraint
+  stringTooLong,              // 22001 — value too long
+  invalidTextRepresentation,  // 22P02 — bad cast (often empty uuid)
+  undefinedColumn             // 42703 — server-side schema/code mismatch
 ]
 
 export async function translate(raw: unknown): Promise<ActionableError> {

@@ -10,7 +10,7 @@
     FormCard,
     FieldGrid,
     Field,
-    SubmitButton
+    SubmitButton, ErrorBanner
   } from '$lib/components/ui'
   import type { Column } from '$lib/components/ui/DataTable.svelte'
 
@@ -82,7 +82,10 @@
   {/if}
 </PageHead>
 
-<Toast error={form?.error} success={form?.success} message={form?.message} />
+<Toast success={form?.success} message={form?.success ? form?.message : undefined} />
+{#if form?.error || (form as any)?.actionable}
+  <ErrorBanner error={(form as any)?.actionable ?? form?.error} showRaw />
+{/if}
 
 {#if showCreate && can('items', 'create')}
   <div class="create-wrap">

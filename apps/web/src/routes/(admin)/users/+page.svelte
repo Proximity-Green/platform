@@ -9,7 +9,7 @@
     DataTable,
     Copyable,
     SubmitButton,
-    Prompt
+    Prompt, ErrorBanner
   } from '$lib/components/ui'
   import type { Column, Filter } from '$lib/components/ui/DataTable.svelte'
 
@@ -93,7 +93,10 @@
   lede="Auth accounts with sign-in access. To add a new user, invite them from the Members page."
 />
 
-<Toast error={form?.error} success={form?.success} message={form?.message} />
+<Toast success={form?.success} message={form?.success ? form?.message : undefined} />
+{#if form?.error || (form as any)?.actionable}
+  <ErrorBanner error={(form as any)?.actionable ?? form?.error} showRaw />
+{/if}
 
 <DataTable
   data={data.users as User[]}

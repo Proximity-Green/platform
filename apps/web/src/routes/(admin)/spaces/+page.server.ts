@@ -2,6 +2,7 @@ import { fail } from '@sveltejs/kit'
 import { requirePermission, getUserIdFromRequest, supabase } from '$lib/services/permissions.service'
 import * as spacesService from '$lib/services/spaces.service'
 import type { SpaceFilter } from '$lib/services/spaces.service'
+import { logFail } from '$lib/services/action-log.service'
 
 export const load = async ({ cookies, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)
@@ -66,7 +67,7 @@ export const actions = {
     if (!input.name) return fail(400, { error: 'Name is required' })
 
     const result = await spacesService.createSpace(input, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'spaces.create', result.error)
     return { success: true, message: 'Space created' }
   },
 
@@ -79,7 +80,7 @@ export const actions = {
     if (!id) return fail(400, { error: 'Missing id' })
     const input = readSpaceInput(data)
     const result = await spacesService.updateSpace(id, input, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'spaces.update', result.error)
     return { success: true, message: 'Space updated' }
   },
 
@@ -89,7 +90,7 @@ export const actions = {
 
     const data = await request.formData()
     const result = await spacesService.deleteSpace(data.get('id') as string, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'spaces.delete', result.error)
     return { success: true, message: 'Space deleted' }
   }
 }

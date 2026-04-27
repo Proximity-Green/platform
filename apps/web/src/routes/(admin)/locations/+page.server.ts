@@ -1,6 +1,7 @@
 import { fail } from '@sveltejs/kit'
 import { requirePermission, getUserIdFromRequest, supabase } from '$lib/services/permissions.service'
 import * as locationsService from '$lib/services/locations.service'
+import { logFail } from '$lib/services/action-log.service'
 
 export const load = async ({ cookies, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)
@@ -101,7 +102,7 @@ export const actions = {
       return fail(400, { error: 'Name and slug are required' })
     }
     const result = await locationsService.createLocation(input, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'locations.create', result.error)
     return { success: true, message: 'Location created' }
   },
 
@@ -114,7 +115,7 @@ export const actions = {
     if (!id) return fail(400, { error: 'Missing id' })
     const input = readLocationInput(data)
     const result = await locationsService.updateLocation(id, input, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'locations.update', result.error)
     return { success: true, message: 'Location updated' }
   },
 
@@ -124,7 +125,7 @@ export const actions = {
 
     const data = await request.formData()
     const result = await locationsService.deleteLocation(data.get('id') as string, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'locations.delete', result.error)
     return { success: true, message: 'Location deleted' }
   }
 }

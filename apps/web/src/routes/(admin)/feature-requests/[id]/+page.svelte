@@ -2,7 +2,7 @@
   import { enhance } from '$app/forms'
   import { invalidateAll } from '$app/navigation'
   import { marked } from 'marked'
-  import { Badge, Button, PageHead, Toast, Field, FieldGrid, Select, SubmitButton, RecordHistory } from '$lib/components/ui'
+  import { Badge, Button, PageHead, Toast, Field, FieldGrid, Select, SubmitButton, RecordHistory, ErrorBanner } from '$lib/components/ui'
   import type { FeatureRequest, FeatureRequestKind, FeatureRequestStatus, Tag } from '$lib/services/feature-requests.service'
 
   let { data, form } = $props()
@@ -135,7 +135,10 @@
   <a class="back-link" href="/feature-requests">← All</a>
 </PageHead>
 
-<Toast error={form?.error} success={form?.success} message={form?.message} />
+<Toast success={form?.success} message={form?.success ? form?.message : undefined} />
+{#if form?.error || (form as any)?.actionable}
+  <ErrorBanner error={(form as any)?.actionable ?? form?.error} showRaw />
+{/if}
 
 <div class="grid">
   <div class="main">

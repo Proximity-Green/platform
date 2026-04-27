@@ -14,7 +14,8 @@
     Select,
     Badge,
     Copyable,
-    RecordHistory
+    RecordHistory,
+    ErrorBanner
   } from '$lib/components/ui'
 
   let { data, form } = $props()
@@ -196,7 +197,10 @@
   {/if}
 </PageHead>
 
-<Toast error={form?.error} success={form?.success} message={form?.message} />
+<Toast success={form?.success} message={form?.success ? form?.message : undefined} />
+{#if form?.error || (form as any)?.actionable}
+  <ErrorBanner error={(form as any)?.actionable ?? form?.error} showRaw />
+{/if}
 
 <nav class="tabs" aria-label="Location sections">
   {#each TABS as t}

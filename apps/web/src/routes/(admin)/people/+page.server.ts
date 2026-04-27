@@ -2,6 +2,7 @@ import { fail } from '@sveltejs/kit'
 import { requirePermission, getUserIdFromRequest, supabase, sbForUser } from '$lib/services/permissions.service'
 import * as personsService from '$lib/services/persons.service'
 import * as usersService from '$lib/services/users.service'
+import { logFail } from '$lib/services/action-log.service'
 
 export const load = async ({ cookies, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)
@@ -25,7 +26,7 @@ export const actions = {
       phone: data.get('phone') as string,
       job_title: data.get('job_title') as string
     }, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'people.create', result.error)
     return { success: true, message: 'Person created' }
   },
 
@@ -34,7 +35,7 @@ export const actions = {
     if (userId) await requirePermission(userId, 'persons', 'create')
 
     const result = await personsService.generateRandomPersons(10, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'people.generateRandom', result.error)
     return { success: true, message: '10 random people added' }
   },
 
@@ -50,7 +51,7 @@ export const actions = {
       invitedByUserId: userId,
       inviterEmail: session?.user?.email ?? 'an administrator'
     })
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'people.inviteUser', result.error)
     return { success: true, message: 'Person invited' }
   },
 
@@ -78,7 +79,7 @@ export const actions = {
       offboarded_at: blank('offboarded_at'),
       external_accounting_customer_id: blank('external_accounting_customer_id')
     }, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'people.update', result.error)
     return { success: true, message: 'Person updated' }
   },
 
@@ -88,7 +89,7 @@ export const actions = {
 
     const data = await request.formData()
     const result = await personsService.deletePerson(data.get('id') as string, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'people.delete', result.error)
     return { success: true, message: 'Person deleted' }
   },
 
@@ -152,7 +153,7 @@ export const actions = {
       .is('deleted_at', null)
     if (lookupErr) {
       console.log('[bulkSetRole] lookup error:', lookupErr.message)
-      return fail(400, { error: lookupErr.message })
+      return await logFail(userId, 'people.bulkSetRole', lookupErr)
     }
 
     const withUser = (rows ?? []).filter(r => !!r.user_id)
@@ -207,14 +208,14 @@ export const actions = {
       .in('user_id', userIdList)
     if (delErr) {
       console.log('[bulkSetRole] delete error:', delErr.message)
-      return fail(400, { error: delErr.message })
+      return await logFail(userId, 'people.bulkSetRole', delErr)
     }
 
     const newRows = userIdList.map(uid => ({ user_id: uid, role_id: roleId }))
     const { error: insErr } = await sb.from('user_roles').insert(newRows)
     if (insErr) {
       console.log('[bulkSetRole] insert error:', insErr.message)
-      return fail(400, { error: insErr.message })
+      return await logFail(userId, 'people.bulkSetRole', insErr)
     }
 
     const ms = Date.now() - t0

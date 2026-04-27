@@ -2,6 +2,7 @@ import { fail } from '@sveltejs/kit'
 import { requirePermission, getUserIdFromRequest, getActualUserId } from '$lib/services/permissions.service'
 import * as messagesService from '$lib/services/messages.service'
 import type { Channel } from '$lib/services/messages.service'
+import { logFail } from '$lib/services/action-log.service'
 
 export const load = async ({ cookies, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)
@@ -22,7 +23,7 @@ export const actions = {
       text_body: data.get('text_body') as string,
       title: data.get('title') as string
     }, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'messages.update', result.error)
     return { success: true, message: result.message }
   },
 
@@ -42,7 +43,7 @@ export const actions = {
       description: (data.get('description') as string) || '',
       variables: ((data.get('variables') as string) || '').split(',').map(v => v.trim()).filter(Boolean)
     }, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'messages.create', result.error)
     return { success: true, message: result.message }
   },
 
@@ -52,7 +53,7 @@ export const actions = {
 
     const data = await request.formData()
     const result = await messagesService.deleteTemplate(data.get('id') as string, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'messages.delete', result.error)
     return { success: true, message: result.message }
   },
 
@@ -67,7 +68,7 @@ export const actions = {
       data.get('test_email') as string,
       actualUserId
     )
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'messages.sendTest', result.error)
     return { success: true, message: result.message }
   }
 }

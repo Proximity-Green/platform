@@ -12,7 +12,7 @@
     FieldGrid,
     Field,
     Select,
-    Copyable
+    Copyable, ErrorBanner
   } from '$lib/components/ui'
   import type { Column, Filter } from '$lib/components/ui/DataTable.svelte'
 
@@ -294,7 +294,10 @@
   {/if}
 </PageHead>
 
-<Toast error={form?.error} success={form?.success} message={form?.message} />
+<Toast success={form?.success} message={form?.success ? form?.message : undefined} />
+{#if form?.error || (form as any)?.actionable}
+  <ErrorBanner error={(form as any)?.actionable ?? form?.error} showRaw />
+{/if}
 
 {#if showCreate && can('persons', 'create')}
   <div class="create-wrap">

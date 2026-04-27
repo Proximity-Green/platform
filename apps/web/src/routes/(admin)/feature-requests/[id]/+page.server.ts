@@ -1,6 +1,7 @@
 import { error, fail, redirect } from '@sveltejs/kit'
 import { getUserIdFromRequest, requirePermission } from '$lib/services/permissions.service'
 import * as featureRequestsService from '$lib/services/feature-requests.service'
+import { logFail } from '$lib/services/action-log.service'
 
 export const load = async ({ params, cookies, locals }) => {
   const userId = await getUserIdFromRequest(locals, cookies)
@@ -24,7 +25,7 @@ export const actions = {
       title: (data.get('title') as string) ?? undefined,
       summary: (data.get('summary') as string) ?? null
     }, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'feature-requests.updateDetails', result.error)
     return { success: true, message: 'Feature request updated' }
   },
 
@@ -34,7 +35,7 @@ export const actions = {
     const data = await request.formData()
     const status = data.get('status') as featureRequestsService.FeatureRequestStatus
     const result = await featureRequestsService.updateStatus(params.id!, status, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'feature-requests.updateStatus', result.error)
     return { success: true, message: `Status set to ${status.replace('_', ' ')}` }
   },
 
@@ -44,7 +45,7 @@ export const actions = {
     const data = await request.formData()
     const kind = data.get('kind') as featureRequestsService.FeatureRequestKind
     const result = await featureRequestsService.updateKind(params.id!, kind, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'feature-requests.updateKind', result.error)
     return { success: true, message: kind === 'feature_request' ? 'Promoted to feature request' : 'Marked as note' }
   },
 
@@ -64,7 +65,7 @@ export const actions = {
         label = existing.name
       } else {
         const created = await featureRequestsService.createTag(name, userId ?? null)
-        if (!created.ok) return fail(400, { error: created.error })
+        if (!created.ok) return await logFail(userId, 'feature-requests.addTag', created.error)
         tagId = created.data!.id
         label = created.data!.name
       }
@@ -72,7 +73,7 @@ export const actions = {
     if (!tagId) return fail(400, { error: 'Tag name or id is required' })
 
     const result = await featureRequestsService.applyTag(params.id!, tagId, userId ?? null)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'feature-requests.addTag', result.error)
     return { success: true, message: label ? `Tag "${label}" added` : 'Tag added' }
   },
 
@@ -83,7 +84,7 @@ export const actions = {
     const tagId = (data.get('tag_id') as string) ?? ''
     if (!tagId) return fail(400, { error: 'tag_id required' })
     const result = await featureRequestsService.removeTagAssignment(params.id!, tagId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'feature-requests.removeTag', result.error)
     return { success: true, message: 'Tag removed' }
   },
 
@@ -96,7 +97,7 @@ export const actions = {
     const result = hasVoted
       ? await featureRequestsService.removeVote(params.id!, userId)
       : await featureRequestsService.addVote(params.id!, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'feature-requests.toggleVote', result.error)
     return { success: true, message: hasVoted ? 'Vote removed' : 'Vote added' }
   },
 
@@ -104,7 +105,7 @@ export const actions = {
     const userId = await getUserIdFromRequest(locals, cookies)
     if (userId) await requirePermission(userId, 'feature_requests', 'delete')
     const result = await featureRequestsService.remove(params.id!, userId)
-    if (!result.ok) return fail(400, { error: result.error })
+    if (!result.ok) return await logFail(userId, 'feature-requests.delete', result.error)
     throw redirect(303, '/feature-requests')
   }
 }
