@@ -180,7 +180,7 @@
         {:else}
           <h2 class="fr-title">{request.title}</h2>
           {#if request.summary}
-            <p class="fr-summary">{request.summary}</p>
+            <div class="fr-summary md">{@html marked.parse(request.summary)}</div>
           {:else}
             <p class="fr-summary muted"><em>No summary.</em></p>
           {/if}
@@ -358,6 +358,55 @@
     line-height: 1.5;
   }
   .fr-summary.muted em { color: var(--text-muted); }
+
+  /* Markdown-rendered summary — keep typography close to surrounding UI */
+  .fr-summary.md :global(h1),
+  .fr-summary.md :global(h2),
+  .fr-summary.md :global(h3),
+  .fr-summary.md :global(h4) {
+    margin: var(--space-3) 0 var(--space-1);
+    color: var(--heading-color);
+    font-weight: var(--weight-semibold);
+  }
+  .fr-summary.md :global(h1) { font-size: var(--text-lg); }
+  .fr-summary.md :global(h2) { font-size: var(--text-md); }
+  .fr-summary.md :global(h3),
+  .fr-summary.md :global(h4) { font-size: var(--text-sm); text-transform: uppercase; letter-spacing: 0.05em; color: var(--label-color); }
+  .fr-summary.md :global(p) { margin: 0 0 var(--space-2); }
+  .fr-summary.md :global(ul),
+  .fr-summary.md :global(ol) { margin: 0 0 var(--space-2); padding-left: var(--space-5); }
+  .fr-summary.md :global(li) { margin: 0 0 4px; }
+  .fr-summary.md :global(li > ul),
+  .fr-summary.md :global(li > ol) { margin: 4px 0 0; }
+  .fr-summary.md :global(code) {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    background: var(--surface-sunk);
+    padding: 1px 6px;
+    border-radius: 3px;
+  }
+  .fr-summary.md :global(pre) {
+    background: var(--surface-sunk);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-sm);
+    overflow-x: auto;
+    font-size: var(--text-xs);
+  }
+  .fr-summary.md :global(pre code) { background: transparent; padding: 0; }
+  .fr-summary.md :global(strong) { font-weight: var(--weight-semibold); }
+  .fr-summary.md :global(blockquote) {
+    margin: 0 0 var(--space-2);
+    padding-left: var(--space-3);
+    border-left: 3px solid var(--border);
+    color: var(--text-muted);
+  }
+  .fr-summary.md :global(a) { color: var(--accent); text-decoration: none; }
+  .fr-summary.md :global(a:hover) { text-decoration: underline; }
+  .fr-summary.md :global(hr) {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: var(--space-3) 0;
+  }
   .header-actions { margin-top: var(--space-2); }
   .edit-actions { display: flex; gap: var(--space-2); justify-content: flex-end; margin-top: var(--space-3); }
   .summary-textarea {
