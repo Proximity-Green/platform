@@ -217,7 +217,7 @@
   title="Locations"
   lede="Workspace venues — branding, accounting tenant, and lifecycle."
   searchFields={['name', 'slug', 'short_name', 'city', 'suburb']}
-  searchPlaceholder="Search name, slug, city…"
+  searchPlaceholder="Search name, city…"
   csvFilename="locations"
   empty="No locations yet."
   timesToggle
@@ -229,7 +229,6 @@
         <span class="name">{location.name}</span>
         {#if location.headquarters}<span class="hq-dot" title="Headquarters"></span>{/if}
       </Copyable>
-      <div class="slug">{location.slug}</div>
     </td>
     <td class="muted hide-md">{location.city ?? '—'}</td>
     <td class="muted hide-md">

@@ -140,6 +140,42 @@
     return u.pathname + u.search
   }
 
+  // Keyboard nav (mirrors locations/[id]):
+  //   ⌘/Ctrl+Enter — save the form
+  //   →            — next tab
+  //   ←            — previous tab, or back to list at the first tab
+  $effect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        const form = document.getElementById('type-form') as HTMLFormElement | null
+        if (form) { e.preventDefault(); form.requestSubmit() }
+        return
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+      const ae = document.activeElement as HTMLElement | null
+      if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable)) return
+      if (document.querySelector('[role="dialog"]')) return
+
+      const idx = TABS.findIndex(t => t.key === activeTab)
+      if (e.key === 'ArrowRight') {
+        if (idx >= 0 && idx < TABS.length - 1) {
+          e.preventDefault()
+          goto(tabHref(TABS[idx + 1].key), { replaceState: true, noScroll: true, keepFocus: true })
+        }
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        if (idx > 0) {
+          goto(tabHref(TABS[idx - 1].key), { replaceState: true, noScroll: true, keepFocus: true })
+        } else {
+          goto('/item-types')
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
   const currentFields = $derived<FieldDef[]>(TYPE_FIELDS[slug] ?? [])
 
   // Detail-table name follows from the type slug — no separate registry.
@@ -307,8 +343,22 @@
   }
 </script>
 
-<PageHead title={`Item Type: ${type.name}`} lede={`Slug: ${type.slug}`}>
+<PageHead title={`Item Type: ${type.name}`} lede={type.description ?? ''}>
   <Button variant="ghost" size="sm" href="/item-types">← Back</Button>
+  {#if can('items', 'delete') && items.length === 0}
+    <SubmitButton
+      action="?/delete"
+      label="Delete"
+      pendingLabel="Deleting…"
+      variant="danger"
+      size="sm"
+      confirm={{
+        title: 'Delete item type?',
+        message: `Permanently delete ${type.name}? Cannot undo.`,
+        variant: 'danger'
+      }}
+    />
+  {/if}
   {#if can('items', 'update')}
     <Button
       type="submit"
@@ -359,8 +409,11 @@
 >
   <!-- ── IDENTITY ── -->
   <div class="pane" class:is-active={activeTab === 'identity'}>
-    <FieldGrid cols={2}>
-      <Field name="slug" label="Slug" value={slug} required oninput={(v) => slug = v} />
+    <!-- Slug is the technical handle used by code (formula references,
+         routing, type-table mapping). Kept as a hidden input so save still
+         works, but not surfaced visually — most admins never need it. -->
+    <input type="hidden" name="slug" value={slug} />
+    <FieldGrid cols={1}>
       <Field name="name" label="Name" value={name} required oninput={(v) => name = v} />
     </FieldGrid>
     <FieldGrid cols={1}>
@@ -567,24 +620,6 @@
     {/if}
   </div>
 </form>
-
-{#if can('items', 'delete') && items.length === 0}
-  <div class="danger-zone">
-    <h3 class="section-title">Danger Zone</h3>
-    <SubmitButton
-      action="?/delete"
-      label="Delete Item Type"
-      pendingLabel="Deleting…"
-      variant="danger"
-      size="sm"
-      confirm={{
-        title: 'Delete item type?',
-        message: `Permanently delete ${type.name}? Cannot undo.`,
-        variant: 'danger'
-      }}
-    />
-  </div>
-{/if}
 
 <RecordHistory table="item_types" id={type?.id} />
 
@@ -876,10 +911,4 @@
   .items-tbl a { color: var(--accent); text-decoration: none; font-size: var(--text-sm); }
   .items-tbl a:hover { text-decoration: underline; }
 
-  .danger-zone {
-    margin-top: var(--space-6);
-    padding: var(--space-3);
-    border: 1px dashed var(--border);
-    border-radius: var(--radius-sm);
-  }
 </style>

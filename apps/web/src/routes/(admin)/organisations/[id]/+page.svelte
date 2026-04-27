@@ -107,6 +107,42 @@
     return u.pathname + u.search
   }
 
+  // Keyboard nav (mirrors locations/[id]):
+  //   ⌘/Ctrl+Enter — save the form
+  //   →            — next tab
+  //   ←            — previous tab, or back to list at the first tab
+  $effect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        const form = document.getElementById('update-form') as HTMLFormElement | null
+        if (form) { e.preventDefault(); form.requestSubmit() }
+        return
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+      const ae = document.activeElement as HTMLElement | null
+      if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable)) return
+      if (document.querySelector('[role="dialog"]')) return
+
+      const idx = TABS.findIndex(t => t.key === activeTab)
+      if (e.key === 'ArrowRight') {
+        if (idx >= 0 && idx < TABS.length - 1) {
+          e.preventDefault()
+          goto(tabHref(TABS[idx + 1].key), { replaceState: true, noScroll: true, keepFocus: true })
+        }
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        if (idx > 0) {
+          goto(tabHref(TABS[idx - 1].key), { replaceState: true, noScroll: true, keepFocus: true })
+        } else {
+          goto('/organisations')
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
   // ---------- helpers ----------
 
   function toDateInput(v: string | null): string {
@@ -424,7 +460,7 @@
             </Field>
             <Field name="legal_name" label="Legal Name" value={org.legal_name ?? ''} />
             <Field name="short_name" label="Short Name" value={org.short_name ?? ''} />
-            <Field name="slug" label="UHID" value={org.slug ?? ''} />
+            <input type="hidden" name="slug" value={org.slug ?? ''} />
             <Field label="Home Location">
               <div class="ro-input muted">{homeLocation?.name ?? 'Derived from active subscriptions'}</div>
             </Field>

@@ -76,7 +76,7 @@
   title="Organisations"
   lede="Billing entities, legal structures, and commercial relationships."
   searchFields={['name', 'short_name', 'legal_name', 'slug', 'wsm_id', 'industry']}
-  searchPlaceholder="Search name, industry, slug…"
+  searchPlaceholder="Search name, industry…"
   csvFilename="organisations"
   empty="No organisations yet."
   timesToggle

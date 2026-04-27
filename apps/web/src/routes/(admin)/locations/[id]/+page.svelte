@@ -190,7 +190,7 @@
   }
 </script>
 
-<PageHead title={`Location: ${loc.name}`} lede={loc.short_name ?? loc.slug ?? ''}>
+<PageHead title={`Location: ${loc.name}`} lede={loc.short_name ?? ''}>
   <Button variant="ghost" size="sm" href="/locations">← Back</Button>
   {#if activeTab !== 'tracking' && can('locations', 'update')}
     <Button type="submit" form="update-form" size="sm" loading={saving}>{saving ? 'Saving…' : 'Save Changes'}</Button>
@@ -228,7 +228,7 @@
         <h3 class="section-title">Identity</h3>
         <FieldGrid cols={2}>
           <Field name="name" label="Name" value={loc.name} required />
-          <Field name="slug" label="Slug" value={loc.slug} required />
+          <input type="hidden" name="slug" value={loc.slug} />
           <Field name="short_name" label="Short Name" value={loc.short_name ?? ''} />
           <Field label="Legal Entity">
             <Select name="legal_entity_id" value={loc.legal_entity_id ?? ''}

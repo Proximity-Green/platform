@@ -63,14 +63,23 @@
   permStore.subscribe(v => { perms = v })
   function can(resource: string, action: string = 'read') { return canDo(perms, resource, action) }
 
+  // Slug deliberately omitted from list columns — it duplicates info already
+  // visible in the Name column for users, and shows up on the detail page
+  // anyway. Universal rule across all admin list pages.
+  // Pricing column = "is a pricing formula configured?" — true when
+  // pricing_params.expression is a non-empty string.
+  function hasPricingFormula(t: ItemType): boolean {
+    const exp = (t.pricing_params as any)?.expression
+    return typeof exp === 'string' && exp.trim().length > 0
+  }
   const columns: Column<ItemType>[] = [
-    { key: 'slug', label: 'Slug', sortable: true, width: '12%', mono: true },
-    { key: 'name', label: 'Name', sortable: true, width: '14%' },
-    { key: 'fields', label: 'Fields', width: '6%', align: 'right', get: t => typeFieldCount(t.slug) },
-    { key: 'description', label: 'Description', width: '36%', muted: true, ellipsis: true, render: t => t.description || '—' },
+    { key: 'name', label: 'Name', sortable: true, width: '16%' },
+    { key: 'fields', label: 'Fields', width: '8%', align: 'right', get: t => typeFieldCount(t.slug) },
+    { key: 'description', label: 'Description', width: '34%', muted: true, ellipsis: true, render: t => t.description || '—' },
     { key: 'requires_license', label: 'Licence', sortable: true, width: '8%' },
     { key: 'sellable_ad_hoc', label: 'Ad-hoc', sortable: true, width: '8%' },
-    { key: 'sellable_recurring', label: 'Recurring', sortable: true, width: '8%' }
+    { key: 'sellable_recurring', label: 'Recurring', sortable: true, width: '8%' },
+    { key: 'pricing', label: 'Pricing', sortable: true, width: '8%', get: t => hasPricingFormula(t) ? 'Yes' : 'No' }
   ]
 </script>
 
@@ -130,13 +139,13 @@
   title="Item Types"
   lede="Lookup table that drives sellability policy for every catalog item."
   searchFields={['slug', 'name', 'description']}
-  searchPlaceholder="Search slug, name, description…"
+  searchPlaceholder="Search name, description…"
   csvFilename="item-types"
   empty="No item types yet."
   onActivate={(t) => goto(`/item-types/${t.id}`)}
+  onRowClick={(t) => goto(`/item-types/${t.id}`)}
 >
   {#snippet row(it)}
-    <td class="mono">{it.slug}</td>
     <td><span class="name">{it.name}</span></td>
     <td class="mono right" title={typeFieldList(it.slug)}>
       {#if typeFieldCount(it.slug) > 0}
@@ -167,17 +176,21 @@
         <Badge tone="default">No</Badge>
       {/if}
     </td>
+    <td>
+      {#if hasPricingFormula(it)}
+        <span class="pricing-cell" data-formula={(it.pricing_params as any)?.expression}>
+          <Badge tone="info">Yes</Badge>
+        </span>
+      {:else}
+        <Badge tone="default">No</Badge>
+      {/if}
+    </td>
   {/snippet}
   {#snippet pageActions()}
     {#if can('items', 'create')}
       <Button size="sm" onclick={() => { showCreate = !showCreate }}>
         {showCreate ? 'Cancel' : '+ Add Item Type'}
       </Button>
-    {/if}
-  {/snippet}
-  {#snippet actions(it)}
-    {#if can('items', 'update')}
-      <Button variant="ghost" size="sm" href={`/item-types/${it.id}`}>Edit</Button>
     {/if}
   {/snippet}
 </DataTable>
@@ -200,4 +213,32 @@
     padding-top: 18px;
   }
   .checkbox-field input { width: 16px; height: 16px; accent-color: var(--accent); }
+
+  /* Fast tooltip on the pricing cell — shows the formula expression in
+     monospace immediately on hover (native `title` has a ~1s delay). */
+  .pricing-cell { position: relative; cursor: help; }
+  .pricing-cell::after {
+    content: attr(data-formula);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 6px 10px;
+    background: var(--surface-raised);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-md, 0 4px 12px rgba(0,0,0,0.15));
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    white-space: pre;
+    max-width: 480px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 100ms ease;
+    z-index: 50;
+  }
+  .pricing-cell:hover::after { opacity: 1; }
 </style>
