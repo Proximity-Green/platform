@@ -1,9 +1,31 @@
 <script lang="ts">
   import { enhance } from '$app/forms'
-  import { invalidateAll } from '$app/navigation'
+  import { goto, invalidateAll } from '$app/navigation'
   import { marked } from 'marked'
   import { Badge, Button, PageHead, Toast, Field, FieldGrid, Select, SubmitButton, RecordHistory, ErrorBanner } from '$lib/components/ui'
   import type { FeatureRequest, FeatureRequestKind, FeatureRequestStatus, Tag } from '$lib/services/feature-requests.service'
+
+  // Universal keyboard nav — single-page form (no tabs):
+  //   ⌘/Ctrl+Enter — save the active edit form
+  //   ←            — back to the list
+  $effect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        const f = document.getElementById('edit-fr-form') as HTMLFormElement | null
+        if (f) { e.preventDefault(); f.requestSubmit() }
+        return
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return
+      if (e.key !== 'ArrowLeft') return
+      const ae = document.activeElement as HTMLElement | null
+      if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable)) return
+      if (document.querySelector('[role="dialog"]')) return
+      e.preventDefault()
+      goto('/feature-requests')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
 
   let { data, form } = $props()
   const request = $derived(data.request as FeatureRequest)

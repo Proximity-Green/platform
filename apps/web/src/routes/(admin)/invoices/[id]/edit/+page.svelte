@@ -26,6 +26,28 @@
   let addingLine = $state(false)
   let statusMenuOpen = $state(false)
 
+  // Universal keyboard nav — single-page form (no tabs):
+  //   ⌘/Ctrl+Enter — save the main invoice form
+  //   ←            — back to the list
+  $effect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        const f = document.getElementById('save-invoice-form') as HTMLFormElement | null
+        if (f) { e.preventDefault(); f.requestSubmit() }
+        return
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return
+      if (e.key !== 'ArrowLeft') return
+      const ae = document.activeElement as HTMLElement | null
+      if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable)) return
+      if (document.querySelector('[role="dialog"]')) return
+      e.preventDefault()
+      goto('/invoices')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
   $effect(() => {
     if (form?.success) {
       saving = false
@@ -112,7 +134,7 @@
   <ErrorBanner error={(form as any)?.actionable ?? form?.error} showRaw />
 {/if}
 
-<form method="POST" action="?/save" use:enhance={() => {
+<form id="save-invoice-form" method="POST" action="?/save" use:enhance={() => {
   saving = true
   return async ({ update }) => { await update({ reset: false }); saving = false }
 }}>
