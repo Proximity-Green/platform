@@ -59,6 +59,25 @@ All known unclassified failures from this round have been classified.
 
 ## History — what changed and when
 
+### 2026-04-27 — Client-side coverage + alert emails (MVP)
+
+Closed two big gaps in the system: errors that escaped the form-action path were silent, and reports sat in the queue until an admin happened to check.
+
+- **`hooks.client.ts`** — wires `window.onerror`, `unhandledrejection`, and SvelteKit's `handleError` into a shared `globalErrors` store. Async event handlers, unhandled promise rejections, third-party widget bugs now surface as a banner instead of a console-only message.
+- **Noise filter** — known benign noise is dropped before it reaches the banner: `ResizeObserver loop limit`, Vite HMR reconnects, browser-extension errors, user-cancelled fetches.
+- **De-dup on push** — same title within 5s of the last entry is suppressed so a runaway loop doesn't fill the banner stack.
+- **Admin layout** renders `{#each $globalErrors}` at the top of `<main>` for both top-nav and sidebar themes.
+- **Trigger.dev `notify-error-report`** task — Mailgun email to recipients listed in `ALERT_EMAIL` (comma-separated env var) when a new report lands. Fired fire-and-forget from `/api/admin/report-error` so the user's "✓ Reported" feedback isn't blocked on email infrastructure.
+- **Throttling** — if the same `code` was reported in the past hour, the alert is suppressed (the report still lands in the triage queue, just doesn't ring the bell again).
+
+**Next session — notification routing system** (queued, not built):
+- `notification_channels` + `notification_subscriptions` tables
+- Per-channel adapters: email, SMS (Twilio), WhatsApp, Zulip, Slack, push
+- Severity model on `reported_errors` driving subscription filters
+- `/admin/notifications` UI for managing subscriptions + channels
+
+For now, **set `ALERT_EMAIL` in Coolify** on the trigger-jobs service to whatever address(es) should get error alerts.
+
 ### 2026-04-27 — Report-this-error pipeline + screenshots
 
 User-driven triage queue. The ErrorBanner gained a **Report error** button alongside Copy details and Show technical detail. Click → captures the visible viewport via `html2canvas-pro`, packages it with the existing details blob, POSTs to `/api/admin/report-error`, lands in `public.reported_errors`.

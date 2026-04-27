@@ -5,7 +5,8 @@
   import { permStore, loadPermissions, canDo } from '$lib/stores/permissions'
   import { loadPrefs } from '$lib/stores/prefs'
   import { look, usesTopNav } from '$lib/stores/theme'
-  import { Badge, Button, ModeToggle, ThemeToggle, TopNav, Workshop17Logo } from '$lib/components/ui'
+  import { Badge, Button, ErrorBanner, ModeToggle, ThemeToggle, TopNav, Workshop17Logo } from '$lib/components/ui'
+  import { globalErrors, dismissGlobalError } from '$lib/stores/global-errors'
   import { buildStats } from '$lib/generated/build-stats'
 
   let { children, data } = $props()
@@ -122,6 +123,9 @@
     <!-- W17 theme: horizontal top nav, content below -->
     <TopNav {perms} email={session.user.email ?? ''} role={perms.role} onSignOut={signOut} />
     <main class="content topnav-content">
+      {#each $globalErrors as g (g.id)}
+        <ErrorBanner error={g.error} showRaw onDismiss={() => dismissGlobalError(g.id)} />
+      {/each}
       {#if !perms.role && perms.loaded}
         <div class="no-access">
           <h2>No role assigned</h2>
@@ -180,6 +184,9 @@
     </aside>
 
     <main class="content">
+      {#each $globalErrors as g (g.id)}
+        <ErrorBanner error={g.error} showRaw onDismiss={() => dismissGlobalError(g.id)} />
+      {/each}
       {#if devMode}
         <div class="dev-panel">
           <div class="dev-header">Dev Panel</div>

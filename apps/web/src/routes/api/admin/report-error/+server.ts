@@ -1,5 +1,7 @@
 import { error, json } from '@sveltejs/kit'
 import { getUserIdFromRequest, sbForUser } from '$lib/services/permissions.service'
+import { tasks } from '@trigger.dev/sdk/v3'
+import type { notifyErrorReport } from '$lib/../trigger/notify-error-report'
 
 /**
  * Capture a user-initiated error report from the ErrorBanner.
@@ -86,5 +88,15 @@ export async function POST({ request, cookies, locals }) {
     .single()
 
   if (insErr) throw error(400, insErr.message)
-  return json({ id: (data as { id: string }).id }, { status: 201 })
+
+  const reportId = (data as { id: string }).id
+
+  // Fire-and-forget the alert email. Don't await — we don't want a slow
+  // Mailgun call (or a missing ALERT_EMAIL config) to delay the user's
+  // "✓ Reported" feedback. The task itself logs to system_logs on
+  // failure so the gap is visible without blocking here.
+  tasks.trigger<typeof notifyErrorReport>('notify-error-report', { reportId })
+    .catch(e => console.warn('[report-error] failed to enqueue alert', e?.message ?? e))
+
+  return json({ id: reportId }, { status: 201 })
 }
