@@ -179,19 +179,21 @@
     note: 'default'
   }
   const KIND_LABEL: Record<FeatureRequestKind, string> = {
-    feature_request: 'Feature request',
+    feature_request: 'Request',
     note: 'Note'
   }
 
+  // Column widths sum to 100. Kind needs to comfortably hold the "Request"
+  // badge — at 9% it was clipping and the title bled left into the kind cell.
   const columns: Column<FeatureRequest>[] = [
-    { key: 'vote_count', label: 'Votes', sortable: true, width: '6%', align: 'right' },
-    { key: 'kind', label: 'Kind', sortable: true, width: '9%' },
+    { key: 'vote_count', label: 'Votes', sortable: true, width: '8%', align: 'right' },
+    { key: 'kind', label: 'Kind', sortable: true, width: '10%' },
     { key: 'title', label: 'Title', sortable: true, width: '22%' },
     { key: 'summary', label: 'Summary', width: '18%', muted: true, ellipsis: true, get: (r) => r.summary ?? '' },
     { key: 'raised_by', label: 'Raised by', sortable: true, width: '12%', get: (r) => r.author_email ?? '—' },
-    { key: 'status', label: 'Status', sortable: true, width: '9%' },
+    { key: 'status', label: 'Status', sortable: true, width: '8%' },
     { key: 'tags', label: 'Tags', width: '12%', get: (r) => r.tags.map((t) => t.name).join(', ') },
-    { key: 'created_at', label: 'Created', sortable: true, width: '12%' }
+    { key: 'created_at', label: 'Created', sortable: true, width: '10%' }
   ]
 
   function fmtDate(iso: string): string {
@@ -245,6 +247,8 @@
 
   let showStatusDialog = $state(false)
   let showTagsDialog = $state(false)
+  let showDeleteDialog = $state(false)
+  let bulkDeleteConfirm = $state('')
   let bulkStatus = $state<FeatureRequestStatus>('triaged')
   let bulkTagIds = $state<Set<string>>(new Set())
   let bulkNewTagDrafts = $state<Array<{ name: string; checked: boolean }>>([])
@@ -352,6 +356,16 @@
     )
   }
 
+  function runBulkSoftDelete() {
+    if (selectedArr.length === 0) return
+    if (bulkDeleteConfirm !== 'DELETE') return
+    return runBulkStream(
+      '/api/admin/bulk-soft-delete',
+      { table: 'feature_requests', ids: selectedArr, confirm: 'DELETE' },
+      `Deleting ${selectedArr.length} record${selectedArr.length === 1 ? '' : 's'}`
+    )
+  }
+
   function runBulkAddTags() {
     if (selectedArr.length === 0) return
     const tag_ids = [...bulkTagIds]
@@ -395,12 +409,14 @@
   function closeBulkDialog() {
     showStatusDialog = false
     showTagsDialog = false
+    showDeleteDialog = false
     bulkPhases = []
     bulkResult = null
     bulkError = null
     bulkTagIds = new Set()
     bulkNewTagDrafts = []
     bulkTagInput = ''
+    bulkDeleteConfirm = ''
     if (!bulkBusy) clearSelection()
   }
 
@@ -483,6 +499,7 @@
     <div class="bulk-actions">
       <Button size="sm" variant="secondary" onclick={() => (showStatusDialog = true)}>Set status…</Button>
       <Button size="sm" variant="secondary" onclick={() => (showTagsDialog = true)}>Add tags…</Button>
+      <button type="button" class="bulk-delete-btn" onclick={() => (showDeleteDialog = true)}>Delete…</button>
     </div>
   </div>
 {/if}
@@ -691,6 +708,54 @@
     {:else}
       <Button size="sm" onclick={runBulkSetStatus} loading={bulkBusy} disabled={bulkBusy || !bulkStatus}>
         Apply
+      </Button>
+    {/if}
+  {/snippet}
+</Modal>
+
+<Modal
+  open={showDeleteDialog}
+  title={`Delete ${selectedIds.size} record${selectedIds.size === 1 ? '' : 's'}?`}
+  busy={bulkBusy}
+  onClose={closeBulkDialog}
+>
+  <p class="bulk-warn">
+    This soft-deletes the selected feature request{selectedIds.size === 1 ? '' : 's'}. They'll be hidden from this list and the dashboard, but can be restored from the Change Log within 90 days.
+  </p>
+  <Field label="Type DELETE to confirm">
+    <input
+      type="text"
+      bind:value={bulkDeleteConfirm}
+      class="fr-input"
+      autocomplete="off"
+      placeholder="DELETE"
+      disabled={bulkBusy}
+    />
+  </Field>
+  {#if bulkPhases.length > 0}
+    <ul class="phase-list">
+      {#each bulkPhases as p}
+        <li class="phase phase--{p.status}">
+          <span class="phase-dot"></span>
+          <span class="phase-label">{p.label}</span>
+          {#if p.detail}<span class="phase-detail">{p.detail}</span>{/if}
+        </li>
+      {/each}
+    </ul>
+  {/if}
+  {#if bulkError}<p class="bulk-error">{bulkError}</p>{/if}
+
+  {#snippet footer()}
+    <Button variant="ghost" size="sm" onclick={closeBulkDialog} disabled={bulkBusy}>Close</Button>
+    {#if lastBulkActionId && bulkResult}
+      <Button size="sm" variant="secondary" onclick={undoLastBulk} loading={undoBusy} disabled={undoBusy || bulkBusy}>
+        ↶ Undo
+      </Button>
+    {:else}
+      <Button size="sm" variant="danger" onclick={runBulkSoftDelete}
+        loading={bulkBusy}
+        disabled={bulkBusy || bulkDeleteConfirm !== 'DELETE'}>
+        Delete {selectedIds.size}
       </Button>
     {/if}
   {/snippet}
@@ -982,7 +1047,28 @@
     text-underline-offset: 2px;
   }
   .bulk-link:hover { color: var(--accent); }
-  .bulk-actions { display: inline-flex; gap: var(--space-2); }
+  .bulk-actions { display: inline-flex; gap: var(--space-2); align-items: center; }
+
+  .bulk-delete-btn {
+    padding: 5px 12px;
+    border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--border));
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--danger);
+    font-size: var(--text-sm);
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 120ms;
+  }
+  .bulk-delete-btn:hover {
+    background: color-mix(in srgb, var(--danger) 10%, transparent);
+  }
+  .bulk-warn {
+    margin: 0 0 var(--space-3);
+    color: var(--text);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+  }
 
   .bulk-flash {
     display: flex;
