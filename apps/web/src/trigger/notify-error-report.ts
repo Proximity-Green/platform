@@ -39,27 +39,30 @@ function escapeHtml(s: string): string {
  * a noisy class of failure from blowing up the inbox while still flagging
  * the first occurrence quickly.
  *
- * Recipients come from the ALERT_EMAIL env var (comma-separated list).
- * Set this in Coolify; if missing, the task no-ops and writes a warning
- * to system_logs so the gap is visible without breaking anything.
+ * Recipients default to tech@proximity.green (a Google Workspace group
+ * that fans out to whoever needs to see error alerts). For dev / local
+ * testing or if a different list is wanted in a non-prod environment,
+ * override via the ALERT_EMAIL env var (comma-separated list — anything
+ * set there replaces the default rather than adding to it).
+ *
+ * Will revisit when the notification routing system lands; that table-
+ * driven model will replace this per-task default.
  */
+const DEFAULT_RECIPIENTS = ['tech@proximity.green']
 export const notifyErrorReport = task({
   id: 'notify-error-report',
   maxDuration: 60,
   run: async (payload: { reportId: string }) => {
     const apiKey = process.env.MAILGUN_API_KEY ?? ''
-    const recipients = (process.env.ALERT_EMAIL ?? '')
+    const envRecipients = (process.env.ALERT_EMAIL ?? '')
       .split(',')
       .map(s => s.trim())
       .filter(Boolean)
+    const recipients = envRecipients.length > 0 ? envRecipients : DEFAULT_RECIPIENTS
 
     if (!apiKey) {
       logger.warn('notify-error-report: MAILGUN_API_KEY missing — skipping')
       return { skipped: 'no_api_key' }
-    }
-    if (recipients.length === 0) {
-      logger.warn('notify-error-report: ALERT_EMAIL not set — skipping')
-      return { skipped: 'no_recipients' }
     }
 
     const supabase = await getSupabase()

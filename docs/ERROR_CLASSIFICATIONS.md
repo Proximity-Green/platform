@@ -67,7 +67,7 @@ Closed two big gaps in the system: errors that escaped the form-action path were
 - **Noise filter** — known benign noise is dropped before it reaches the banner: `ResizeObserver loop limit`, Vite HMR reconnects, browser-extension errors, user-cancelled fetches.
 - **De-dup on push** — same title within 5s of the last entry is suppressed so a runaway loop doesn't fill the banner stack.
 - **Admin layout** renders `{#each $globalErrors}` at the top of `<main>` for both top-nav and sidebar themes.
-- **Trigger.dev `notify-error-report`** task — Mailgun email to recipients listed in `ALERT_EMAIL` (comma-separated env var) when a new report lands. Fired fire-and-forget from `/api/admin/report-error` so the user's "✓ Reported" feedback isn't blocked on email infrastructure.
+- **Trigger.dev `notify-error-report`** task — Mailgun email when a new report lands. Defaults to `tech@proximity.green` (a Google Workspace group that fans out to whoever needs to see error alerts); override with `ALERT_EMAIL` env var if needed in a non-prod env. Fired fire-and-forget from `/api/admin/report-error` so the user's "✓ Reported" feedback isn't blocked on email infrastructure.
 - **Throttling** — if the same `code` was reported in the past hour, the alert is suppressed (the report still lands in the triage queue, just doesn't ring the bell again).
 
 **Next session — notification routing system** (queued, not built):
@@ -76,7 +76,7 @@ Closed two big gaps in the system: errors that escaped the form-action path were
 - Severity model on `reported_errors` driving subscription filters
 - `/admin/notifications` UI for managing subscriptions + channels
 
-For now, **set `ALERT_EMAIL` in Coolify** on the trigger-jobs service to whatever address(es) should get error alerts.
+Default recipient is `tech@proximity.green` (Google Workspace group). To override in a non-prod env, set `ALERT_EMAIL` on the trigger-jobs service.
 
 ### 2026-04-27 — Report-this-error pipeline + screenshots
 
