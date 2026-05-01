@@ -4,8 +4,14 @@ Status: **scoping**, no code yet. Captured during the 2026-04-30 / 05-01
 session so the rules survive across conversations. Treat this as the source
 of truth for the next coding parcel.
 
-Companion doc: `docs/PRICE_ESCALATION.md` covers the per-sub-line rules
-(escalation, discount) and the org-default JSON shape — separate parcel.
+Companion docs (separate parcels):
+- `docs/PRICING_AND_FORECAST.md` — per-sub-line rules (escalation, discount) +
+  the org-default JSON shape that seeds new sub lines.
+- `docs/SUBSCRIPTION_UPGRADE_DOWNGRADE.md` — atomic transitions between
+  products, scheduled vs immediate, multi-option proposal flow,
+  self-service for members with permissions.
+- `docs/ONBOARDING.md` — onboarding & offboarding orchestration across
+  WiFi / printing / access control sub-systems.
 
 ## How to use this doc
 
@@ -85,59 +91,23 @@ entry points route through it.
 
 ## Upgrade / Downgrade
 
-> **Rule 7 companion: upgrade / downgrade is a first-class operation.**
-> Not a delete-and-create. The service exposes
-> `upgradeLicence(currentId, newItemId, effectiveAt)` /
-> `downgradeLicence(...)`. Same mechanics for both — direction is informational.
->
-> Atomic effect:
-> 1. Existing licence's `ended_at = effectiveAt - 1 day`
-> 2. Existing paired sub's `status = 'superseded'` (or 'ended')
-> 3. New licence opens with `started_at = effectiveAt`
-> 4. New paired sub created at the new item's rate
+Extracted to `docs/SUBSCRIPTION_UPGRADE_DOWNGRADE.md`. The licence-creation
+service exposes `createLicence(...)`; the upgrade/downgrade service
+exposes `applyChange(...)` / `proposeChange(...)`. Both are atomic at the
+licence ↔ sub level. Open questions about the actor model (primary
+member, org-admin role) are the same blocker — answered once, applies to
+both parcels.
 
-### Actor model (open — needs schema check)
-- Platform admin / super_admin — always (implicit).
-- The org's **primary member**.
-- Any org member with **org member admin** rights.
+## Onboarding & offboarding
 
-Open questions before encoding the actor model:
-- Does the platform have a `primary_member_id` on `organisations` already?
-  (`signatory_person_id` exists but that's a different concept.)
-- Where would "org member admin" rights be tracked? On `persons`? On a new
-  per-org junction (`organisation_members` with role)?
+Extracted to `docs/ONBOARDING.md`. The licence-creation service calls
+`fireOnboardingHook(...)` when a licence is current at creation and the
+member's `onboarded_at IS NULL`; calls `fireOffboardingHook(...)` when
+ending a licence leaves the member with zero current licences.
 
-## Onboarding (separate parcel)
-
-Onboarding talks to multiple sub-systems (WiFi, printing, access control) so
-it deserves its own design / build. Don't bundle with the licence-creation
-service. Instead:
-
-> **Rule 12: On a licence becoming current, fire the onboarding hook.**
-> Hook is a stub today (writes a TODO row to `system_logs`). When the
-> onboarding system is built, the hook becomes the orchestrator entry point.
-> No code outside the hook function changes.
->
-> **Rule 13: Every current licence must resolve to an onboarded member.**
-> A current licence is in one of two states:
-> - **Onboarded** — `persons.onboarded_at IS NOT NULL`, fully reconciled.
-> - **Pending onboarding** — sitting on the onboarding queue.
->
-> No third state. The onboarding queue is the gap between the two.
-
-### Future onboarding-system shape (tentative)
-Probably a dedicated `onboarding_tasks` table with per-step status (wifi,
-print account, access card, welcome email, induction meeting) so each
-sub-system integration can succeed/fail/retry independently. Decide when
-the first integration is built — the table shape will be obvious then.
-
-**Runtime**: each step that calls an external sub-system (WiFi controller,
-print server, access-control API) goes through **Trigger.dev**, not an
-in-process worker. External APIs flake; Trigger.dev gives us durable
-retries + visibility into failure. The internal coordinator that sequences
-steps and updates `onboarding_tasks` rows can be plain Node/Postgres —
-that part is bullet-proof. (See the `feedback_task_execution` memory for
-the rule of thumb.)
+The hooks are the only contact between this parcel and the onboarding
+parcel — everything else (orchestration, sub-system integrations, queue
+UI) lives over there.
 
 ## Side-effects to wire when the service exists
 
@@ -145,7 +115,7 @@ When `createLicence(...)` succeeds:
 1. Insert the licence + paired sub atomically (the RPC already does this).
 2. Copy current org defaults from `organisations.default_sub_rules` (JSON)
    into a fresh `subscription_line_rules` row for this sub. See
-   `docs/PRICE_ESCALATION.md` for the JSON shape.
+   `docs/PRICING_AND_FORECAST.md` for the JSON shape.
 3. If the licence is current at creation, call `fireOnboardingHook(...)`.
 4. Log the operation in `change_log` (the existing tier-1 trigger handles
    this for licences and subs, so probably nothing to add here — but verify).
@@ -155,4 +125,4 @@ When `createLicence(...)` succeeds:
 - WiFi / printing / access-control integrations.
 - Multi-tenant org-admin role model.
 - Bulk licence operations.
-- Price escalation (covered by the separate parcel — see `docs/PRICE_ESCALATION.md`).
+- Price escalation (covered by the separate parcel — see `docs/PRICING_AND_FORECAST.md`).

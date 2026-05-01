@@ -19,7 +19,8 @@ for (const [path, content] of Object.entries(rawDocs)) {
 type DocSlug =
   | 'architecture' | 'conventions' | 'catalog' | 'migration'
   | 'benchmark' | 'testing' | 'sage' | 'platform-school'
-  | 'licence-creation' | 'price-escalation'
+  | 'licence-creation' | 'pricing-forecast'
+  | 'subscription-change' | 'onboarding'
 
 const FILE_BY_SLUG: Record<DocSlug, string> = {
   architecture: 'ARCHITECTURE.md',
@@ -31,7 +32,9 @@ const FILE_BY_SLUG: Record<DocSlug, string> = {
   sage: 'SAGE.md',
   'platform-school': 'PLATFORM_SCHOOL.md',
   'licence-creation': 'LICENCE_CREATION_RULES.md',
-  'price-escalation': 'PRICE_ESCALATION.md'
+  'pricing-forecast': 'PRICING_AND_FORECAST.md',
+  'subscription-change': 'SUBSCRIPTION_UPGRADE_DOWNGRADE.md',
+  'onboarding': 'ONBOARDING.md'
 }
 
 export const load = async ({ url }) => {
@@ -56,7 +59,9 @@ export const load = async ({ url }) => {
       { type: 'link', slug: 'platform-school', label: 'Platform School' },
       { type: 'heading', label: 'Design parcels' },
       { type: 'link', slug: 'licence-creation', label: 'Licence creation rules' },
-      { type: 'link', slug: 'price-escalation', label: 'Price escalation' },
+      { type: 'link', slug: 'pricing-forecast', label: 'Pricing, discounting & forecast' },
+      { type: 'link', slug: 'subscription-change', label: 'Upgrade / downgrade' },
+      { type: 'link', slug: 'onboarding', label: 'Onboarding & offboarding' },
       { type: 'heading', label: 'Integrations' },
       { type: 'link', slug: 'sage', label: 'Sage' }
     ] as ({ type: 'link'; slug: string; label: string } | { type: 'heading'; label: string })[]
