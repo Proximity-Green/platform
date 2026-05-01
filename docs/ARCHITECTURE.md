@@ -104,10 +104,15 @@ A person's billing membership and home location come from their **active licence
 
 ## Deployment
 
+Production tracks `main`. Pushes to `main` don't auto-deploy — re-run the
+SSH block below to roll the container forward. Apply any new
+`packages/database/migrations/*.sql` against the production DB before the
+container starts so the new app code never sees an old schema.
+
 ```
 ssh root@178.104.205.85 \
   "cd /tmp && rm -rf platform && \
-   git clone --depth 1 --branch develop https://github.com/Proximity-Green/platform.git && \
+   git clone --depth 1 --branch main https://github.com/Proximity-Green/platform.git && \
    cd platform/apps/web && \
    docker build --no-cache -t pg-web . && \
    docker stop pg-web && docker rm pg-web && \
