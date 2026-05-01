@@ -21,8 +21,7 @@ for (const [path, content] of Object.entries(rawDocs)) {
 type DocSlug =
   | 'architecture' | 'conventions' | 'catalog' | 'migration'
   | 'benchmark' | 'testing' | 'sage' | 'platform-school'
-  | 'licence-creation' | 'pricing-forecast'
-  | 'subscription-change' | 'onboarding'
+  | 'subscription-lifecycle' | 'onboarding'
   | 'occupancy' | 'radius'
 
 const FILE_BY_SLUG: Record<DocSlug, string> = {
@@ -34,9 +33,7 @@ const FILE_BY_SLUG: Record<DocSlug, string> = {
   testing: 'TESTING.md',
   sage: 'SAGE.md',
   'platform-school': 'PLATFORM_SCHOOL.md',
-  'licence-creation': 'LICENCE_CREATION_RULES.md',
-  'pricing-forecast': 'PRICING_AND_FORECAST.md',
-  'subscription-change': 'SUBSCRIPTION_UPGRADE_DOWNGRADE.md',
+  'subscription-lifecycle': 'SUBSCRIPTION_LIFECYCLE.md',
   'onboarding': 'ONBOARDING.md',
   'occupancy': 'OCCUPANCY.md',
   'radius': 'RADIUS_INTEGRATION.md'
@@ -72,9 +69,7 @@ export const load = async ({ url, cookies, locals }) => {
       { type: 'link', slug: 'testing', label: 'Testing' },
       { type: 'link', slug: 'platform-school', label: 'Platform School' },
       { type: 'heading', label: 'Design parcels' },
-      { type: 'link', slug: 'licence-creation', label: 'Licence creation rules' },
-      { type: 'link', slug: 'pricing-forecast', label: 'Pricing, discounting & forecast' },
-      { type: 'link', slug: 'subscription-change', label: 'Upgrade / downgrade' },
+      { type: 'link', slug: 'subscription-lifecycle', label: 'Subscription lifecycle' },
       { type: 'link', slug: 'onboarding', label: 'Onboarding & offboarding' },
       { type: 'link', slug: 'occupancy', label: 'Occupancy' },
       { type: 'heading', label: 'Integrations' },
