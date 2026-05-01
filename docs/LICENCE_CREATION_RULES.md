@@ -7,6 +7,33 @@ of truth for the next coding parcel.
 Companion doc: `docs/PRICE_ESCALATION.md` covers the per-sub-line rules
 (escalation, discount) and the org-default JSON shape — separate parcel.
 
+## How to use this doc
+
+This doc plays two roles depending on stage:
+
+- **Pre-build (now)** — the design contract. Read it, edit it, get buy-in
+  on it. Rules get locked in here before any code is written.
+- **Post-build** — the living reference. Open it later to remember *why*
+  the code is shaped the way it is.
+
+**When to update:**
+- A rule changes during a design conversation → update before any code lands.
+- Code drifts from a rule during build → update the doc (or push back on
+  the code). Out-of-sync docs are worse than missing docs.
+- New requirement surfaces post-ship → **append, don't rewrite**. Add an
+  amendment section dated. Old rules marked `~~superseded YYYY-MM~~`,
+  not deleted.
+
+**Rule numbering is stable.** Don't renumber when a rule is dropped — code
+comments and old commits reference numbers. Drop the body, keep the slot.
+
+**Audit trail = git history.** Every rule change is a commit with a clear
+message. The repo log answers "when did Rule N change and why?".
+
+**Buy-in:** for rules touching money, contracts, member experience — run
+them past the operator who'd actually push the buttons before building.
+Don't spec in isolation; don't spec by committee.
+
 ## Why a service?
 
 Today licence creation is splintered across four call sites:
