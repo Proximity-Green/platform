@@ -78,6 +78,14 @@
     Promise.resolve(data.licences).then(v => (licences = v as any))
   })
 
+  // Resolved once data.organisations promise settles. Used in the page-head
+  // lede ("ravi@… in Acme Co") with a link to the org page.
+  const currentOrg = $derived(
+    person.organisation_id
+      ? organisations.find(o => o.id === person.organisation_id) ?? null
+      : null
+  )
+
   let perms = $state({ role: null as string | null, permissions: [] as any, loaded: false })
   permStore.subscribe(v => { perms = v })
   function can(resource: string, action: string = 'read') { return canDo(perms, resource, action) }
@@ -169,7 +177,8 @@
 
 <RecordLive tableName="persons" recordId={person.id} viewerId={data.viewerId ?? null} label="member" />
 
-<PageHead title={`Member: ${person.first_name} ${person.last_name}`} lede={person.email}>
+<PageHead title={`Member: ${person.first_name} ${person.last_name}`}>
+  {#snippet ledeSlot()}{person.email ?? ''}{#if currentOrg} at <a href="/organisations/{currentOrg.id}">{currentOrg.name}</a>{/if}{/snippet}
   <Button variant="ghost" size="sm" href="/people">← Back</Button>
   {#if !person.user_id && can('users', 'manage')}
     <SubmitButton

@@ -26,20 +26,37 @@
     user_id: string | null
     created_at: string
     role_name?: string | null
+    organisation_id?: string | null
+    organisation_name?: string | null
   }
 
   let { data, form } = $props()
   let showCreate = $state(false)
   let saving = $state(false)
 
+  // Resolve organisation name once (server returns id+name for the picker);
+  // joined client-side onto each person so the table doesn't need a denormalised
+  // column on the persons base view.
+  const orgNameById = $derived(
+    new Map(((data.organisations ?? []) as { id: string; name: string }[]).map(o => [o.id, o.name]))
+  )
+  const persons = $derived(
+    (data.persons as Person[]).map(p => ({
+      ...p,
+      organisation_name: p.organisation_id ? orgNameById.get(p.organisation_id) ?? null : null
+    }))
+  )
+
   // ── Bulk selection ──────────────────────────────────────────────
   let selectedIds = $state<Set<string>>(new Set())
   let filteredPersons = $state<Person[]>([])
   let showRoleDialog = $state(false)
   let showFirstNameDialog = $state(false)
+  let showOrgDialog = $state(false)
   let showEmailDrawer = $state(false)
   let bulkRoleId = $state('')
   let bulkFirstName = $state('')
+  let bulkOrgId = $state('')
   let mailSubject = $state('')
   let mailBody = $state('Hi {{first_name}},\n\n')
   let bulkBusy = $state(false)
@@ -130,6 +147,17 @@
       `Setting first_name to "${name}"`)
   }
 
+  function runBulkSetOrg() {
+    if (selectedArr.length === 0) return
+    // Empty string from the Select means "clear org assignment".
+    const orgIdOrNull = bulkOrgId === '' ? null : bulkOrgId
+    // Generic label keeps the row tidy when the org name is long — the
+    // org appears in the right-aligned detail via handlePhase.
+    return runBulkStream('/api/admin/bulk-set-organisation',
+      { organisation_id: orgIdOrNull, person_ids: selectedArr },
+      'Setting organisation')
+  }
+
   function handlePhase(evt: any) {
     switch (evt.phase) {
       case 'resolving':
@@ -173,6 +201,7 @@
   function closeBulkDialog() {
     showRoleDialog = false
     showFirstNameDialog = false
+    showOrgDialog = false
     // Keep result/undo chip visible on the page after closing.
     bulkPhases = []
     bulkResult = null
@@ -202,6 +231,7 @@
       // Close modal so the refreshed list is visible behind.
       showRoleDialog = false
       showFirstNameDialog = false
+      showOrgDialog = false
       bulkPhases = []
       bulkResult = null
       bulkError = null
@@ -224,7 +254,7 @@
     selectedIds = next
   }
   function selectAll() {
-    selectedIds = new Set((data.persons as Person[]).map(p => p.id))
+    selectedIds = new Set(persons.map(p => p.id))
   }
   function selectFound() {
     selectedIds = new Set(filteredPersons.map(p => p.id))
@@ -234,7 +264,7 @@
   }
   const selectedArr = $derived([...selectedIds])
   const selectedPersons = $derived(
-    (data.persons as Person[]).filter(p => selectedIds.has(p.id))
+    persons.filter(p => selectedIds.has(p.id))
   )
   const selectedInvitable = $derived(selectedPersons.filter(p => !p.user_id))
 
@@ -252,18 +282,20 @@
   function can(resource: string, action: string = 'read') { return canDo(perms, resource, action) }
 
   const columns: Column<Person>[] = [
-    { key: 'name', label: 'Name', sortable: true, width: '24%', get: p => `${p.first_name} ${p.last_name}` },
-    { key: 'email', label: 'Email', sortable: true, width: '24%', ellipsis: true, muted: true },
+    { key: 'name', label: 'Name', sortable: true, width: '20%', get: p => `${p.first_name} ${p.last_name}` },
+    { key: 'email', label: 'Email', sortable: true, width: '20%', ellipsis: true, muted: true },
+    { key: 'organisation_name', label: 'Organisation', sortable: true, width: '14%', muted: true, get: p => p.organisation_name ?? '' },
     { key: 'role_name', label: 'Role', sortable: true, width: '10%', muted: true, get: p => p.role_name ?? '' },
     { key: 'phone', label: 'Phone', width: '12%', mono: true, muted: true, hideBelow: 'md' },
-    { key: 'job_title', label: 'Job Title', sortable: true, width: '14%', muted: true, hideBelow: 'md' },
+    { key: 'job_title', label: 'Job Title', sortable: true, width: '12%', muted: true, hideBelow: 'md' },
     { key: 'created_at', label: 'Created', sortable: true, width: '12%', date: true, hideBelow: 'sm' }
   ]
 
   const filters: Filter<Person>[] = [
     { key: 'all', label: 'All' },
     { key: 'user', label: 'Has user', test: p => !!p.user_id },
-    { key: 'no_user', label: 'No user', test: p => !p.user_id }
+    { key: 'no_user', label: 'No user', test: p => !p.user_id },
+    { key: 'no_org', label: 'No Organisation', test: p => !p.organisation_id }
   ]
 
   const firstNames = ['Sarah', 'James', 'Thandi', 'Mohammed', 'Chen', 'Priya', 'David', 'Emma', 'Sipho', 'Maria', 'Liam', 'Aisha', 'Ravi', 'Nina', 'Oscar', 'Fatima', 'Johan', 'Leila', 'Tom', 'Zanele']
@@ -329,9 +361,9 @@
       <span class="bulk-sep">·</span>
       <button type="button" class="bulk-link" onclick={clearSelection}>Clear</button>
       <button type="button" class="bulk-link" onclick={selectAll}>
-        Select all ({(data.persons as Person[]).length} records)
+        Select all ({persons.length} records)
       </button>
-      {#if filteredPersons.length > 0 && filteredPersons.length !== (data.persons as Person[]).length}
+      {#if filteredPersons.length > 0 && filteredPersons.length !== persons.length}
         <button type="button" class="bulk-link" onclick={selectFound}>
           Select filtered ({filteredPersons.length} records)
         </button>
@@ -353,6 +385,9 @@
       {/if}
       {#if can('persons', 'update')}
         <Button size="sm" variant="secondary" onclick={() => (showFirstNameDialog = true)}>Set first name…</Button>
+        {#if can('bulk_actions', 'set_organisation')}
+          <Button size="sm" variant="secondary" onclick={() => (showOrgDialog = true)}>Set Organisation…</Button>
+        {/if}
         <Button size="sm" onclick={() => (showEmailDrawer = true)}>Email (mail merge)…</Button>
       {/if}
     </div>
@@ -360,7 +395,7 @@
 {/if}
 
 <DataTable
-  data={data.persons as Person[]}
+  data={persons}
   {columns}
   {filters}
   table="people"
@@ -392,6 +427,13 @@
     </td>
     <td class="muted">
       <Copyable value={person.email} ellipsis />
+    </td>
+    <td class="muted">
+      {#if person.organisation_id && person.organisation_name}
+        <a href={`/organisations/${person.organisation_id}`} onclick={(e) => e.stopPropagation()}>{person.organisation_name}</a>
+      {:else}
+        —
+      {/if}
     </td>
     <td class="muted">{person.role_name ?? '—'}</td>
     <td class="muted mono hide-md">
@@ -522,7 +564,58 @@
   </div>
 {/if}
 
-{#if lastBulkSummary && !showRoleDialog && !showFirstNameDialog}
+{#if showOrgDialog}
+  <div class="modal-backdrop" role="presentation" onclick={() => !bulkBusy && closeBulkDialog()}></div>
+  <div class="modal" role="dialog" aria-modal="true">
+    <h3>Set organisation on {selectedIds.size} member{selectedIds.size === 1 ? '' : 's'}</h3>
+    <p class="muted small">Re-assigns <code>persons.organisation_id</code> for every selected member. Pick "(none)" to clear. Undoable from the changelog.</p>
+
+    {#if bulkPhases.length === 0}
+      <Field label="Organisation">
+        <Select
+          name="bulk_org"
+          value={bulkOrgId}
+          onchange={(v) => (bulkOrgId = v)}
+          options={[{ value: '', label: '(none — clear assignment)' }, ...((data.organisations as { id: string; name: string }[]) ?? []).map(o => ({ value: o.id, label: o.name }))]}
+        />
+      </Field>
+      <div class="modal-actions">
+        <Button variant="ghost" size="sm" onclick={closeBulkDialog} disabled={bulkBusy}>Cancel</Button>
+        <Button size="sm" onclick={runBulkSetOrg} disabled={bulkBusy}>Apply</Button>
+      </div>
+    {:else}
+      <ul class="phase-list" aria-live="polite">
+        {#each bulkPhases as p (p.key)}
+          <li class="phase phase-{p.status}">
+            <span class="phase-icon" aria-hidden="true">
+              {#if p.status === 'done'}✓{:else if p.status === 'active'}<span class="spin"></span>{:else if p.status === 'error'}!{:else if p.status === 'skipped'}–{:else}·{/if}
+            </span>
+            <span class="phase-label">{p.label}</span>
+            {#if p.detail}<span class="phase-detail">{p.detail}</span>{/if}
+          </li>
+        {/each}
+      </ul>
+
+      {#if bulkResult && !bulkError}
+        <div class="phase-summary ok">
+          <strong>{bulkResult.applied}</strong> person{bulkResult.applied === 1 ? '' : 's'} updated · <span class="muted">{bulkResult.ms}ms</span>
+          {#if bulkResult.bulk_action_id}
+            <Button size="xs" variant="ghost" onclick={undoLastBulk} disabled={undoBusy} loading={undoBusy}>Undo</Button>
+          {/if}
+        </div>
+      {/if}
+      {#if bulkError}
+        <div class="phase-summary err">{bulkError}</div>
+      {/if}
+
+      <div class="modal-actions">
+        <Button size="sm" onclick={closeBulkDialog} disabled={bulkBusy}>{bulkBusy ? 'Applying…' : 'Close'}</Button>
+      </div>
+    {/if}
+  </div>
+{/if}
+
+{#if lastBulkSummary && !showRoleDialog && !showFirstNameDialog && !showOrgDialog}
   <div class="bulk-flash" role="status">
     <span>{lastBulkSummary}</span>
     {#if lastBulkActionId}
@@ -640,7 +733,8 @@
     flex: 0 0 auto;
   }
   .phase-label {
-    flex: 0 0 auto;
+    flex: 1 1 auto;
+    min-width: 0;
     color: var(--muted);
   }
   .phase-detail {
@@ -648,6 +742,10 @@
     font-size: 12px;
     margin-left: auto;
     font-variant-numeric: tabular-nums;
+    text-align: right;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
   .phase-active {
     background: color-mix(in srgb, var(--accent) 10%, var(--surface));

@@ -1,12 +1,17 @@
 <script lang="ts">
-  type Props = { title: string; lede?: string; children?: any }
-  let { title, lede, children }: Props = $props()
+  import type { Snippet } from 'svelte'
+  type Props = { title: string; lede?: string; ledeSlot?: Snippet; children?: any }
+  let { title, lede, ledeSlot, children }: Props = $props()
 </script>
 
 <section class="page-head">
   <div class="page-head-text">
     <h1>{title}</h1>
-    {#if lede}<p class="lede">{lede}</p>{/if}
+    {#if ledeSlot}
+      <p class="lede">{@render ledeSlot()}</p>
+    {:else if lede}
+      <p class="lede">{lede}</p>
+    {/if}
   </div>
   {#if children}
     <div class="page-actions">{@render children()}</div>
@@ -31,6 +36,12 @@
     font-size: var(--text-md);
     max-width: 620px;
   }
+  .lede :global(a) {
+    color: var(--accent, #2d6a35);
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+  }
+  .lede :global(a:hover) { opacity: 0.8; }
   .page-actions {
     display: flex;
     gap: var(--space-2);
