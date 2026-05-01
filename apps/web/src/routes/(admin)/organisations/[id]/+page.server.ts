@@ -4,7 +4,13 @@ import { logFail } from '$lib/services/action-log.service'
 import * as walletsService from '$lib/services/wallets.service'
 import * as subsService from '$lib/services/subscription-lines.service'
 import * as invoicesService from '$lib/services/invoices.service'
-import { createLicence, applyLicenceChange } from '$lib/services/licence-creation.service'
+import {
+  createLicence,
+  applyLicenceChange,
+  proposeLicenceChange,
+  approveLicenceProposal,
+  rejectLicenceProposal
+} from '$lib/services/licence-creation.service'
 
 const blank = (data: FormData, k: string): string | null => {
   const v = data.get(k)
@@ -251,6 +257,38 @@ export const load = async ({ params, cookies, locals }) => {
       location_id: i.location_id
     }))
 
+  // ── L2 proposals: pending licence changes for this org's licences ──
+  const orgLicenceIds = (licences as any[]).map(l => l.id)
+  const proposalsRes = orgLicenceIds.length === 0
+    ? { data: [] }
+    : await supabase
+        .from('licence_change_proposals')
+        .select(`
+          *,
+          source_licence:source_licence_id(id, item_id, items(name), locations(name, short_name), user_id, persons:user_id(first_name, last_name)),
+          new_item:new_item_id(id, name, base_rate)
+        `)
+        .in('source_licence_id', orgLicenceIds)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: true })
+
+  const proposals = (proposalsRes.data ?? []).map((p: any) => ({
+    id: p.id,
+    source_licence_id: p.source_licence_id,
+    new_item_id: p.new_item_id,
+    effective_at: p.effective_at,
+    status: p.status,
+    created_at: p.created_at,
+    proposed_notes: p.proposed_notes,
+    source_item_name: p.source_licence?.items?.name ?? null,
+    source_location_name: p.source_licence?.locations?.short_name ?? p.source_licence?.locations?.name ?? null,
+    source_member_name: p.source_licence?.persons
+      ? `${p.source_licence.persons.first_name ?? ''} ${p.source_licence.persons.last_name ?? ''}`.trim() || null
+      : null,
+    new_item_name: p.new_item?.name ?? null,
+    new_item_base_rate: p.new_item?.base_rate ?? null
+  }))
+
   return {
     organisation,
     licences,
@@ -267,6 +305,7 @@ export const load = async ({ params, cookies, locals }) => {
     items: itemsRes.data ?? [],
     licenceableItems,
     licenceableItemTypes,
+    proposals,
     viewerId: userId
   }
 }
@@ -693,6 +732,66 @@ export const actions = {
     const { error: delErr } = await sbForUser(userId).from('licenses').delete().eq('id', id)
     if (delErr) return await logFail(userId, 'organisations.removeLicence', delErr, { id })
     return { success: true, message: 'Licence removed' }
+  },
+
+  proposeLicenceChange: async ({ request, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
+    if (userId) await requirePermission(userId, 'subscriptions', 'propose')
+
+    const data = await request.formData()
+    const result = await proposeLicenceChange({
+      source_licence_id: (data.get('source_licence_id') as string) ?? '',
+      new_item_id: (data.get('new_item_id') as string) ?? '',
+      effective_at: (data.get('effective_at') as string) ?? '',
+      notes: blank(data, 'notes')
+    }, userId)
+
+    if (!result.ok) {
+      await logFail(userId, 'organisations.proposeLicenceChange', new Error(result.error.detail ?? result.error.title), {
+        code: result.error.code
+      })
+      return fail(400, { error: result.error.title, actionable: result.error })
+    }
+
+    return { success: true, message: 'Change proposed — awaiting approval.', proposal_id: result.proposal_id }
+  },
+
+  approveLicenceProposal: async ({ request, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
+    if (userId) await requirePermission(userId, 'subscriptions', 'approve_proposal')
+
+    const data = await request.formData()
+    const proposalId = (data.get('proposal_id') as string) ?? ''
+    const result = await approveLicenceProposal(proposalId, userId, blank(data, 'notes'))
+
+    if (!result.ok) {
+      await logFail(userId, 'organisations.approveLicenceProposal', new Error(result.error.detail ?? result.error.title), {
+        code: result.error.code,
+        proposal_id: proposalId
+      })
+      return fail(400, { error: result.error.title, actionable: result.error })
+    }
+
+    return { success: true, message: 'Proposal approved — change applied.', applied: result.applied }
+  },
+
+  rejectLicenceProposal: async ({ request, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
+    if (userId) await requirePermission(userId, 'subscriptions', 'approve_proposal')
+
+    const data = await request.formData()
+    const proposalId = (data.get('proposal_id') as string) ?? ''
+    const result = await rejectLicenceProposal(proposalId, userId, blank(data, 'notes'))
+
+    if (!result.ok) {
+      await logFail(userId, 'organisations.rejectLicenceProposal', new Error(result.error.detail ?? result.error.title), {
+        code: result.error.code,
+        proposal_id: proposalId
+      })
+      return fail(400, { error: result.error.title, actionable: result.error })
+    }
+
+    return { success: true, message: 'Proposal rejected.' }
   },
 
   upgradeLicence: async ({ request, cookies, locals }) => {

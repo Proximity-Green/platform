@@ -266,3 +266,188 @@ export async function applyLicenceChange(
     currency: (r as any).currency
   }
 }
+
+// ─── L2: propose / approve / reject licence change ───────────────────
+
+export type ProposeLicenceChangeInput = {
+  source_licence_id: string
+  new_item_id: string
+  effective_at: string
+  notes?: string | null
+}
+
+export type ProposeLicenceChangeResult =
+  | { ok: true; proposal_id: string }
+  | { ok: false; error: ActionableError }
+
+const PROPOSE_FAIL = 'licence_proposal_failed'
+function proposeFail(title: string, detail: string, code = PROPOSE_FAIL): ProposeLicenceChangeResult {
+  return { ok: false, error: { code, title, detail } }
+}
+
+/**
+ * Stage a licence change for approval. Doesn't touch the live licence/sub —
+ * just records the intent. Once approved via approveLicenceProposal, the
+ * standard apply_licence_change RPC fires.
+ *
+ * Validates the same shape rules as applyLicenceChange (different item,
+ * same location, effective_at after start) up-front so the operator
+ * doesn't get a surprise when the approver clicks Approve.
+ */
+export async function proposeLicenceChange(
+  input: ProposeLicenceChangeInput,
+  actorId: string | null
+): Promise<ProposeLicenceChangeResult> {
+  if (!input.source_licence_id) return proposeFail('Missing licence', 'No licence selected.')
+  if (!input.new_item_id) return proposeFail('Missing new item', 'Pick a new membership / item.')
+  if (!input.effective_at) return proposeFail('Missing effective date', 'Pick when the change should take effect.')
+
+  // Validate same-shape constraints as the apply path so the proposal
+  // has a chance of succeeding when an approver lands.
+  const { data: lic } = await supabase
+    .from('licenses')
+    .select('id, started_at, item_id, location_id, organisation_id')
+    .eq('id', input.source_licence_id)
+    .is('deleted_at', null)
+    .maybeSingle()
+  if (!lic) return proposeFail('Licence not found', 'The licence you tried to change no longer exists.', 'source_missing')
+  if (input.new_item_id === lic.item_id) {
+    return proposeFail('Same item', 'The new item is the same as the current one — pick a different one.', 'change_same_item')
+  }
+  if (new Date(input.effective_at) <= new Date(lic.started_at)) {
+    return proposeFail('Bad effective date', 'The effective date must be after the current licence started.', 'change_bad_date')
+  }
+
+  const { data: newItem } = await supabase
+    .from('items')
+    .select('id, location_id, active, item_types(requires_license)')
+    .eq('id', input.new_item_id)
+    .is('deleted_at', null)
+    .is('item_types.deleted_at', null)
+    .maybeSingle()
+  if (!newItem) return proposeFail('Item not found', 'The chosen item does not exist or has been deleted.', 'item_not_found')
+  if (!newItem.active) return proposeFail('Item inactive', 'The chosen item is not active.', 'item_inactive')
+  if (!(newItem as any).item_types?.requires_license) {
+    return proposeFail('Not a membership', 'The chosen item does not require a licence.', 'change_wrong_item_type')
+  }
+  if (newItem.location_id !== lic.location_id) {
+    return proposeFail(
+      'Different location',
+      'The new item must be at the same location as the current licence.',
+      'change_cross_location'
+    )
+  }
+
+  const { data: row, error: insErr } = await sbForUser(actorId)
+    .from('licence_change_proposals')
+    .insert({
+      source_licence_id: input.source_licence_id,
+      new_item_id: input.new_item_id,
+      effective_at: input.effective_at,
+      proposed_by: actorId,
+      proposed_notes: input.notes ?? null
+    })
+    .select('id')
+    .single()
+
+  if (insErr) {
+    // Unique partial index → only one pending proposal per licence.
+    if (insErr.code === '23505') {
+      return proposeFail(
+        'Already a pending proposal',
+        'There is already a pending proposal for this licence. Approve or reject it first, then create a new one if needed.',
+        'proposal_exists'
+      )
+    }
+    return proposeFail('Could not save proposal', insErr.message, 'insert_failed')
+  }
+
+  return { ok: true, proposal_id: row!.id }
+}
+
+export type DecideLicenceProposalResult =
+  | { ok: true; proposal_id: string; applied?: { licence_id: string; subscription_line_id: string } }
+  | { ok: false; error: ActionableError }
+
+/**
+ * Approve a pending proposal — records the decision, then fires
+ * apply_licence_change with the proposal's params and stamps the new
+ * ids back onto the proposal row so the audit closes.
+ */
+export async function approveLicenceProposal(
+  proposalId: string,
+  actorId: string | null,
+  notes: string | null = null
+): Promise<DecideLicenceProposalResult> {
+  if (!proposalId) return { ok: false, error: { code: PROPOSE_FAIL, title: 'Missing proposal id', detail: '' } }
+
+  const sb = sbForUser(actorId)
+  const { data: prop, error: loadErr } = await sb
+    .from('licence_change_proposals')
+    .select('id, source_licence_id, new_item_id, effective_at, status')
+    .eq('id', proposalId)
+    .maybeSingle()
+  if (loadErr || !prop) return { ok: false, error: { code: 'proposal_not_found', title: 'Proposal not found', detail: 'It may have been deleted or already decided.' } }
+  if (prop.status !== 'pending') {
+    return { ok: false, error: { code: 'proposal_not_pending', title: 'Already decided', detail: `This proposal is already ${prop.status}.` } }
+  }
+
+  // Apply the change first; if it succeeds, mark the proposal approved.
+  const apply = await applyLicenceChange({
+    old_licence_id: prop.source_licence_id,
+    new_item_id: prop.new_item_id,
+    effective_at: prop.effective_at
+  }, actorId)
+  if (!apply.ok) return { ok: false, error: apply.error }
+
+  // Stamp the proposal row — applied_at + the new licence/sub ids close
+  // the audit loop. status = approved (final state).
+  await sb.from('licence_change_proposals').update({
+    status: 'approved',
+    decided_by: actorId,
+    decided_at: new Date().toISOString(),
+    decided_notes: notes,
+    applied_at: new Date().toISOString(),
+    applied_licence_id: apply.new_licence_id,
+    applied_subscription_line_id: apply.new_subscription_line_id,
+    updated_at: new Date().toISOString()
+  }).eq('id', proposalId)
+
+  return {
+    ok: true,
+    proposal_id: proposalId,
+    applied: { licence_id: apply.new_licence_id, subscription_line_id: apply.new_subscription_line_id }
+  }
+}
+
+/**
+ * Reject a pending proposal — records the decision, makes no changes
+ * to the underlying licence/sub.
+ */
+export async function rejectLicenceProposal(
+  proposalId: string,
+  actorId: string | null,
+  notes: string | null = null
+): Promise<DecideLicenceProposalResult> {
+  if (!proposalId) return { ok: false, error: { code: PROPOSE_FAIL, title: 'Missing proposal id', detail: '' } }
+
+  const { data: prop, error: loadErr } = await sbForUser(actorId)
+    .from('licence_change_proposals')
+    .select('id, status')
+    .eq('id', proposalId)
+    .maybeSingle()
+  if (loadErr || !prop) return { ok: false, error: { code: 'proposal_not_found', title: 'Proposal not found', detail: '' } }
+  if (prop.status !== 'pending') {
+    return { ok: false, error: { code: 'proposal_not_pending', title: 'Already decided', detail: `This proposal is already ${prop.status}.` } }
+  }
+
+  await sbForUser(actorId).from('licence_change_proposals').update({
+    status: 'rejected',
+    decided_by: actorId,
+    decided_at: new Date().toISOString(),
+    decided_notes: notes,
+    updated_at: new Date().toISOString()
+  }).eq('id', proposalId)
+
+  return { ok: true, proposal_id: proposalId }
+}

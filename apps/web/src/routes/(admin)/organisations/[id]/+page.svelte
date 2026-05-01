@@ -788,6 +788,60 @@
       </Card>
     {/if}
 
+    {#if (data.proposals as any[]).length > 0}
+      <Card padding="md">
+        <div class="proposals-head">
+          <h3 class="proposals-title">Pending changes — awaiting approval</h3>
+          <span class="proposals-count">{(data.proposals as any[]).length}</span>
+        </div>
+        <ul class="proposals-list">
+          {#each (data.proposals as any[]) as p (p.id)}
+            <li class="proposal-row">
+              <div class="proposal-meta">
+                <strong>{p.source_member_name ?? '—'}</strong>
+                <span class="muted small">
+                  {p.source_item_name ?? '—'} → <strong>{p.new_item_name ?? '—'}</strong>
+                  · effective {fmtDate(p.effective_at)}
+                  · proposed {fmtDate(p.created_at)}
+                </span>
+                {#if p.proposed_notes}
+                  <span class="muted small notes">"{p.proposed_notes}"</span>
+                {/if}
+              </div>
+              {#if can('subscriptions', 'approve_proposal')}
+                <div class="proposal-actions">
+                  <SubmitButton
+                    action="?/rejectLicenceProposal"
+                    label="Reject"
+                    pendingLabel="Rejecting…"
+                    variant="ghost"
+                    size="sm"
+                    fields={{ proposal_id: p.id }}
+                    confirm={{
+                      title: 'Reject proposal?',
+                      message: `Reject the proposed change to ${p.new_item_name} for ${p.source_member_name}? The current licence stays as-is.`,
+                      variant: 'danger'
+                    }}
+                  />
+                  <SubmitButton
+                    action="?/approveLicenceProposal"
+                    label="Approve & apply"
+                    pendingLabel="Applying…"
+                    size="sm"
+                    fields={{ proposal_id: p.id }}
+                    confirm={{
+                      title: 'Approve & apply?',
+                      message: `Approving will end the current licence and open a new ${p.new_item_name} licence on ${fmtDate(p.effective_at)}. Continue?`
+                    }}
+                  />
+                </div>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      </Card>
+    {/if}
+
     <DataTable
       data={data.licences as LicenceRow[]}
       columns={licenceColumns}
@@ -898,6 +952,10 @@
           </form>
         {:else}
           <!-- ── Change mode: pick new item + effective date ──────── -->
+          <!-- Single form, two submit paths: "Apply now" goes to
+               ?/upgradeLicence (applies immediately); "Save as proposal"
+               uses formaction to redirect to ?/proposeLicenceChange
+               (stages for approval). Both share the same fields. -->
           <form
             method="POST"
             action="?/upgradeLicence"
@@ -906,11 +964,16 @@
               return async ({ update, result }) => {
                 await update({ reset: false })
                 saving = false
-                if (result.type === 'success') expandedLicId = null
+                if (result.type === 'success') {
+                  expandedLicId = null
+                  licChangeMode = false
+                }
               }
             }}
           >
+            <!-- both action handlers read different field names — pass both -->
             <input type="hidden" name="old_licence_id" value={l.id} />
+            <input type="hidden" name="source_licence_id" value={l.id} />
             <FieldGrid cols={2}>
               <Field label="New membership *">
                 <Select
@@ -951,17 +1014,33 @@
                 </div>
               </Field>
             </FieldGrid>
+            <FieldGrid cols={1}>
+              <Field name="notes" label="Notes (visible to approver)" value="" />
+            </FieldGrid>
             <p class="muted small change-hint">
-              The current licence will end the day before this date. A new licence + paired subscription
-              opens at the new item's catalog rate from the effective date.
+              <strong>Apply now</strong> ends the current licence the day before the effective date and opens a new licence + paired subscription immediately at the new item's catalog rate.
+              <br>
+              <strong>Save as proposal</strong> stages the same change for an admin to approve first; nothing changes on the licence until approval.
             </p>
             <div class="lic-edit-actions">
               <Button type="button" size="sm" variant="ghost" onclick={() => (licChangeMode = false)}>
                 Back to edit
               </Button>
-              <Button type="submit" size="sm" loading={saving} disabled={!licChangeNewItemId || !licChangeEffectiveAt}>
-                {saving ? 'Applying…' : 'Apply change'}
-              </Button>
+              <button
+                type="submit"
+                formaction="?/proposeLicenceChange"
+                class="btn-secondary"
+                disabled={saving || !licChangeNewItemId || !licChangeEffectiveAt}
+              >
+                {saving ? '…' : 'Save as proposal'}
+              </button>
+              <button
+                type="submit"
+                class="btn-primary"
+                disabled={saving || !licChangeNewItemId || !licChangeEffectiveAt}
+              >
+                {saving ? 'Applying…' : 'Apply now'}
+              </button>
             </div>
           </form>
         {/if}
@@ -1981,6 +2060,58 @@
     color: white;
     border-color: var(--accent, #2d6a35);
   }
+  /* Lightweight inline submit buttons — match Button component styling
+     close enough without going through the wrapper (we need formaction). */
+  .btn-primary, .btn-secondary {
+    padding: 6px 14px;
+    font-size: var(--text-sm);
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    font-weight: 500;
+  }
+  .btn-primary {
+    background: var(--accent, #2d6a35);
+    color: white;
+  }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-hover, #1e4d25); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-secondary {
+    background: var(--surface, #fff);
+    color: var(--accent, #2d6a35);
+    border-color: var(--border, #c8deca);
+  }
+  .btn-secondary:hover:not(:disabled) { background: var(--surface-sunk, #f0eee6); }
+  .btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+  /* Pending-changes panel */
+  .proposals-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+  }
+  .proposals-title { margin: 0; font-size: 0.95rem; font-weight: 600; }
+  .proposals-count {
+    background: var(--accent, #2d6a35);
+    color: white;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .proposals-list { list-style: none; margin: 0; padding: 0; }
+  .proposal-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--surface-sunk, #f0eee6);
+  }
+  .proposal-row:last-child { border-bottom: none; }
+  .proposal-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .proposal-meta .notes { font-style: italic; }
+  .proposal-actions { display: flex; gap: var(--space-2); flex-shrink: 0; }
   .member-picker {
     display: flex;
     flex-direction: column;
