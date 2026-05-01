@@ -770,7 +770,13 @@
           <Badge tone="info">Licence</Badge>
           <span class="primary">{l.item_name ?? '—'}</span>
         </td>
-        <td>{l.user_name ?? '—'}</td>
+        <td>
+          {#if l.user_id && l.user_name}
+            <a href={`/people/${l.user_id}`} onclick={(e) => e.stopPropagation()}>{l.user_name}</a>
+          {:else}
+            {l.user_name ?? '—'}
+          {/if}
+        </td>
         <td class="num mono">{l.base_rate != null ? money(Number(l.base_rate), l.currency ?? currency) : '—'}</td>
         <td class="date">{fmtDate(l.started_at)}</td>
         <td class="date hide-sm">{fmtDate(l.ended_at)}</td>
@@ -1248,7 +1254,7 @@
       searchFields={['first_name', 'last_name', 'email', 'job_title']}
       searchPlaceholder="Search name, email…"
       empty="No members yet."
-      onRowClick={(m) => goto(`/people?id=${m.id}`)}
+      onRowClick={(m) => goto(`/people/${m.id}`)}
     >
       {#snippet row(m: any)}
         <td><Copyable value={`${m.first_name} ${m.last_name}`}><span class="primary">{m.first_name} {m.last_name}</span></Copyable></td>
