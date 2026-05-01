@@ -789,17 +789,17 @@
           }}
         >
           <input type="hidden" name="id" value={l.id} />
-          <FieldGrid cols={3}>
-            <Field label="Member">
-              <Select
-                name="user_id"
-                value={l.user_id ?? ''}
-                options={(data.members as any[]).map(m => ({
-                  value: m.id,
-                  label: `${m.first_name ?? ''} ${m.last_name ?? ''}`.trim() || m.email || m.id
-                }))}
-              />
-            </Field>
+          <!-- Inline edit: dates + notes only. A licence's identity is
+               (member, item, location, organisation) — those are immutable
+               here. To change the member or product, end this licence and
+               add a new one (V7 will collapse that to one click via the
+               upgrade/downgrade composition). -->
+          <div class="lic-edit-meta">
+            <span class="muted small">
+              <strong>{l.user_name ?? '—'}</strong> · {l.item_name ?? '—'} · {l.location_name ?? '—'}
+            </span>
+          </div>
+          <FieldGrid cols={2}>
             <Field name="started_at" label="Start" type="date" value={l.started_at?.slice(0, 10) ?? ''} />
             <Field name="ended_at" label="End (optional)" type="date" value={l.ended_at?.slice(0, 10) ?? ''} />
           </FieldGrid>
@@ -826,6 +826,9 @@
             <Button type="submit" size="sm" loading={saving}>{saving ? 'Saving…' : 'Save'}</Button>
           </div>
         </form>
+        <div class="lic-edit-history">
+          <RecordHistory table="licenses" id={l.id} label="licence history" />
+        </div>
       {/snippet}
     </DataTable>
 
@@ -1788,6 +1791,16 @@
     justify-content: flex-end;
     margin-top: var(--space-3);
     align-items: center;
+  }
+  .lic-edit-meta {
+    margin-bottom: var(--space-2);
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--surface-sunk, #e8e3d8);
+  }
+  .lic-edit-history {
+    margin-top: var(--space-3);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--surface-sunk, #e8e3d8);
   }
   .member-picker {
     display: flex;

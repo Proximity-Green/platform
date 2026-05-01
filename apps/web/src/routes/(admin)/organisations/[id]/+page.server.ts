@@ -703,11 +703,13 @@ export const actions = {
     const id = data.get('id') as string
     if (!id) return fail(400, { error: 'Missing licence id' })
 
-    // Build a partial patch — only set fields the form actually carried.
-    const patch: Record<string, any> = {
-      updated_at: new Date().toISOString()
-    }
-    if (data.has('user_id'))    patch.user_id    = blank(data, 'user_id')
+    // Inline edit is dates + notes only. Identity (member, item, location,
+    // organisation) is immutable on this row — to change those, end the
+    // licence and create a new one (V7 will collapse that to one click).
+    // We deliberately ignore user_id / item_id / location_id / org_id
+    // even if they're submitted — server is the source of truth, not the
+    // form.
+    const patch: Record<string, any> = { updated_at: new Date().toISOString() }
     if (data.has('started_at')) patch.started_at = blank(data, 'started_at')
     if (data.has('ended_at'))   patch.ended_at   = blank(data, 'ended_at')
     if (data.has('notes'))      patch.notes      = blank(data, 'notes')
@@ -717,10 +719,8 @@ export const actions = {
     if (licErr) return await logFail(userId, 'organisations.updateLicence', licErr, { id })
 
     // Keep the paired sub aligned per the 1:1 invariant — same dates +
-    // user. Rate is left alone (would be the snapshot pricing concern of
-    // a separate edit). Status untouched.
+    // notes. Rate, status, member untouched.
     const subPatch: Record<string, any> = { updated_at: new Date().toISOString() }
-    if (data.has('user_id'))    subPatch.user_id    = blank(data, 'user_id')
     if (data.has('started_at')) subPatch.started_at = blank(data, 'started_at')
     if (data.has('ended_at'))   subPatch.ended_at   = blank(data, 'ended_at')
     if (data.has('notes'))      subPatch.notes      = blank(data, 'notes')
