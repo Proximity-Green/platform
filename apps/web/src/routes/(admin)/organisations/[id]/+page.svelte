@@ -883,7 +883,15 @@
       {#snippet row(l: any)}
         <td>{l.location_name ?? '—'}</td>
         <td>
-          <Badge tone="info">Licence</Badge>
+          <span title={`licence: ${l.id}
+sub: ${l.paired_subscription_line_id ?? '(none)'}
+item: ${l.item_id ?? '—'}
+member: ${l.user_id ?? '—'}
+location: ${l.location_id ?? '—'}
+org: ${l.organisation_id ?? '—'}`}>
+            <Badge tone="info">Licence</Badge>
+          </span>
+          <Copyable value={l.id ?? ''}><span class="id-chip" title={`Licence id ${l.id} — click to copy`}>{(l.id ?? '').slice(0, 8)}</span></Copyable>
           {#if l.item_id && l.item_name}
             <a class="primary" href={`/items/${l.item_id}`} onclick={(e) => e.stopPropagation()}>{l.item_name}</a>
           {:else}
@@ -2161,6 +2169,18 @@
     font-size: 0.75rem;
     color: var(--fg, #0a1f0f);
   }
+  .id-chip {
+    display: inline-block;
+    padding: 1px 6px;
+    margin: 0 6px;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 0.7rem;
+    background: var(--surface-sunk, #f0eee6);
+    color: var(--text-muted, #5a7060);
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  .id-chip:hover { color: var(--fg, #0a1f0f); background: var(--surface, #fff); border: 1px solid var(--border, #c8deca); padding: 0 5px; }
   .change-hint {
     margin-top: var(--space-2);
     padding: var(--space-2);
