@@ -11,6 +11,19 @@ import {
   approveLicenceProposal,
   rejectLicenceProposal
 } from '$lib/services/licence-creation.service'
+import { tasks } from '@trigger.dev/sdk/v3'
+import type { notifyLicenceChange } from '$lib/../trigger/notify-licence-change'
+
+/**
+ * Fire-and-forget licence-change notification. Trigger.dev handles retries
+ * + observability. Wrapped to swallow failures so a flaky email path can
+ * never block a successful licence write.
+ */
+function fireLicenceEmail(payload: { event_kind: 'created' | 'changed'; licence_id: string; old_licence_id?: string | null }) {
+  tasks.trigger<typeof notifyLicenceChange>('notify-licence-change', payload).catch(err => {
+    console.error('[notify-licence-change] trigger failed', err)
+  })
+}
 
 const blank = (data: FormData, k: string): string | null => {
   const v = data.get(k)
@@ -709,6 +722,8 @@ export const actions = {
       return fail(400, { error: result.error.title, actionable: result.error })
     }
 
+    fireLicenceEmail({ event_kind: 'created', licence_id: result.licence_id })
+
     return {
       success: true,
       message: newFirst ? 'Member + licence + subscription added' : 'Licence + subscription added',
@@ -772,6 +787,14 @@ export const actions = {
       return fail(400, { error: result.error.title, actionable: result.error })
     }
 
+    if (result.applied) {
+      fireLicenceEmail({
+        event_kind: 'changed',
+        licence_id: result.applied.licence_id,
+        old_licence_id: result.applied.source_licence_id
+      })
+    }
+
     return { success: true, message: 'Proposal approved — change applied.', applied: result.applied }
   },
 
@@ -811,6 +834,12 @@ export const actions = {
       })
       return fail(400, { error: result.error.title, actionable: result.error })
     }
+
+    fireLicenceEmail({
+      event_kind: 'changed',
+      licence_id: result.new_licence_id,
+      old_licence_id: result.old_licence_id
+    })
 
     return {
       success: true,

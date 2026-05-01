@@ -358,7 +358,7 @@ export async function proposeLicenceChange(
 }
 
 export type DecideLicenceProposalResult =
-  | { ok: true; proposal_id: string; applied?: { licence_id: string; subscription_line_id: string } }
+  | { ok: true; proposal_id: string; applied?: { licence_id: string; subscription_line_id: string; source_licence_id: string } }
   | { ok: false; error: ActionableError }
 
 /**
@@ -421,7 +421,11 @@ export async function approveLicenceProposal(
   return {
     ok: true,
     proposal_id: proposalId,
-    applied: { licence_id: apply.new_licence_id, subscription_line_id: apply.new_subscription_line_id }
+    applied: {
+      licence_id: apply.new_licence_id,
+      subscription_line_id: apply.new_subscription_line_id,
+      source_licence_id: prop.source_licence_id
+    }
   }
 }
 
