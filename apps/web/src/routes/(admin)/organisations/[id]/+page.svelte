@@ -915,12 +915,11 @@ item: ${l.item_id ?? '—'}
 member: ${l.user_id ?? '—'}
 location: ${l.location_id ?? '—'}
 org: ${l.organisation_id ?? '—'}`}
-          <Copyable value={idDump}>
+          <Copyable value={idDump} title="">
             <span
               class="id-chip has-tip"
               onclick={(e) => e.stopPropagation()}
               data-tip={idDump}
-              title="Click to copy all ids"
             >{(l.id ?? '').slice(0, 8)}</span>
           </Copyable>
           {#if l.item_id && l.item_name}
