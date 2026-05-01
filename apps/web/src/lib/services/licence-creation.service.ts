@@ -441,10 +441,12 @@ export type TouchLicenceResult =
  * operator action that breaks the snapshot-pricing rule for one row —
  * "the catalog price moved; pull this licence onto the new rate".
  *
- * One-off bump. Doesn't touch dates, doesn't end the licence, doesn't
- * create a new sub. Just rewrites subscription_lines.base_rate +
- * currency on the active paired sub. Future: feed
- * subscription_line_rate_history when V2 lands.
+ * Two paths:
+ * 1. Active paired sub exists → update its base_rate + currency.
+ * 2. No active paired sub (pre-V1 cruft, deleted sub, etc.) → create
+ *    one. This restores the 1:1 invariant for the row.
+ *
+ * Future: feed subscription_line_rate_history when V2 lands.
  */
 export async function touchLicence(
   licenceId: string,
@@ -456,11 +458,12 @@ export async function touchLicence(
 
   const sb = sbForUser(actorId)
 
-  // Pull the licence with its item + location for the new rate/currency.
+  // Pull the licence + item + location for the new rate/currency, plus
+  // the dates and ids we'd need if we have to create a new paired sub.
   const { data: lic, error: licErr } = await sb
     .from('licenses')
     .select(`
-      id,
+      id, organisation_id, location_id, user_id, started_at, ended_at, notes, item_id,
       items(base_rate),
       locations(currency)
     `)
@@ -474,8 +477,8 @@ export async function touchLicence(
   const newRate = Number((lic as any).items?.base_rate ?? 0)
   const newCurrency = (lic as any).locations?.currency ?? 'ZAR'
 
-  // Find the active paired sub.
-  const { data: sub, error: subErr } = await sb
+  // Find the active paired sub (if any).
+  const { data: sub } = await sb
     .from('subscription_lines')
     .select('id, base_rate, currency, status')
     .eq('license_id', licenceId)
@@ -483,10 +486,31 @@ export async function touchLicence(
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
-  if (subErr || !sub) {
-    return { ok: false, error: { code: 'paired_sub_not_found', title: 'No active subscription', detail: 'The paired subscription line is missing or terminal — touch only makes sense on an active row.' } }
+
+  // Path 2: no active paired sub — create one. Restores 1:1 invariant.
+  if (!sub) {
+    const { error: insErr } = await sb.from('subscription_lines').insert({
+      license_id: licenceId,
+      organisation_id: (lic as any).organisation_id,
+      location_id: (lic as any).location_id,
+      user_id: (lic as any).user_id,
+      base_rate: newRate,
+      currency: newCurrency,
+      quantity: 1,
+      frequency: 'monthly',
+      interval_months: 1,
+      status: 'draft',
+      started_at: (lic as any).started_at,
+      ended_at: (lic as any).ended_at,
+      notes: (lic as any).notes
+    })
+    if (insErr) {
+      return { ok: false, error: { code: 'touch_insert_failed', title: 'Could not create paired subscription', detail: insErr.message } }
+    }
+    return { ok: true, licence_id: licenceId, old_rate: 0, new_rate: newRate, currency: newCurrency }
   }
 
+  // Path 1: active sub exists. No-op short-circuit if it already matches.
   const oldRate = Number(sub.base_rate ?? 0)
   if (oldRate === newRate && sub.currency === newCurrency) {
     return { ok: false, error: { code: 'touch_no_change', title: 'Already at catalog rate', detail: `The paired subscription is already at ${newCurrency} ${newRate.toLocaleString('en-ZA')}. No change needed.` } }
