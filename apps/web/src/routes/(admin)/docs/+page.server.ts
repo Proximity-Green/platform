@@ -20,7 +20,7 @@ type DocSlug =
   | 'architecture' | 'conventions' | 'catalog' | 'migration'
   | 'benchmark' | 'testing' | 'sage' | 'platform-school'
   | 'licence-creation' | 'pricing-forecast'
-  | 'subscription-change' | 'onboarding'
+  | 'subscription-change' | 'onboarding' | 'freeradius'
 
 const FILE_BY_SLUG: Record<DocSlug, string> = {
   architecture: 'ARCHITECTURE.md',
@@ -34,7 +34,8 @@ const FILE_BY_SLUG: Record<DocSlug, string> = {
   'licence-creation': 'LICENCE_CREATION_RULES.md',
   'pricing-forecast': 'PRICING_AND_FORECAST.md',
   'subscription-change': 'SUBSCRIPTION_UPGRADE_DOWNGRADE.md',
-  'onboarding': 'ONBOARDING.md'
+  'onboarding': 'ONBOARDING.md',
+  'freeradius': 'FREERADIUS_INTEGRATION.md'
 }
 
 export const load = async ({ url }) => {
@@ -63,7 +64,8 @@ export const load = async ({ url }) => {
       { type: 'link', slug: 'subscription-change', label: 'Upgrade / downgrade' },
       { type: 'link', slug: 'onboarding', label: 'Onboarding & offboarding' },
       { type: 'heading', label: 'Integrations' },
-      { type: 'link', slug: 'sage', label: 'Sage' }
+      { type: 'link', slug: 'sage', label: 'Sage' },
+      { type: 'link', slug: 'freeradius', label: 'FreeRADIUS (WiFi)' }
     ] as ({ type: 'link'; slug: string; label: string } | { type: 'heading'; label: string })[]
   }
 }
