@@ -599,26 +599,70 @@ export const actions = {
     if (userId) await requirePermission(userId, 'subscriptions', 'create')
 
     const data = await request.formData()
-    // Route through the V1 licence-creation service. The service owns rules
-    // 1–7 from docs/SUBSCRIPTION_LIFECYCLE.md (required inputs, item must
-    // require licence, member belongs to org, location consistency, date
-    // sanity, no overlap) and delegates the atomic insert to
-    // add_licence_with_sub. Other entry points (the /licenses page, the
-    // createSub auto-licence path) will route through the same service in
-    // follow-up PRs.
+
+    // ── Optional WSM-style shortcut: name + email + licence in one go.
+    // If the form carried new-member fields, create the person first
+    // (with this org's id pre-set so Rule 4 passes) and use the new
+    // person's id as user_id for createLicence below. Email collision
+    // surfaces through the existing error banner.
+    let userIdForLicence = (data.get('user_id') as string) ?? ''
+    const newFirst = blank(data, 'new_member_first_name')
+    const newLast = blank(data, 'new_member_last_name')
+    const newEmail = blank(data, 'new_member_email')
+    if (newFirst || newLast || newEmail) {
+      if (!newFirst || !newLast || !newEmail) {
+        return fail(400, {
+          error: 'Incomplete new member',
+          actionable: {
+            code: 'new_member_incomplete',
+            title: 'Incomplete new member',
+            detail: 'First name, last name, and email are all required when creating a new member.'
+          }
+        })
+      }
+      if (userId) await requirePermission(userId, 'persons', 'create')
+      const { data: newPerson, error: personErr } = await sbForUser(userId)
+        .from('persons')
+        .insert({
+          first_name: newFirst,
+          last_name: newLast,
+          email: newEmail,
+          organisation_id: params.id
+        })
+        .select('id')
+        .single()
+      if (personErr || !newPerson) {
+        await logFail(userId, 'organisations.addLicence.newMember', personErr ?? new Error('insert returned no row'), {
+          org_id: params.id,
+          email: newEmail
+        })
+        const isDup = (personErr?.code === '23505') || /duplicate|unique/i.test(personErr?.message ?? '')
+        return fail(400, {
+          error: isDup ? 'Email already in use' : 'Could not create member',
+          actionable: {
+            code: isDup ? 'email_exists' : 'person_create_failed',
+            title: isDup ? 'Email already in use' : 'Could not create member',
+            detail: isDup
+              ? `Someone with the email "${newEmail}" already exists. Pick them from the existing-member dropdown, or use a different email.`
+              : (personErr?.message ?? 'The member record could not be created. Try again or pick an existing member.')
+          }
+        })
+      }
+      userIdForLicence = newPerson.id as string
+    }
+
+    // ── Rules + atomic licence + sub via createLicence ───────────────
     const result = await createLicence({
       organisation_id: params.id,
       item_id: (data.get('item_id') as string) ?? '',
       location_id: blank(data, 'location_id'),
-      user_id: (data.get('user_id') as string) ?? '',
+      user_id: userIdForLicence,
       started_at: (data.get('started_at') as string) ?? '',
       ended_at: blank(data, 'ended_at'),
       notes: blank(data, 'notes')
     }, userId)
 
     if (!result.ok) {
-      // Log to action_log for diagnostic + surface ActionableError to the
-      // form so <ErrorBanner> renders the user-facing message.
       await logFail(userId, 'organisations.addLicence', new Error(result.error.detail ?? result.error.title), {
         org_id: params.id,
         code: result.error.code
@@ -628,7 +672,7 @@ export const actions = {
 
     return {
       success: true,
-      message: 'Licence + subscription added',
+      message: newFirst ? 'Member + licence + subscription added' : 'Licence + subscription added',
       result: {
         licence_id: result.licence_id,
         subscription_line_id: result.subscription_line_id,

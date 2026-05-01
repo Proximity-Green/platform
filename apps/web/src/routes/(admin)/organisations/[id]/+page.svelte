@@ -53,6 +53,16 @@
   let licEndedAt = $state<string>('')
   let licNotes = $state<string>('')
 
+  // ── New-member shortcut (WSM-style: name + email + licence in one go) ──
+  // When true, the Add Licence form's Member dropdown is replaced with
+  // three fields. The server action creates the person first, then runs
+  // createLicence with the new person's id. Email collisions surface
+  // through the existing error banner.
+  let licNewMember = $state(false)
+  let licNewFirstName = $state<string>('')
+  let licNewLastName = $state<string>('')
+  let licNewEmail = $state<string>('')
+
   type LicenceableItem = { id: string; name: string; item_type_id: string; location_id: string }
   const licenceableItems = $derived((data.licenceableItems as LicenceableItem[]) ?? [])
   const licenceableTypes = $derived((data.licenceableItemTypes as { id: string; name: string; slug: string }[]) ?? [])
@@ -83,6 +93,10 @@
     licStartedAt = new Date().toISOString().slice(0, 10)
     licEndedAt = ''
     licNotes = ''
+    licNewMember = false
+    licNewFirstName = ''
+    licNewLastName = ''
+    licNewEmail = ''
     showAddLicence = false
   }
 
@@ -670,18 +684,37 @@
             </Field>
           </FieldGrid>
           <FieldGrid cols={3}>
-            <Field label="Member (optional)">
-              <Select
-                name="user_id"
-                value={licUserId}
-                onchange={(v) => (licUserId = v)}
-                placeholder="No specific member"
-                options={[{ value: '', label: 'No specific member' }, ...((data.members as any[]) ?? []).map(p => ({ value: p.id, label: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || p.email || p.id }))]}
-              />
-            </Field>
+            {#if !licNewMember}
+              <Field label="Member *">
+                <div class="member-picker">
+                  <Select
+                    name="user_id"
+                    value={licUserId}
+                    onchange={(v) => (licUserId = v)}
+                    placeholder="Pick a member"
+                    options={((data.members as any[]) ?? []).map(p => ({ value: p.id, label: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || p.email || p.id }))}
+                  />
+                  <button type="button" class="link-btn" onclick={() => { licNewMember = true; licUserId = '' }}>+ New member</button>
+                </div>
+              </Field>
+            {:else}
+              <Field label="New member">
+                <div class="member-picker">
+                  <span class="muted small">Will be created in this org.</span>
+                  <button type="button" class="link-btn" onclick={() => { licNewMember = false; licNewFirstName = ''; licNewLastName = ''; licNewEmail = '' }}>Pick existing instead</button>
+                </div>
+              </Field>
+            {/if}
             <Field name="started_at" label="Start *" type="date" value={licStartedAt} oninput={(v) => (licStartedAt = v)} />
             <Field name="ended_at" label="End (optional)" type="date" value={licEndedAt} oninput={(v) => (licEndedAt = v)} />
           </FieldGrid>
+          {#if licNewMember}
+            <FieldGrid cols={3}>
+              <Field name="new_member_first_name" label="First name *" value={licNewFirstName} oninput={(v) => (licNewFirstName = v)} />
+              <Field name="new_member_last_name" label="Last name *" value={licNewLastName} oninput={(v) => (licNewLastName = v)} />
+              <Field name="new_member_email" label="Email *" type="email" value={licNewEmail} oninput={(v) => (licNewEmail = v)} />
+            </FieldGrid>
+          {/if}
           <FieldGrid cols={1}>
             <Field name="notes" label="Notes" value={licNotes} oninput={(v) => (licNotes = v)} />
           </FieldGrid>
@@ -701,7 +734,18 @@
 
           <div class="lic-form-actions">
             <Button type="button" size="sm" variant="ghost" onclick={() => (showAddLicence = false)}>Cancel</Button>
-            <Button type="submit" size="sm" loading={saving} disabled={!licItemId || !licStartedAt}>
+            <Button
+              type="submit"
+              size="sm"
+              loading={saving}
+              disabled={
+                !licItemId
+                || !licStartedAt
+                || (licNewMember
+                    ? (!licNewFirstName.trim() || !licNewLastName.trim() || !licNewEmail.trim())
+                    : !licUserId)
+              }
+            >
               {saving ? 'Adding…' : 'Add licence'}
             </Button>
           </div>
@@ -1745,6 +1789,22 @@
     margin-top: var(--space-3);
     align-items: center;
   }
+  .member-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .link-btn {
+    background: transparent;
+    border: none;
+    color: var(--accent, #2d6a35);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    padding: 0;
+    text-align: left;
+    align-self: flex-start;
+  }
+  .link-btn:hover { text-decoration: underline; }
   .without-lic-head {
     display: flex;
     align-items: center;
