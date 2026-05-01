@@ -51,7 +51,7 @@ export const load = async ({ params, cookies, locals }) => {
       .from('licenses')
       .select(`
         *,
-        items(name, base_rate),
+        items(name),
         locations(name, short_name, currency),
         persons:user_id(first_name, last_name)
       `)
@@ -144,20 +144,38 @@ export const load = async ({ params, cookies, locals }) => {
     .order('name')
     .then(r => r.data ?? [])
 
+  // Build licence_id → paired-sub map so the licences row can show the
+  // *snapshot* rate (subscription_lines.base_rate at creation time), not the
+  // live items.base_rate. Per the platform rule, item-price changes don't
+  // cascade to existing licences/subs. Filter out terminal-status subs so a
+  // superseded sub's rate doesn't shadow the active one.
+  const TERMINAL_SUB_STATUSES = new Set(['superseded', 'cancelled', 'expired', 'ended'])
+  const pairedSubByLicenceId = new Map<string, { base_rate: number; currency: string }>()
+  for (const s of (subsRes.data ?? []) as any[]) {
+    if (s.license_id && !TERMINAL_SUB_STATUSES.has(s.status)) {
+      pairedSubByLicenceId.set(s.license_id, { base_rate: s.base_rate, currency: s.currency })
+    }
+  }
+
   // Enrich licences. Prefer location.short_name for the table cell so the
   // Location column stays compact ("20 Kloof" not "20 Kloof by Workshop17");
-  // full name kept around in case future detail views need it.
-  const licences = (licencesRes.data ?? []).map((row: any) => ({
-    ...row,
-    item_name: row.items?.name ?? null,
-    base_rate: row.items?.base_rate ?? null,
-    location_name: row.locations?.short_name ?? row.locations?.name ?? null,
-    location_full_name: row.locations?.name ?? null,
-    currency: row.locations?.currency ?? null,
-    user_name: row.persons
-      ? `${row.persons.first_name ?? ''} ${row.persons.last_name ?? ''}`.trim() || null
-      : null
-  }))
+  // full name kept around in case future detail views need it. Rate +
+  // currency come from the paired sub snapshot — `null` here means the
+  // 1:1 invariant is broken (orphaned licence) and the UI should show "—".
+  const licences = (licencesRes.data ?? []).map((row: any) => {
+    const paired = pairedSubByLicenceId.get(row.id)
+    return {
+      ...row,
+      item_name: row.items?.name ?? null,
+      base_rate: paired?.base_rate ?? null,
+      location_name: row.locations?.short_name ?? row.locations?.name ?? null,
+      location_full_name: row.locations?.name ?? null,
+      currency: paired?.currency ?? row.locations?.currency ?? null,
+      user_name: row.persons
+        ? `${row.persons.first_name ?? ''} ${row.persons.last_name ?? ''}`.trim() || null
+        : null
+    }
+  })
 
   // Enrich subscription lines (with tax % for Ex/Incl VAT display + member + location)
   const subs = (subsRes.data ?? []).map((row: any) => {

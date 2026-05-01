@@ -41,6 +41,12 @@ entry points route through it.
 10. **Subscription tab default-filters to currently-valid lines** (date range
     active, status not in superseded/cancelled/expired/ended). Historical subs
     reachable via "Show ended" toggle. Data layer keeps full history.
+11. **Pricing is a snapshot at creation time.** A licence inherits its price
+    from `item.base_rate` when created; that price is stored on the paired
+    `subscription_lines.base_rate`. Subsequent changes to `items.base_rate`
+    do **not** cascade to existing licences or subs — same principle as
+    `invoice_lines`. Display surfaces (e.g. the org-page Licences Rate
+    column) must read from the paired sub, not the item join.
 
 ### Invariant
 > **1:1 licence ↔ subscription_line.** Always paired at creation, throughout
