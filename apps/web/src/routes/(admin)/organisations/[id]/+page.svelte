@@ -2,7 +2,8 @@
   import { page } from '$app/stores'
   import { goto, invalidateAll } from '$app/navigation'
   import { enhance } from '$app/forms'
-  import { onDestroy } from 'svelte'
+  import { onMount, onDestroy } from 'svelte'
+  import { browser } from '$app/environment'
   import { supabase } from '$lib/supabase'
   import { permStore, canDo } from '$lib/stores/permissions'
   import {
@@ -39,24 +40,30 @@
   // ── Live refresh: subscribe to licences + subs for this org ─────────
   // Multiple writes can arrive in quick succession (apply_licence_change
   // touches old licence + new licence + old sub + new sub = 4 events).
-  // Debounce so a single invalidate covers the burst.
+  // Debounce so a single invalidate covers the burst. Client-only —
+  // Supabase realtime opens a websocket, which crashes SSR.
   let invalidateTimer: ReturnType<typeof setTimeout> | null = null
+  let liveChannel: ReturnType<typeof supabase.channel> | null = null
   function scheduleInvalidate() {
     if (invalidateTimer) clearTimeout(invalidateTimer)
     invalidateTimer = setTimeout(() => { invalidateTimer = null; invalidateAll() }, 200)
   }
-  const liveChannel = supabase
-    .channel(`org-licences-${($page.params as any).id}`)
-    .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'licenses', filter: `organisation_id=eq.${($page.params as any).id}` },
-        scheduleInvalidate)
-    .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'subscription_lines', filter: `organisation_id=eq.${($page.params as any).id}` },
-        scheduleInvalidate)
-    .subscribe()
+  onMount(() => {
+    if (!browser) return
+    const orgId = ($page.params as any).id
+    liveChannel = supabase
+      .channel(`org-licences-${orgId}`)
+      .on('postgres_changes',
+          { event: '*', schema: 'public', table: 'licenses', filter: `organisation_id=eq.${orgId}` },
+          scheduleInvalidate)
+      .on('postgres_changes',
+          { event: '*', schema: 'public', table: 'subscription_lines', filter: `organisation_id=eq.${orgId}` },
+          scheduleInvalidate)
+      .subscribe()
+  })
   onDestroy(() => {
     if (invalidateTimer) clearTimeout(invalidateTimer)
-    supabase.removeChannel(liveChannel)
+    if (liveChannel) supabase.removeChannel(liveChannel)
   })
 
   // ── Licence add-form state ──────────────────────────────────────────
@@ -906,15 +913,15 @@
       isExpandedRow={(l) => l.id === expandedLicId}
     >
       {#snippet row(l: any)}
-        <td>{l.location_name ?? '—'}</td>
-        <td>
-          <Badge tone="info">Licence</Badge>
-          {@const idDump = `licence: ${l.id}
+        {@const idDump = `licence: ${l.id}
 sub: ${l.paired_subscription_line_id ?? '(none)'}
 item: ${l.item_id ?? '—'}
 member: ${l.user_id ?? '—'}
 location: ${l.location_id ?? '—'}
 org: ${l.organisation_id ?? '—'}`}
+        <td>{l.location_name ?? '—'}</td>
+        <td>
+          <Badge tone="info">Licence</Badge>
           <Copyable value={idDump} title="">
             <span
               class="id-chip has-tip"
