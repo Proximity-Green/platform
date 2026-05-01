@@ -4,6 +4,7 @@ import { logFail } from '$lib/services/action-log.service'
 import * as walletsService from '$lib/services/wallets.service'
 import * as subsService from '$lib/services/subscription-lines.service'
 import * as invoicesService from '$lib/services/invoices.service'
+import { createLicence } from '$lib/services/licence-creation.service'
 
 const blank = (data: FormData, k: string): string | null => {
   const v = data.get(k)
@@ -591,35 +592,43 @@ export const actions = {
     if (userId) await requirePermission(userId, 'subscriptions', 'create')
 
     const data = await request.formData()
-    const item_id = data.get('item_id') as string
-    const location_id = data.get('location_id') as string
-    const user_id = blank(data, 'user_id')   // person holding the licence — optional per schema
-    const started_at = data.get('started_at') as string
-    const ended_at = blank(data, 'ended_at')
-    const notes = blank(data, 'notes')
+    // Route through the V1 licence-creation service. The service owns rules
+    // 1–7 from docs/SUBSCRIPTION_LIFECYCLE.md (required inputs, item must
+    // require licence, member belongs to org, location consistency, date
+    // sanity, no overlap) and delegates the atomic insert to
+    // add_licence_with_sub. Other entry points (the /licenses page, the
+    // createSub auto-licence path) will route through the same service in
+    // follow-up PRs.
+    const result = await createLicence({
+      organisation_id: params.id,
+      item_id: (data.get('item_id') as string) ?? '',
+      location_id: blank(data, 'location_id'),
+      user_id: (data.get('user_id') as string) ?? '',
+      started_at: (data.get('started_at') as string) ?? '',
+      ended_at: blank(data, 'ended_at'),
+      notes: blank(data, 'notes')
+    }, userId)
 
-    if (!item_id) return fail(400, { error: 'Pick a membership / item' })
-    if (!location_id) return fail(400, { error: 'Pick a location' })
-    if (!started_at) return fail(400, { error: 'Start date is required' })
+    if (!result.ok) {
+      // Log to action_log for diagnostic + surface ActionableError to the
+      // form so <ErrorBanner> renders the user-facing message.
+      await logFail(userId, 'organisations.addLicence', new Error(result.error.detail ?? result.error.title), {
+        org_id: params.id,
+        code: result.error.code
+      })
+      return fail(400, { error: result.error.title, actionable: result.error })
+    }
 
-    // Single-round-trip atomic licence + sub insert via add_licence_with_sub
-    // RPC. Doing both in one statement keeps the form snappy — previously
-    // we paid for licence insert, two parallel lookups, and a sub insert
-    // sequentially. The RPC returns the new ids so the UI can do an
-    // optimistic merge without a follow-up SELECT.
-    const { data: result, error: rpcErr } = await sbForUser(userId).rpc('add_licence_with_sub', {
-      p_org_id: params.id,
-      p_item_id: item_id,
-      p_location_id: location_id,
-      p_user_id: user_id,
-      p_started_at: started_at,
-      p_ended_at: ended_at,
-      p_notes: notes,
-      p_performed_by: userId
-    })
-    if (rpcErr) return await logFail(userId, 'organisations.addLicence', rpcErr, { org_id: params.id, item_id })
-
-    return { success: true, message: 'Licence + subscription added', result }
+    return {
+      success: true,
+      message: 'Licence + subscription added',
+      result: {
+        licence_id: result.licence_id,
+        subscription_line_id: result.subscription_line_id,
+        base_rate: result.base_rate,
+        currency: result.currency
+      }
+    }
   },
 
   removeLicence: async ({ request, cookies, locals }) => {
