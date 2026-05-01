@@ -18,7 +18,7 @@
     Badge,
     Copyable,
     RecordLive,
-    RecordHistory, ErrorBanner, SubmitButton
+    RecordHistory, ErrorBanner, SubmitButton, RowMenu
   } from '$lib/components/ui'
   import type { Column, Filter } from '$lib/components/ui/DataTable.svelte'
   import { fmtMoney, fmtMoneyWithCurrency } from '$lib/utils/money'
@@ -63,6 +63,14 @@
     if (licItemId && !filteredLicItems.some(i => i.id === licItemId)) licItemId = ''
   })
 
+  // Members of this org who don't yet hold any active licence here. Surfaced
+  // below the licences table so the operator can spot gaps and add one in
+  // a single click.
+  const membersWithoutLicences = $derived.by(() => {
+    const licensedIds = new Set((data.licences as any[]).map(l => l.user_id).filter(Boolean))
+    return (data.members as any[]).filter(m => !licensedIds.has(m.id))
+  })
+
   function resetLicForm() {
     licTypeId = ''
     licLocationId = ''
@@ -72,6 +80,21 @@
     licEndedAt = ''
     licNotes = ''
     showAddLicence = false
+  }
+
+  // Open the Add Licence form pre-populated for a specific member.
+  function addLicenceFor(memberId: string) {
+    licTypeId = ''
+    licLocationId = ''
+    licItemId = ''
+    licUserId = memberId
+    licStartedAt = new Date().toISOString().slice(0, 10)
+    licEndedAt = ''
+    licNotes = ''
+    showAddLicence = true
+    queueMicrotask(() => {
+      document.getElementById('org-add-licence-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
   }
 
   $effect(() => {
@@ -367,16 +390,21 @@
     item_name: string | null
     user_name: string | null
     location_name: string | null
+    base_rate: number | null
+    currency: string | null
     started_at: string | null
     ended_at: string | null
   }
 
   const licenceColumns: Column<LicenceRow>[] = [
-    { key: 'location_name', label: 'Location', sortable: true, width: '18%' },
-    { key: 'item_name', label: 'Description', sortable: true, width: '30%' },
-    { key: 'user_name', label: 'Member', sortable: true, width: '24%' },
-    { key: 'started_at', label: 'Started', sortable: true, width: '14%', date: true },
-    { key: 'ended_at', label: 'Ended', sortable: true, width: '14%', date: true, hideBelow: 'sm' }
+    { key: 'location_name', label: 'Location', sortable: true, width: '16%' },
+    { key: 'item_name', label: 'Description', sortable: true, width: '26%' },
+    { key: 'user_name', label: 'Member', sortable: true, width: '22%' },
+    { key: 'base_rate', label: 'Rate', sortable: true, width: '12%', align: 'right', mono: true,
+      get: l => Number(l.base_rate ?? 0),
+      render: l => l.base_rate != null ? money(Number(l.base_rate), l.currency ?? currency) : '—' },
+    { key: 'started_at', label: 'Started', sortable: true, width: '12%', date: true },
+    { key: 'ended_at', label: 'Ended', sortable: true, width: '12%', date: true, hideBelow: 'sm' }
   ]
 
   // ---------- invoice table (WSM Invoices expandable) ----------
@@ -644,7 +672,7 @@
                 value={licUserId}
                 onchange={(v) => (licUserId = v)}
                 placeholder="No specific member"
-                options={[{ value: '', label: 'No specific member' }, ...((data.persons as any[]) ?? []).map(p => ({ value: p.id, label: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || p.email || p.id }))]}
+                options={[{ value: '', label: 'No specific member' }, ...((data.members as any[]) ?? []).map(p => ({ value: p.id, label: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || p.email || p.id }))]}
               />
             </Field>
             <Field name="started_at" label="Start *" type="date" value={licStartedAt} oninput={(v) => (licStartedAt = v)} />
@@ -694,27 +722,51 @@
           <span class="primary">{l.item_name ?? '—'}</span>
         </td>
         <td>{l.user_name ?? '—'}</td>
+        <td class="num mono">{l.base_rate != null ? money(Number(l.base_rate), l.currency ?? currency) : '—'}</td>
         <td class="date">{fmtDate(l.started_at)}</td>
         <td class="date hide-sm">{fmtDate(l.ended_at)}</td>
       {/snippet}
       {#snippet actions(l: any)}
         {#if can('subscriptions', 'delete')}
-          <SubmitButton
-            action="?/removeLicence"
-            label="End"
-            pendingLabel="Ending…"
-            variant="danger"
-            size="sm"
-            fields={{ id: l.id }}
-            confirm={{
-              title: 'End licence?',
-              message: `Remove this licence for ${l.item_name ?? 'this item'}? It will disappear from the list.`,
-              variant: 'danger'
-            }}
-          />
+          <RowMenu ariaLabel="Licence actions">
+            <a href={`/licenses?id=${l.id}`}>Open</a>
+            <SubmitButton
+              action="?/removeLicence"
+              label="End licence"
+              pendingLabel="Ending…"
+              variant="danger"
+              size="sm"
+              fields={{ id: l.id }}
+              confirm={{
+                title: 'End licence?',
+                message: `Remove this licence for ${l.item_name ?? 'this item'}? It will disappear from the list.`,
+                variant: 'danger'
+              }}
+            />
+          </RowMenu>
         {/if}
       {/snippet}
     </DataTable>
+
+    {#if membersWithoutLicences.length > 0}
+      <Card padding="md">
+        <div class="without-lic-head">
+          <h3 class="without-lic-title">Members without a licence</h3>
+          <span class="without-lic-count">{membersWithoutLicences.length}</span>
+        </div>
+        <ul class="without-lic-list">
+          {#each membersWithoutLicences as m}
+            <li>
+              <span class="primary">{`${m.first_name ?? ''} ${m.last_name ?? ''}`.trim() || m.email || m.id}</span>
+              <span class="muted">{m.job_title ?? ''}</span>
+              {#if can('subscriptions', 'create')}
+                <Button size="sm" variant="ghost" onclick={() => addLicenceFor(m.id)}>+ Add Licence</Button>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      </Card>
+    {/if}
 
   {:else if activeTab === 'subscription'}
     <!-- SUBSCRIPTION (WSM-style rich table) -->
@@ -1649,4 +1701,40 @@
     justify-content: flex-end;
     margin-top: var(--space-3);
   }
+  .without-lic-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+  }
+  .without-lic-title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+  .without-lic-count {
+    background: var(--surface-sunk, #f0eee6);
+    color: var(--text-muted, #5a7060);
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .without-lic-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+  .without-lic-list li {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) 0;
+    border-bottom: 1px solid var(--surface-sunk, #f0eee6);
+  }
+  .without-lic-list li:last-child { border-bottom: none; }
 </style>

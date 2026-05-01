@@ -51,8 +51,8 @@ export const load = async ({ params, cookies, locals }) => {
       .from('licenses')
       .select(`
         *,
-        items(name),
-        locations(name),
+        items(name, base_rate),
+        locations(name, short_name, currency),
         persons:user_id(first_name, last_name)
       `)
       .eq('organisation_id', id)
@@ -144,11 +144,16 @@ export const load = async ({ params, cookies, locals }) => {
     .order('name')
     .then(r => r.data ?? [])
 
-  // Enrich licences
+  // Enrich licences. Prefer location.short_name for the table cell so the
+  // Location column stays compact ("20 Kloof" not "20 Kloof by Workshop17");
+  // full name kept around in case future detail views need it.
   const licences = (licencesRes.data ?? []).map((row: any) => ({
     ...row,
     item_name: row.items?.name ?? null,
-    location_name: row.locations?.name ?? null,
+    base_rate: row.items?.base_rate ?? null,
+    location_name: row.locations?.short_name ?? row.locations?.name ?? null,
+    location_full_name: row.locations?.name ?? null,
+    currency: row.locations?.currency ?? null,
     user_name: row.persons
       ? `${row.persons.first_name ?? ''} ${row.persons.last_name ?? ''}`.trim() || null
       : null
@@ -579,17 +584,24 @@ export const actions = {
     if (!location_id) return fail(400, { error: 'Pick a location' })
     if (!started_at) return fail(400, { error: 'Start date is required' })
 
-    const { error: insErr } = await sbForUser(userId).from('licenses').insert({
-      item_id,
-      location_id,
-      organisation_id: params.id,
-      user_id,
-      started_at,
-      ended_at,
-      notes
+    // Single-round-trip atomic licence + sub insert via add_licence_with_sub
+    // RPC. Doing both in one statement keeps the form snappy — previously
+    // we paid for licence insert, two parallel lookups, and a sub insert
+    // sequentially. The RPC returns the new ids so the UI can do an
+    // optimistic merge without a follow-up SELECT.
+    const { data: result, error: rpcErr } = await sbForUser(userId).rpc('add_licence_with_sub', {
+      p_org_id: params.id,
+      p_item_id: item_id,
+      p_location_id: location_id,
+      p_user_id: user_id,
+      p_started_at: started_at,
+      p_ended_at: ended_at,
+      p_notes: notes,
+      p_performed_by: userId
     })
-    if (insErr) return await logFail(userId, 'organisations.addLicence', insErr, { org_id: params.id, item_id })
-    return { success: true, message: 'Licence added' }
+    if (rpcErr) return await logFail(userId, 'organisations.addLicence', rpcErr, { org_id: params.id, item_id })
+
+    return { success: true, message: 'Licence + subscription added', result }
   },
 
   removeLicence: async ({ request, cookies, locals }) => {
