@@ -52,21 +52,28 @@ move uniformly across geographies — CPT might lift +8% while Paarl lifts +5%.
 > - `location_id` (or set of locations)
 > - optional `item_type_id` to narrow scope further
 > - `pct` — the % to lift catalog prices by
-> - `effective_at` — the date the new prices take effect (required, future-dated)
+> - `effective_at` — required, defaults to today. Today = applies on
+>   confirm; future date = scheduled for the cron to pick up.
 >
 > Mechanics, atomic per run:
 > 1. Update `items.base_rate` at the targeted scope: `new_rate = current × (1 + pct/100)`.
 > 2. For every paired `subscription_line` whose item is in scope **and**
->    whose rules' `escalation_method` is `'annual_lift'` or unset, append a
->    future-dated row to `subscription_line_rate_history` with the new rate
->    and the chosen `effective_at`.
+>    whose rules' `escalation_method` is `'annual_lift'` or unset, write a
+>    row to `subscription_line_rate_history` with the new rate and the
+>    chosen `effective_at`.
 > 3. Skip any sub whose `escalation_method = 'contracted'` — those self-manage.
-> 4. A daily cron promotes rate-history rows whose `effective_at <= today`
->    by writing the new value to `subscription_lines.base_rate`. Until that
->    date the materialised rate is unchanged; the pending change is visible
->    on the sub line as "Scheduled change → R{x} from {date}".
-> 5. Operator can cancel before `effective_at` — soft-deletes the future
->    rate-history row. Cron will skip cancelled rows.
+> 4. **Apply branch** depends on `effective_at`:
+>    - `effective_at <= today` → write the new rate to
+>      `subscription_lines.base_rate` immediately and stamp the history
+>      row applied. Operator gets the result in the same response.
+>    - `effective_at > today` → leave `subscription_lines.base_rate`
+>      unchanged. The pending change is visible on the sub line as
+>      "Scheduled change → R{x} from {date}". A daily cron promotes
+>      future rows when their date arrives by writing the new rate to
+>      `subscription_lines.base_rate` and marking the history row applied.
+> 5. Operator can cancel before `effective_at` — soft-deletes the pending
+>    rate-history row. Cron skips cancelled rows. (Cancelling an already-
+>    applied row is a separate counter-action, not a one-click undo.)
 
 The whole run is wrapped in `bulk_actions` for snapshot-backed undo if it's
 caught before the cron applies. After the cron applies, undo is still
