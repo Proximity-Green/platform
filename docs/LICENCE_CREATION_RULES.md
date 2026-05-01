@@ -103,6 +103,14 @@ print account, access card, welcome email, induction meeting) so each
 sub-system integration can succeed/fail/retry independently. Decide when
 the first integration is built — the table shape will be obvious then.
 
+**Runtime**: each step that calls an external sub-system (WiFi controller,
+print server, access-control API) goes through **Trigger.dev**, not an
+in-process worker. External APIs flake; Trigger.dev gives us durable
+retries + visibility into failure. The internal coordinator that sequences
+steps and updates `onboarding_tasks` rows can be plain Node/Postgres —
+that part is bullet-proof. (See the `feedback_task_execution` memory for
+the rule of thumb.)
+
 ## Side-effects to wire when the service exists
 
 When `createLicence(...)` succeeds:

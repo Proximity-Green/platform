@@ -210,9 +210,12 @@ create index if not exists organisations_escalation_method_idx
      rows, wraps in `bulk_actions` for undo.
    - `cancelScheduledIncrease(history_row_id)` — soft-deletes a pending
      rate-history row before cron picks it up.
-2. Cron job (pg_cron) — daily: walk `subscription_line_rate_history` where
+2. Cron job — daily: walk `subscription_line_rate_history` where
    `effective_at <= today` AND not yet applied → write to
    `subscription_lines.base_rate`, mark the history row applied.
+   **Use pg_cron / Node, NOT Trigger.dev** — this is purely internal,
+   no external dependencies, transactionally clean. Trigger.dev's retry
+   surface buys nothing here.
 
 ### Bulk actions
 1. `bulk_apply_sub_rules_apply(sub_ids[], keys[], performer)` RPC + new
