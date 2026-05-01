@@ -57,6 +57,12 @@
     return d.toISOString().slice(0, 10)
   }
 
+  function nextDayISO(isoTs: string): string {
+    const d = new Date(isoTs)
+    d.setDate(d.getDate() + 1)
+    return d.toISOString().slice(0, 10)
+  }
+
   // Reset change-form state whenever the expanded row closes / changes.
   $effect(() => {
     if (!expandedLicId) {
@@ -917,13 +923,33 @@
                     .map(i => ({ value: i.id, label: i.name }))}
                 />
               </Field>
-              <Field
-                name="effective_at"
-                label="Effective from *"
-                type="date"
-                value={licChangeEffectiveAt}
-                oninput={(v) => (licChangeEffectiveAt = v)}
-              />
+              <Field label="Effective from *">
+                <div class="effective-pickers">
+                  <input
+                    type="date"
+                    name="effective_at"
+                    value={licChangeEffectiveAt}
+                    oninput={(e) => (licChangeEffectiveAt = (e.currentTarget as HTMLInputElement).value)}
+                    class="plain-date"
+                  />
+                  <div class="effective-presets">
+                    <button
+                      type="button"
+                      class="preset-btn"
+                      class:is-active={licChangeEffectiveAt === tomorrowISO()}
+                      onclick={() => (licChangeEffectiveAt = tomorrowISO())}
+                    >ASAP</button>
+                    {#if l.ended_at}
+                      <button
+                        type="button"
+                        class="preset-btn"
+                        class:is-active={licChangeEffectiveAt === nextDayISO(l.ended_at)}
+                        onclick={() => (licChangeEffectiveAt = nextDayISO(l.ended_at))}
+                      >When current ends ({fmtDate(l.ended_at)})</button>
+                    {/if}
+                  </div>
+                </div>
+              </Field>
             </FieldGrid>
             <p class="muted small change-hint">
               The current licence will end the day before this date. A new licence + paired subscription
@@ -1921,6 +1947,39 @@
     padding: var(--space-2);
     background: var(--surface-sunk, #f0eee6);
     border-radius: 6px;
+  }
+  .effective-pickers {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .plain-date {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border, #c8deca);
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: var(--text-sm);
+  }
+  .effective-presets {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .preset-btn {
+    padding: 4px 10px;
+    font-size: 0.78rem;
+    border: 1px solid var(--border, #c8deca);
+    background: var(--surface, #fff);
+    border-radius: 999px;
+    cursor: pointer;
+    color: var(--text-muted, #5a7060);
+  }
+  .preset-btn:hover { background: var(--surface-sunk, #f0eee6); }
+  .preset-btn.is-active {
+    background: var(--accent, #2d6a35);
+    color: white;
+    border-color: var(--accent, #2d6a35);
   }
   .member-picker {
     display: flex;
