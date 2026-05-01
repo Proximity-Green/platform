@@ -16,7 +16,10 @@ for (const [path, content] of Object.entries(rawDocs)) {
   DOC_CONTENT[filename] = content
 }
 
-type DocSlug = 'architecture' | 'conventions' | 'catalog' | 'migration' | 'benchmark' | 'testing' | 'sage' | 'platform-school'
+type DocSlug =
+  | 'architecture' | 'conventions' | 'catalog' | 'migration'
+  | 'benchmark' | 'testing' | 'sage' | 'platform-school'
+  | 'licence-creation' | 'price-escalation'
 
 const FILE_BY_SLUG: Record<DocSlug, string> = {
   architecture: 'ARCHITECTURE.md',
@@ -26,7 +29,9 @@ const FILE_BY_SLUG: Record<DocSlug, string> = {
   benchmark: 'BENCHMARK.md',
   testing: 'TESTING.md',
   sage: 'SAGE.md',
-  'platform-school': 'PLATFORM_SCHOOL.md'
+  'platform-school': 'PLATFORM_SCHOOL.md',
+  'licence-creation': 'LICENCE_CREATION_RULES.md',
+  'price-escalation': 'PRICE_ESCALATION.md'
 }
 
 export const load = async ({ url }) => {
@@ -49,6 +54,9 @@ export const load = async ({ url }) => {
       { type: 'link', slug: 'benchmark', label: 'Benchmark' },
       { type: 'link', slug: 'testing', label: 'Testing' },
       { type: 'link', slug: 'platform-school', label: 'Platform School' },
+      { type: 'heading', label: 'Design parcels' },
+      { type: 'link', slug: 'licence-creation', label: 'Licence creation rules' },
+      { type: 'link', slug: 'price-escalation', label: 'Price escalation' },
       { type: 'heading', label: 'Integrations' },
       { type: 'link', slug: 'sage', label: 'Sage' }
     ] as ({ type: 'link'; slug: string; label: string } | { type: 'heading'; label: string })[]
