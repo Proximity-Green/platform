@@ -883,15 +883,19 @@
       {#snippet row(l: any)}
         <td>{l.location_name ?? '—'}</td>
         <td>
-          <span title={`licence: ${l.id}
+          <Badge tone="info">Licence</Badge>
+          <Copyable value={l.id ?? ''}>
+            <span
+              class="id-chip has-tip"
+              onclick={(e) => e.stopPropagation()}
+              data-tip={`licence: ${l.id}
 sub: ${l.paired_subscription_line_id ?? '(none)'}
 item: ${l.item_id ?? '—'}
 member: ${l.user_id ?? '—'}
 location: ${l.location_id ?? '—'}
-org: ${l.organisation_id ?? '—'}`}>
-            <Badge tone="info">Licence</Badge>
-          </span>
-          <Copyable value={l.id ?? ''}><span class="id-chip" title={`Licence id ${l.id} — click to copy`}>{(l.id ?? '').slice(0, 8)}</span></Copyable>
+org: ${l.organisation_id ?? '—'}`}
+            >{(l.id ?? '').slice(0, 8)}</span>
+          </Copyable>
           {#if l.item_id && l.item_name}
             <a class="primary" href={`/items/${l.item_id}`} onclick={(e) => e.stopPropagation()}>{l.item_name}</a>
           {:else}
@@ -2181,6 +2185,25 @@ org: ${l.organisation_id ?? '—'}`}>
     cursor: pointer;
   }
   .id-chip:hover { color: var(--fg, #0a1f0f); background: var(--surface, #fff); border: 1px solid var(--border, #c8deca); padding: 0 5px; }
+  /* CSS-driven instant tooltip — replaces native `title` so it shows on
+     hover without the 1.5s browser delay (which loses to row-click). */
+  .has-tip { position: relative; }
+  .has-tip:hover::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 50;
+    white-space: pre;
+    background: var(--fg, #0a1f0f);
+    color: var(--surface, #fff);
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 0.7rem;
+    padding: 6px 10px;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    pointer-events: none;
+  }
   .change-hint {
     margin-top: var(--space-2);
     padding: var(--space-2);
