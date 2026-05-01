@@ -1,7 +1,9 @@
 <script lang="ts">
   import { page } from '$app/stores'
-  import { goto } from '$app/navigation'
+  import { goto, invalidateAll } from '$app/navigation'
   import { enhance } from '$app/forms'
+  import { onDestroy } from 'svelte'
+  import { supabase } from '$lib/supabase'
   import { permStore, canDo } from '$lib/stores/permissions'
   import {
     Button,
@@ -33,6 +35,29 @@
   let addingTxnFor = $state<string | null>(null)
   let addingCustomer = $state(false)
   let editingSubId = $state<string | null>(null)
+
+  // ── Live refresh: subscribe to licences + subs for this org ─────────
+  // Multiple writes can arrive in quick succession (apply_licence_change
+  // touches old licence + new licence + old sub + new sub = 4 events).
+  // Debounce so a single invalidate covers the burst.
+  let invalidateTimer: ReturnType<typeof setTimeout> | null = null
+  function scheduleInvalidate() {
+    if (invalidateTimer) clearTimeout(invalidateTimer)
+    invalidateTimer = setTimeout(() => { invalidateTimer = null; invalidateAll() }, 200)
+  }
+  const liveChannel = supabase
+    .channel(`org-licences-${($page.params as any).id}`)
+    .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'licenses', filter: `organisation_id=eq.${($page.params as any).id}` },
+        scheduleInvalidate)
+    .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'subscription_lines', filter: `organisation_id=eq.${($page.params as any).id}` },
+        scheduleInvalidate)
+    .subscribe()
+  onDestroy(() => {
+    if (invalidateTimer) clearTimeout(invalidateTimer)
+    supabase.removeChannel(liveChannel)
+  })
 
   // ── Licence add-form state ──────────────────────────────────────────
   // Cascading dropdowns: Item Type + Location filter the Membership/item
@@ -884,16 +909,18 @@
         <td>{l.location_name ?? '—'}</td>
         <td>
           <Badge tone="info">Licence</Badge>
-          <Copyable value={l.id ?? ''}>
-            <span
-              class="id-chip has-tip"
-              onclick={(e) => e.stopPropagation()}
-              data-tip={`licence: ${l.id}
+          {@const idDump = `licence: ${l.id}
 sub: ${l.paired_subscription_line_id ?? '(none)'}
 item: ${l.item_id ?? '—'}
 member: ${l.user_id ?? '—'}
 location: ${l.location_id ?? '—'}
 org: ${l.organisation_id ?? '—'}`}
+          <Copyable value={idDump}>
+            <span
+              class="id-chip has-tip"
+              onclick={(e) => e.stopPropagation()}
+              data-tip={idDump}
+              title="Click to copy all ids"
             >{(l.id ?? '').slice(0, 8)}</span>
           </Copyable>
           {#if l.item_id && l.item_name}
