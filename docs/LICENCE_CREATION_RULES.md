@@ -1,8 +1,11 @@
 # Licence creation — rules + onboarding plan
 
-Status: **scoping**, no code yet. Captured during the 2026-04-30 / 05-01 session
-so the rules survive across conversations. Treat this as the source of truth
-for the next coding parcel.
+Status: **scoping**, no code yet. Captured during the 2026-04-30 / 05-01
+session so the rules survive across conversations. Treat this as the source
+of truth for the next coding parcel.
+
+Companion doc: `docs/PRICE_ESCALATION.md` covers the per-sub-line rules
+(escalation, discount) and the org-default JSON shape — separate parcel.
 
 ## Why a service?
 
@@ -54,7 +57,7 @@ entry points route through it.
 
 ## Upgrade / Downgrade
 
-> **Rule 7 (companion): upgrade / downgrade is a first-class operation.**
+> **Rule 7 companion: upgrade / downgrade is a first-class operation.**
 > Not a delete-and-create. The service exposes
 > `upgradeLicence(currentId, newItemId, effectiveAt)` /
 > `downgradeLicence(...)`. Same mechanics for both — direction is informational.
@@ -82,12 +85,12 @@ Onboarding talks to multiple sub-systems (WiFi, printing, access control) so
 it deserves its own design / build. Don't bundle with the licence-creation
 service. Instead:
 
-> **Rule 11: On a licence becoming current, fire the onboarding hook.**
+> **Rule 12: On a licence becoming current, fire the onboarding hook.**
 > Hook is a stub today (writes a TODO row to `system_logs`). When the
 > onboarding system is built, the hook becomes the orchestrator entry point.
 > No code outside the hook function changes.
 >
-> **Rule 12: Every current licence must resolve to an onboarded member.**
+> **Rule 13: Every current licence must resolve to an onboarded member.**
 > A current licence is in one of two states:
 > - **Onboarded** — `persons.onboarded_at IS NOT NULL`, fully reconciled.
 > - **Pending onboarding** — sitting on the onboarding queue.
@@ -104,8 +107,11 @@ the first integration is built — the table shape will be obvious then.
 
 When `createLicence(...)` succeeds:
 1. Insert the licence + paired sub atomically (the RPC already does this).
-2. If the licence is current at creation, call `fireOnboardingHook(...)`.
-3. Log the operation in `change_log` (the existing tier-1 trigger handles
+2. Copy current org defaults from `organisations.default_sub_rules` (JSON)
+   into a fresh `subscription_line_rules` row for this sub. See
+   `docs/PRICE_ESCALATION.md` for the JSON shape.
+3. If the licence is current at creation, call `fireOnboardingHook(...)`.
+4. Log the operation in `change_log` (the existing tier-1 trigger handles
    this for licences and subs, so probably nothing to add here — but verify).
 
 ## Out of scope for this parcel
@@ -113,3 +119,4 @@ When `createLicence(...)` succeeds:
 - WiFi / printing / access-control integrations.
 - Multi-tenant org-admin role model.
 - Bulk licence operations.
+- Price escalation (covered by the separate parcel — see `docs/PRICE_ESCALATION.md`).
