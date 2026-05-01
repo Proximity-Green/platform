@@ -19,20 +19,73 @@ Why this matters:
 - Audit-friendly: at any point you can see what rules applied when a sub
   was created.
 
-## Rules
+## Two distinct paths
 
-> **Rule 14: Price escalation walks each active sub line independently.**
+Price changes happen via **one of two paths**, never both for the same sub:
+
+### Path A — per-sub-line rule escalation
+
+Driven by each sub's own `subscription_line_rules`. Self-managing per line.
+
+> **Rule 14a: Sub-line rule escalation walks each active sub independently.**
 > The escalation function reads `subscription_line_rules` per-line, computes
-> the new rate per-line, snapshots a new `subscription_lines.base_rate`,
-> and appends to `subscription_line_rate_history`. There is no
-> "one method per org" assumption — different lines on the same org can use
-> different methods.
+> the new rate per-line, snapshots a new `subscription_lines.base_rate`, and
+> appends to `subscription_line_rate_history`. Different lines on the same
+> org can use different methods.
 >
-> Two methods supported:
-> - **Contracted escalation** — apply a known % bump (e.g. CPI + 2%) defined
->   in the sub's rules. `new_rate = current.base_rate × (1 + pct/100)`.
-> - **Annual lift-to-current** — bring price to today's catalog rate.
+> Two methods supported in sub-line rules:
+> - **`contracted`** — apply a known % bump (e.g. CPI + 2%) from the sub's
+>   rules. `new_rate = current.base_rate × (1 + pct/100)`.
+> - **`annual_lift`** — bring price to today's catalog rate.
 >   `new_rate = item.base_rate` (current value).
+
+### Path B — annual market-increase function
+
+A deliberate operator-initiated event that resets prices "to market". Scope
+is per-location (optionally narrowed by item-type) because the market doesn't
+move uniformly across geographies — CPT might lift +8% while Paarl lifts +5%.
+
+> **Rule 14b: Annual market-increase is location-scoped, scheduled, and
+> skips contracted lines.**
+>
+> Inputs:
+> - `location_id` (or set of locations)
+> - optional `item_type_id` to narrow scope further
+> - `pct` — the % to lift catalog prices by
+> - `effective_at` — the date the new prices take effect (required, future-dated)
+>
+> Mechanics, atomic per run:
+> 1. Update `items.base_rate` at the targeted scope: `new_rate = current × (1 + pct/100)`.
+> 2. For every paired `subscription_line` whose item is in scope **and**
+>    whose rules' `escalation_method` is `'annual_lift'` or unset, append a
+>    future-dated row to `subscription_line_rate_history` with the new rate
+>    and the chosen `effective_at`.
+> 3. Skip any sub whose `escalation_method = 'contracted'` — those self-manage.
+> 4. A daily cron promotes rate-history rows whose `effective_at <= today`
+>    by writing the new value to `subscription_lines.base_rate`. Until that
+>    date the materialised rate is unchanged; the pending change is visible
+>    on the sub line as "Scheduled change → R{x} from {date}".
+> 5. Operator can cancel before `effective_at` — soft-deletes the future
+>    rate-history row. Cron will skip cancelled rows.
+
+The whole run is wrapped in `bulk_actions` for snapshot-backed undo if it's
+caught before the cron applies. After the cron applies, undo is still
+possible (it just inverts the rate-history rows) but the operator must
+explicitly run a counter-action — not the standard one-click undo.
+
+### Path A vs Path B — mutually exclusive at the sub level
+
+A sub line is either:
+- **Self-managing** (has `escalation_method = 'contracted'`) → Path B never
+  touches it.
+- **Market-tracking** (`escalation_method = 'annual_lift'` or unset) → moves
+  with the next Path B run for its location.
+
+So the operator running a Path B sees a preview with three counts before
+confirming:
+- *N* subs will lift to market
+- *M* subs skipped (contracted curve)
+- *K* items repriced
 
 > **Rule 15: Escalation and discount config lives on the sub line, not the
 > org.** Each `subscription_line` has its own `subscription_line_rules` row
@@ -129,25 +182,53 @@ create index if not exists organisations_escalation_method_idx
 
 ## Future build — what this parcel needs
 
-1. **Migration**: add `organisations.default_sub_rules jsonb`. Seed with
-   sensible blanks for existing orgs.
-2. **Service**: `price-escalation.service.ts` with:
-   - `previewEscalation(subIds[])` — returns proposed new rates without
-     applying.
-   - `applyEscalation(subIds[])` — runs the per-line walk, snapshots
-     prior rate, writes `subscription_line_rate_history`, updates
-     `subscription_lines.base_rate`. Atomic per-line; bulk-action wrapper
-     for undo.
-3. **Bulk action**: `bulk_apply_sub_rules_apply(sub_ids[], keys[], performer)`
+### Migrations
+1. `organisations.default_sub_rules jsonb` (org defaults, seed blank).
+2. Verify `subscription_line_rate_history` has `effective_at` and a way
+   to mark rows "applied" / "cancelled". If missing, extend.
+3. New columns on `subscription_line_rules` if the table doesn't already
+   carry `escalation_method`, `escalation_pct`, `discount_pct`, etc.
+4. New permission seeds: `bulk_actions.apply_sub_rules`,
+   `bulk_actions.annual_increase`.
+
+### Services
+1. `price-escalation.service.ts`:
+   - `previewSubLineEscalation(sub_ids[])` — Path A preview, returns
+     proposed rates without applying.
+   - `applySubLineEscalation(sub_ids[])` — Path A apply.
+   - `previewAnnualIncrease({ location_ids, item_type_id?, pct, effective_at })`
+     — Path B preview: returns the matrix of items + per-sub effects, +
+     the three counts (lift / skipped / repriced).
+   - `applyAnnualIncrease(...)` — Path B apply: writes future-dated history
+     rows, wraps in `bulk_actions` for undo.
+   - `cancelScheduledIncrease(history_row_id)` — soft-deletes a pending
+     rate-history row before cron picks it up.
+2. Cron job (pg_cron) — daily: walk `subscription_line_rate_history` where
+   `effective_at <= today` AND not yet applied → write to
+   `subscription_lines.base_rate`, mark the history row applied.
+
+### Bulk actions
+1. `bulk_apply_sub_rules_apply(sub_ids[], keys[], performer)` RPC + new
+   branch in `bulk_action_undo` + permission seed for
+   `bulk_actions.apply_sub_rules`. Snapshot-backed undo (Rule 16).
+2. `annual_increase_apply(location_ids[], item_type_id?, pct, effective_at, performer)`
    RPC + new branch in `bulk_action_undo` + permission seed for
-   `bulk_actions.apply_sub_rules`. Snapshot-backed undo.
-4. **UI**:
-   - Org edit page: form for `default_sub_rules` (the JSON shape).
-   - Subscription tab: multi-select rows → "Apply org defaults…" dialog
-     with per-key checkboxes → phase progress + Undo (mirrors existing
-     bulk patterns).
-   - Sub-line detail: editable rules section (per-line override).
-   - Optional: an "Escalations due this month" report list.
+   `bulk_actions.annual_increase`.
+
+### UI
+- **Org edit page**: form for `default_sub_rules` (the JSON shape).
+- **Subscription tab**: multi-select rows → "Apply org defaults…" dialog
+  with per-key checkboxes → phase progress + Undo (mirrors existing bulk
+  patterns).
+- **Sub-line detail**: editable rules section (per-line override). Plus
+  a "Scheduled change → R{x} from {date}" badge if a pending rate-history
+  row exists.
+- **Annual increase wizard**: Locations / Item type / % / Effective date
+  → preview (lift / skipped / repriced counts) → confirm. Lives on a
+  dedicated "Pricing → Annual Increase" page (admin-only).
+- **Pending escalations report**: list of all pending future-dated
+  history rows with cancel-action per row.
+- Optional: "Escalations due this month" report.
 
 ## Out of scope for this parcel
 
