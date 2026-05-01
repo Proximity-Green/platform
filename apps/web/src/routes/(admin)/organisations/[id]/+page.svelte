@@ -48,6 +48,8 @@
   // (upgrade/downgrade — pick a new item, set effective date). Switches
   // via buttons in the expand panel + a row-menu item.
   let licChangeMode = $state(false)
+  let licChangeTypeId = $state<string>('')        // item-type filter (optional)
+  let licChangeLocationId = $state<string>('')    // location filter — defaults to current item's
   let licChangeNewItemId = $state<string>('')
   let licChangeEffectiveAt = $state<string>('')
 
@@ -67,15 +69,30 @@
   $effect(() => {
     if (!expandedLicId) {
       licChangeMode = false
+      licChangeTypeId = ''
+      licChangeLocationId = ''
       licChangeNewItemId = ''
       licChangeEffectiveAt = ''
     }
   })
 
+  // Drop a stale item selection when filters change it out of view.
+  $effect(() => {
+    if (!licChangeMode || !licChangeNewItemId) return
+    const stillValid = (licenceableItems as any[]).some(i =>
+      i.id === licChangeNewItemId
+      && (!licChangeTypeId || i.item_type_id === licChangeTypeId)
+      && (!licChangeLocationId || i.location_id === licChangeLocationId)
+    )
+    if (!stillValid) licChangeNewItemId = ''
+  })
+
   // Open the row in change-mode for an upgrade. Called from the row menu.
-  function startLicenceChange(licenceId: string) {
+  function startLicenceChange(licenceId: string, currentLocationId?: string | null) {
     expandedLicId = licenceId
     licChangeMode = true
+    licChangeTypeId = ''
+    licChangeLocationId = currentLocationId ?? ''
     licChangeNewItemId = ''
     licChangeEffectiveAt = tomorrowISO()
   }
@@ -877,7 +894,7 @@
       {#snippet actions(l: any)}
         <RowMenu ariaLabel="Licence actions">
           {#if can('subscriptions', 'create')}
-            <button type="button" onclick={() => startLicenceChange(l.id)}>Change membership…</button>
+            <button type="button" onclick={() => startLicenceChange(l.id, l.location_id)}>Change membership…</button>
           {/if}
           {#if can('subscriptions', 'delete')}
             <SubmitButton
@@ -928,7 +945,7 @@
             <div class="lic-edit-actions">
               <Button type="button" size="sm" variant="ghost" onclick={() => (expandedLicId = null)}>Cancel</Button>
               {#if can('subscriptions', 'create')}
-                <Button type="button" size="sm" variant="secondary" onclick={() => { licChangeMode = true; licChangeNewItemId = ''; licChangeEffectiveAt = tomorrowISO() }}>
+                <Button type="button" size="sm" variant="secondary" onclick={() => startLicenceChange(l.id, l.location_id)}>
                   Change membership…
                 </Button>
               {/if}
@@ -974,7 +991,23 @@
             <!-- both action handlers read different field names — pass both -->
             <input type="hidden" name="old_licence_id" value={l.id} />
             <input type="hidden" name="source_licence_id" value={l.id} />
-            <FieldGrid cols={2}>
+            <FieldGrid cols={3}>
+              <Field label="Item type">
+                <Select
+                  value={licChangeTypeId}
+                  onchange={(v) => (licChangeTypeId = v)}
+                  placeholder="All licence types"
+                  options={[{ value: '', label: 'All licence types' }, ...licenceableTypes.map(t => ({ value: t.id, label: t.name }))]}
+                />
+              </Field>
+              <Field label="Location">
+                <Select
+                  value={licChangeLocationId}
+                  onchange={(v) => (licChangeLocationId = v)}
+                  placeholder="All locations"
+                  options={[{ value: '', label: 'All locations' }, ...(data.locations as any[]).map(loc => ({ value: loc.id, label: loc.short_name ?? loc.name }))]}
+                />
+              </Field>
               <Field label="New membership *">
                 <Select
                   name="new_item_id"
@@ -982,10 +1015,16 @@
                   onchange={(v) => (licChangeNewItemId = v)}
                   placeholder="Pick a new membership"
                   options={(licenceableItems as any[])
-                    .filter(i => i.location_id === l.location_id && i.id !== l.item_id)
+                    .filter(i =>
+                      i.id !== l.item_id
+                      && (!licChangeTypeId || i.item_type_id === licChangeTypeId)
+                      && (!licChangeLocationId || i.location_id === licChangeLocationId)
+                    )
                     .map(i => ({ value: i.id, label: i.name }))}
                 />
               </Field>
+            </FieldGrid>
+            <FieldGrid cols={1}>
               <Field label="Effective from *">
                 <div class="effective-pickers">
                   <input

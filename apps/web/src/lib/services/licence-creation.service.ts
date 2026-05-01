@@ -235,13 +235,6 @@ export async function applyLicenceChange(
   if (error) {
     // Translate the RPC's raise messages into friendly ActionableErrors.
     const msg = error.message ?? ''
-    if (msg.includes('same location')) {
-      return changeFail(
-        'Different location',
-        'The new item must be at the same location as the current licence. Pick an item at this location, or end the licence and add a new one elsewhere.',
-        'change_cross_location'
-      )
-    }
     if (msg.includes('different from')) {
       return changeFail('Same item', 'The new item is the same as the current one — pick a different one to change to.', 'change_same_item')
     }
@@ -254,16 +247,27 @@ export async function applyLicenceChange(
     return changeFail('Could not apply change', msg, 'rpc_failed')
   }
 
-  const r = data as ApplyLicenceChangeResult & { ok?: never }
+  // Defensive: the RPC returned without raising but data is empty.
+  // Has happened when the schema cache held a stale function signature.
+  // Surface it as a real error so the proposal flow doesn't flip to
+  // 'approved' against a no-op.
+  const r = (data ?? {}) as any
+  if (!r.new_licence_id || !r.new_subscription_line_id) {
+    return changeFail(
+      'apply_licence_change returned no result',
+      'The function ran without error but returned no new ids. Re-apply the latest migration (057 or 059) and reload PostgREST schema cache.',
+      'rpc_empty_result'
+    )
+  }
   return {
     ok: true,
-    old_licence_id: (r as any).old_licence_id,
-    old_subscription_line_id: (r as any).old_subscription_line_id,
-    new_licence_id: (r as any).new_licence_id,
-    new_subscription_line_id: (r as any).new_subscription_line_id,
-    effective_at: (r as any).effective_at,
-    base_rate: (r as any).base_rate,
-    currency: (r as any).currency
+    old_licence_id: r.old_licence_id,
+    old_subscription_line_id: r.old_subscription_line_id,
+    new_licence_id: r.new_licence_id,
+    new_subscription_line_id: r.new_subscription_line_id,
+    effective_at: r.effective_at,
+    base_rate: r.base_rate,
+    currency: r.currency
   }
 }
 
@@ -330,13 +334,9 @@ export async function proposeLicenceChange(
   if (!(newItem as any).item_types?.requires_license) {
     return proposeFail('Not a membership', 'The chosen item does not require a licence.', 'change_wrong_item_type')
   }
-  if (newItem.location_id !== lic.location_id) {
-    return proposeFail(
-      'Different location',
-      'The new item must be at the same location as the current licence.',
-      'change_cross_location'
-    )
-  }
+  // Cross-location is allowed (Joe at 20 Kloof → Joe at Watershed).
+  // The new licence + sub will live at the new item's location with that
+  // location's currency. Old licence stays where it was until ended.
 
   const { data: row, error: insErr } = await sbForUser(actorId)
     .from('licence_change_proposals')
@@ -351,14 +351,6 @@ export async function proposeLicenceChange(
     .single()
 
   if (insErr) {
-    // Unique partial index → only one pending proposal per licence.
-    if (insErr.code === '23505') {
-      return proposeFail(
-        'Already a pending proposal',
-        'There is already a pending proposal for this licence. Approve or reject it first, then create a new one if needed.',
-        'proposal_exists'
-      )
-    }
     return proposeFail('Could not save proposal', insErr.message, 'insert_failed')
   }
 
@@ -412,6 +404,19 @@ export async function approveLicenceProposal(
     applied_subscription_line_id: apply.new_subscription_line_id,
     updated_at: new Date().toISOString()
   }).eq('id', proposalId)
+
+  // Auto-cancel any other still-pending proposals against the same source
+  // licence — the licence has now changed, so they're stale by definition.
+  await sb.from('licence_change_proposals').update({
+    status: 'cancelled',
+    decided_by: actorId,
+    decided_at: new Date().toISOString(),
+    decided_notes: 'Auto-cancelled — sibling proposal was approved.',
+    updated_at: new Date().toISOString()
+  })
+  .eq('source_licence_id', prop.source_licence_id)
+  .eq('status', 'pending')
+  .neq('id', proposalId)
 
   return {
     ok: true,
