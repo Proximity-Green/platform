@@ -257,10 +257,12 @@
     </nav>
 
     <div class="nav-right">
-      <a href="/docs" class="nav-item docs-link" class:is-active={isActive('/docs')}>
-        {@render navIcon('book')}
-        <span class="label">Docs</span>
-      </a>
+      {#if role === 'super_admin'}
+        <a href="/docs" class="nav-item docs-link" class:is-active={isActive('/docs')}>
+          {@render navIcon('book')}
+          <span class="label">Docs</span>
+        </a>
+      {/if}
 
       <div class="search-wrap">
         {#if search}
@@ -332,10 +334,12 @@
         </a>
       {/each}
 
-      <a href="/docs" class="mobile-link" class:is-active={isActive('/docs')} onclick={closeAll}>
-        {@render navIcon('book')}
-        <span>Docs</span>
-      </a>
+      {#if role === 'super_admin'}
+        <a href="/docs" class="mobile-link" class:is-active={isActive('/docs')} onclick={closeAll}>
+          {@render navIcon('book')}
+          <span>Docs</span>
+        </a>
+      {/if}
 
       {#each visibleGroups as group (group.label)}
         <div class="mobile-group">

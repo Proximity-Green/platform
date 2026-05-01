@@ -69,7 +69,7 @@
     window.location.href = '/users'
   }
 
-  type NavItem = { href: string; label: string; guard?: string }
+  type NavItem = { href: string; label: string; guard?: string; superAdmin?: boolean }
   const navItems: NavItem[] = [
     { href: '/admin',         label: 'Dashboard',     guard: 'persons' },
     { href: '/feature-requests', label: 'Feedback',  guard: 'feature_requests' },
@@ -90,7 +90,7 @@
     { href: '/changelog',     label: 'Change Log',    guard: 'audit_log' },
     { href: '/system-logs',   label: 'System Logs',   guard: 'system_logs' },
     { href: '/reported-errors', label: 'Reported Errors', guard: 'reported_errors' },
-    { href: '/docs',          label: 'Docs' }
+    { href: '/docs',          label: 'Docs',          superAdmin: true }
   ]
 </script>
 
@@ -150,7 +150,7 @@
 
       <nav class="nav">
         {#each navItems as item}
-          {#if !item.guard || can(item.guard)}
+          {#if (!item.guard || can(item.guard)) && (!item.superAdmin || perms.role === 'super_admin')}
             <a
               href={item.href}
               class="nav-item"

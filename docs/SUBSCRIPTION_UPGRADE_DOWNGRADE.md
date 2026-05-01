@@ -144,15 +144,25 @@ subject to permissions and guardrails.
 ### Actor permissions
 
 A member can self-service if **all** of:
-- They are a `persons` row attached to the org of the sub.
-- They hold one of:
-  - The org's **primary member** flag (open: schema field doesn't exist
-    yet — see `LICENCE_CREATION_RULES.md` open questions).
-  - A per-org **member-admin** role (open: see same doc).
-  - The platform-level admin / super_admin role.
-- They hold the resource permission `subscriptions:change_self` (or
-  `subscriptions:change_org` for primary/member-admin acting on someone
-  else's sub in the same org).
+- They are a `persons` row attached to the org of the sub
+  (`person.organisation_id == sub.organisation_id`).
+- They have a linked user account (`persons.user_id IS NOT NULL`).
+- That user holds the **`org_admin`** role (or platform admin /
+  super_admin).
+
+The `org_admin` role is platform-level (one row per role in `roles`
+table, granted per-user via `user_roles`) but its *scope* is implicit:
+an `org_admin` can only act on subs whose `organisation_id` matches
+their own `persons.organisation_id`. The service enforces this at the
+authorization check.
+
+Resource permissions on the role:
+- `subscriptions:change_self` — change one's own sub.
+- `subscriptions:change_org` — change any sub in the same org. Held
+  by `org_admin` (and by platform admin / super_admin implicitly).
+
+No per-org junction table needed. The role is the role, the scope
+comes from the actor's persons row.
 
 Platform admins can always override. Operators retain full control via
 the existing operator-flow.
@@ -271,8 +281,10 @@ When a change is applied (immediate or via cron at effective date):
 
 ## Open questions
 
-- **Primary member + org-admin role schema** — same blocker as
-  `LICENCE_CREATION_RULES.md`. Decide once, applies to both parcels.
+- ~~**Primary member + org-admin role schema**~~ — resolved 2026-05-01.
+  Use a platform-level `org_admin` role granted per-user via `user_roles`;
+  scope derives from the actor's `persons.organisation_id`. No per-org
+  junction needed.
 - **Pro-rata billing** — required at v1 or deferrable to a follow-up?
 - **Self-service downgrades** — default off feels right; confirm before
   building.

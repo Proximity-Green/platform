@@ -1,4 +1,6 @@
+import { error } from '@sveltejs/kit'
 import { marked } from 'marked'
+import { getUserIdFromRequest, getUserPermissions } from '$lib/services/permissions.service'
 
 // Docs are bundled into the Vite build at compile time via import.meta.glob.
 // This avoids any runtime filesystem access — works identically in dev and
@@ -20,7 +22,8 @@ type DocSlug =
   | 'architecture' | 'conventions' | 'catalog' | 'migration'
   | 'benchmark' | 'testing' | 'sage' | 'platform-school'
   | 'licence-creation' | 'pricing-forecast'
-  | 'subscription-change' | 'onboarding' | 'freeradius'
+  | 'subscription-change' | 'onboarding'
+  | 'occupancy' | 'radius'
 
 const FILE_BY_SLUG: Record<DocSlug, string> = {
   architecture: 'ARCHITECTURE.md',
@@ -35,10 +38,20 @@ const FILE_BY_SLUG: Record<DocSlug, string> = {
   'pricing-forecast': 'PRICING_AND_FORECAST.md',
   'subscription-change': 'SUBSCRIPTION_UPGRADE_DOWNGRADE.md',
   'onboarding': 'ONBOARDING.md',
-  'freeradius': 'FREERADIUS_INTEGRATION.md'
+  'occupancy': 'OCCUPANCY.md',
+  'radius': 'RADIUS_INTEGRATION.md'
 }
 
-export const load = async ({ url }) => {
+export const load = async ({ url, cookies, locals }) => {
+  // Docs are restricted to super_admin only — these are internal design
+  // parcels + architecture references, not user-facing material. Layout +
+  // TopNav already hide the link for non-super-admins; this server-side
+  // gate covers direct-URL access.
+  const userId = await getUserIdFromRequest(locals, cookies)
+  if (!userId) throw error(401, 'Not signed in')
+  const perms = await getUserPermissions(userId)
+  if (perms.role !== 'super_admin') throw error(403, 'Docs are restricted to super admins.')
+
   const slug = (url.searchParams.get('p') ?? 'architecture') as DocSlug
   const file = FILE_BY_SLUG[slug] ?? FILE_BY_SLUG.architecture
 
@@ -63,9 +76,10 @@ export const load = async ({ url }) => {
       { type: 'link', slug: 'pricing-forecast', label: 'Pricing, discounting & forecast' },
       { type: 'link', slug: 'subscription-change', label: 'Upgrade / downgrade' },
       { type: 'link', slug: 'onboarding', label: 'Onboarding & offboarding' },
+      { type: 'link', slug: 'occupancy', label: 'Occupancy' },
       { type: 'heading', label: 'Integrations' },
       { type: 'link', slug: 'sage', label: 'Sage' },
-      { type: 'link', slug: 'freeradius', label: 'FreeRADIUS (WiFi)' }
+      { type: 'link', slug: 'radius', label: 'RADIUS (WiFi)' }
     ] as ({ type: 'link'; slug: string; label: string } | { type: 'heading'; label: string })[]
   }
 }
