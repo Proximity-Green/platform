@@ -186,3 +186,83 @@ function rangesOverlap(
 function fmt(ts: string): string {
   return ts.slice(0, 10)
 }
+
+// ─── apply licence change (V7 upgrade/downgrade composition) ─────────
+
+export type ApplyLicenceChangeInput = {
+  old_licence_id: string
+  new_item_id: string
+  effective_at: string                    // ISO date or timestamptz
+}
+
+export type ApplyLicenceChangeResult =
+  | { ok: true
+      old_licence_id: string
+      old_subscription_line_id: string | null
+      new_licence_id: string
+      new_subscription_line_id: string
+      effective_at: string
+      base_rate: number
+      currency: string }
+  | { ok: false; error: ActionableError }
+
+const CHANGE_FAIL = 'licence_change_failed'
+function changeFail(title: string, detail: string, code = CHANGE_FAIL): ApplyLicenceChangeResult {
+  return { ok: false, error: { code, title, detail } }
+}
+
+/**
+ * V7 composition: end the old licence + sub at effective_at - 1 day, open
+ * a new licence + sub at effective_at with the new item's catalog rate.
+ * Same person, same location, different item. Atomic via the
+ * apply_licence_change RPC — 1:1 invariant maintained throughout.
+ */
+export async function applyLicenceChange(
+  input: ApplyLicenceChangeInput,
+  actorId: string | null
+): Promise<ApplyLicenceChangeResult> {
+  if (!input.old_licence_id) return changeFail('Missing licence', 'No licence selected to change.')
+  if (!input.new_item_id) return changeFail('Missing new item', 'Pick a new membership / item to change to.')
+  if (!input.effective_at) return changeFail('Missing effective date', 'Pick when the change should take effect.')
+
+  const { data, error } = await sbForUser(actorId).rpc('apply_licence_change', {
+    p_old_licence_id: input.old_licence_id,
+    p_new_item_id: input.new_item_id,
+    p_effective_at: input.effective_at,
+    p_performed_by: actorId
+  })
+
+  if (error) {
+    // Translate the RPC's raise messages into friendly ActionableErrors.
+    const msg = error.message ?? ''
+    if (msg.includes('same location')) {
+      return changeFail(
+        'Different location',
+        'The new item must be at the same location as the current licence. Pick an item at this location, or end the licence and add a new one elsewhere.',
+        'change_cross_location'
+      )
+    }
+    if (msg.includes('different from')) {
+      return changeFail('Same item', 'The new item is the same as the current one — pick a different one to change to.', 'change_same_item')
+    }
+    if (msg.includes('after the old licence start')) {
+      return changeFail('Bad effective date', 'The effective date must be after the current licence started.', 'change_bad_date')
+    }
+    if (msg.includes('not licence-requiring')) {
+      return changeFail('Not a membership', 'The selected item does not require a licence — pick a membership-style item.', 'change_wrong_item_type')
+    }
+    return changeFail('Could not apply change', msg, 'rpc_failed')
+  }
+
+  const r = data as ApplyLicenceChangeResult & { ok?: never }
+  return {
+    ok: true,
+    old_licence_id: (r as any).old_licence_id,
+    old_subscription_line_id: (r as any).old_subscription_line_id,
+    new_licence_id: (r as any).new_licence_id,
+    new_subscription_line_id: (r as any).new_subscription_line_id,
+    effective_at: (r as any).effective_at,
+    base_rate: (r as any).base_rate,
+    currency: (r as any).currency
+  }
+}

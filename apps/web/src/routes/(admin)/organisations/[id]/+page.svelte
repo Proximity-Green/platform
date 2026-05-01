@@ -44,6 +44,35 @@
   // this id; the DataTable's `expanded` snippet renders the edit form
   // beneath the row. Resets to null on save success or Cancel.
   let expandedLicId = $state<string | null>(null)
+  // Two modes inside the expand panel: edit (dates+notes) and change
+  // (upgrade/downgrade — pick a new item, set effective date). Switches
+  // via buttons in the expand panel + a row-menu item.
+  let licChangeMode = $state(false)
+  let licChangeNewItemId = $state<string>('')
+  let licChangeEffectiveAt = $state<string>('')
+
+  function tomorrowISO(): string {
+    const d = new Date()
+    d.setDate(d.getDate() + 1)
+    return d.toISOString().slice(0, 10)
+  }
+
+  // Reset change-form state whenever the expanded row closes / changes.
+  $effect(() => {
+    if (!expandedLicId) {
+      licChangeMode = false
+      licChangeNewItemId = ''
+      licChangeEffectiveAt = ''
+    }
+  })
+
+  // Open the row in change-mode for an upgrade. Called from the row menu.
+  function startLicenceChange(licenceId: string) {
+    expandedLicId = licenceId
+    licChangeMode = true
+    licChangeNewItemId = ''
+    licChangeEffectiveAt = tomorrowISO()
+  }
   let showAddLicence = $state(false)
   let licTypeId = $state<string>('')
   let licLocationId = $state<string>('')
@@ -768,7 +797,11 @@
         <td>{l.location_name ?? '—'}</td>
         <td>
           <Badge tone="info">Licence</Badge>
-          <span class="primary">{l.item_name ?? '—'}</span>
+          {#if l.item_id && l.item_name}
+            <a class="primary" href={`/items/${l.item_id}`} onclick={(e) => e.stopPropagation()}>{l.item_name}</a>
+          {:else}
+            <span class="primary">{l.item_name ?? '—'}</span>
+          {/if}
         </td>
         <td>
           {#if l.user_id && l.user_name}
@@ -781,57 +814,132 @@
         <td class="date">{fmtDate(l.started_at)}</td>
         <td class="date hide-sm">{fmtDate(l.ended_at)}</td>
       {/snippet}
+      {#snippet actions(l: any)}
+        <RowMenu ariaLabel="Licence actions">
+          {#if can('subscriptions', 'create')}
+            <button type="button" onclick={() => startLicenceChange(l.id)}>Change membership…</button>
+          {/if}
+          {#if can('subscriptions', 'delete')}
+            <SubmitButton
+              action="?/removeLicence"
+              label="End licence"
+              pendingLabel="Ending…"
+              variant="danger"
+              size="sm"
+              fields={{ id: l.id }}
+              confirm={{
+                title: 'End licence?',
+                message: `Remove this licence for ${l.item_name ?? 'this item'}? It will disappear from the list.`,
+                variant: 'danger'
+              }}
+            />
+          {/if}
+        </RowMenu>
+      {/snippet}
       {#snippet expanded(l: any)}
-        <form
-          method="POST"
-          action="?/updateLicence"
-          use:enhance={() => {
-            saving = true
-            return async ({ update, result }) => {
-              await update({ reset: false })
-              saving = false
-              if (result.type === 'success') expandedLicId = null
-            }
-          }}
-        >
-          <input type="hidden" name="id" value={l.id} />
-          <!-- Inline edit: dates + notes only. A licence's identity is
-               (member, item, location, organisation) — those are immutable
-               here. To change the member or product, end this licence and
-               add a new one (V7 will collapse that to one click via the
-               upgrade/downgrade composition). -->
-          <div class="lic-edit-meta">
-            <span class="muted small">
-              <strong>{l.user_name ?? '—'}</strong> · {l.item_name ?? '—'} · {l.location_name ?? '—'}
-            </span>
-          </div>
-          <FieldGrid cols={2}>
-            <Field name="started_at" label="Start" type="date" value={l.started_at?.slice(0, 10) ?? ''} />
-            <Field name="ended_at" label="End (optional)" type="date" value={l.ended_at?.slice(0, 10) ?? ''} />
-          </FieldGrid>
-          <FieldGrid cols={1}>
-            <Field name="notes" label="Notes" value={l.notes ?? ''} />
-          </FieldGrid>
-          <div class="lic-edit-actions">
-            <Button type="button" size="sm" variant="ghost" onclick={() => (expandedLicId = null)}>Cancel</Button>
-            {#if can('subscriptions', 'delete')}
-              <SubmitButton
-                action="?/removeLicence"
-                label="End licence"
-                pendingLabel="Ending…"
-                variant="danger"
-                size="sm"
-                fields={{ id: l.id }}
-                confirm={{
-                  title: 'End licence?',
-                  message: `Remove this licence for ${l.item_name ?? 'this item'}? It will disappear from the list.`,
-                  variant: 'danger'
-                }}
+        <div class="lic-edit-meta">
+          <span class="muted small">
+            <strong>{l.user_name ?? '—'}</strong> · {l.item_name ?? '—'} · {l.location_name ?? '—'}
+          </span>
+        </div>
+
+        {#if !licChangeMode}
+          <!-- ── Edit mode: dates + notes ─────────────────────────── -->
+          <form
+            method="POST"
+            action="?/updateLicence"
+            use:enhance={() => {
+              saving = true
+              return async ({ update, result }) => {
+                await update({ reset: false })
+                saving = false
+                if (result.type === 'success') expandedLicId = null
+              }
+            }}
+          >
+            <input type="hidden" name="id" value={l.id} />
+            <FieldGrid cols={2}>
+              <Field name="started_at" label="Start" type="date" value={l.started_at?.slice(0, 10) ?? ''} />
+              <Field name="ended_at" label="End (optional)" type="date" value={l.ended_at?.slice(0, 10) ?? ''} />
+            </FieldGrid>
+            <FieldGrid cols={1}>
+              <Field name="notes" label="Notes" value={l.notes ?? ''} />
+            </FieldGrid>
+            <div class="lic-edit-actions">
+              <Button type="button" size="sm" variant="ghost" onclick={() => (expandedLicId = null)}>Cancel</Button>
+              {#if can('subscriptions', 'create')}
+                <Button type="button" size="sm" variant="secondary" onclick={() => { licChangeMode = true; licChangeNewItemId = ''; licChangeEffectiveAt = tomorrowISO() }}>
+                  Change membership…
+                </Button>
+              {/if}
+              {#if can('subscriptions', 'delete')}
+                <SubmitButton
+                  action="?/removeLicence"
+                  label="End licence"
+                  pendingLabel="Ending…"
+                  variant="danger"
+                  size="sm"
+                  fields={{ id: l.id }}
+                  confirm={{
+                    title: 'End licence?',
+                    message: `Remove this licence for ${l.item_name ?? 'this item'}? It will disappear from the list.`,
+                    variant: 'danger'
+                  }}
+                />
+              {/if}
+              <Button type="submit" size="sm" loading={saving}>{saving ? 'Saving…' : 'Save'}</Button>
+            </div>
+          </form>
+        {:else}
+          <!-- ── Change mode: pick new item + effective date ──────── -->
+          <form
+            method="POST"
+            action="?/upgradeLicence"
+            use:enhance={() => {
+              saving = true
+              return async ({ update, result }) => {
+                await update({ reset: false })
+                saving = false
+                if (result.type === 'success') expandedLicId = null
+              }
+            }}
+          >
+            <input type="hidden" name="old_licence_id" value={l.id} />
+            <FieldGrid cols={2}>
+              <Field label="New membership *">
+                <Select
+                  name="new_item_id"
+                  value={licChangeNewItemId}
+                  onchange={(v) => (licChangeNewItemId = v)}
+                  placeholder="Pick a new membership"
+                  options={(licenceableItems as any[])
+                    .filter(i => i.location_id === l.location_id && i.id !== l.item_id)
+                    .map(i => ({ value: i.id, label: i.name }))}
+                />
+              </Field>
+              <Field
+                name="effective_at"
+                label="Effective from *"
+                type="date"
+                value={licChangeEffectiveAt}
+                oninput={(v) => (licChangeEffectiveAt = v)}
               />
-            {/if}
-            <Button type="submit" size="sm" loading={saving}>{saving ? 'Saving…' : 'Save'}</Button>
-          </div>
-        </form>
+            </FieldGrid>
+            <p class="muted small change-hint">
+              The current licence will end the day before this date. A new licence + paired subscription
+              opens at the new item's catalog rate from the effective date.
+            </p>
+            <div class="lic-edit-actions">
+              <Button type="button" size="sm" variant="ghost" onclick={() => (licChangeMode = false)}>
+                Back to edit
+              </Button>
+              <Button type="submit" size="sm" loading={saving} disabled={!licChangeNewItemId || !licChangeEffectiveAt}>
+                {saving ? 'Applying…' : 'Apply change'}
+              </Button>
+            </div>
+          </form>
+        {/if}
+
         <div class="lic-edit-history">
           <RecordHistory table="licenses" id={l.id} label="licence history" />
         </div>
@@ -1807,6 +1915,12 @@
     margin-top: var(--space-3);
     padding-top: var(--space-3);
     border-top: 1px solid var(--surface-sunk, #e8e3d8);
+  }
+  .change-hint {
+    margin-top: var(--space-2);
+    padding: var(--space-2);
+    background: var(--surface-sunk, #f0eee6);
+    border-radius: 6px;
   }
   .member-picker {
     display: flex;

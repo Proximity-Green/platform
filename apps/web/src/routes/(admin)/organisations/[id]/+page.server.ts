@@ -4,7 +4,7 @@ import { logFail } from '$lib/services/action-log.service'
 import * as walletsService from '$lib/services/wallets.service'
 import * as subsService from '$lib/services/subscription-lines.service'
 import * as invoicesService from '$lib/services/invoices.service'
-import { createLicence } from '$lib/services/licence-creation.service'
+import { createLicence, applyLicenceChange } from '$lib/services/licence-creation.service'
 
 const blank = (data: FormData, k: string): string | null => {
   const v = data.get(k)
@@ -693,6 +693,38 @@ export const actions = {
     const { error: delErr } = await sbForUser(userId).from('licenses').delete().eq('id', id)
     if (delErr) return await logFail(userId, 'organisations.removeLicence', delErr, { id })
     return { success: true, message: 'Licence removed' }
+  },
+
+  upgradeLicence: async ({ request, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
+    if (userId) await requirePermission(userId, 'subscriptions', 'create')
+
+    const data = await request.formData()
+    const result = await applyLicenceChange({
+      old_licence_id: (data.get('old_licence_id') as string) ?? '',
+      new_item_id: (data.get('new_item_id') as string) ?? '',
+      effective_at: (data.get('effective_at') as string) ?? ''
+    }, userId)
+
+    if (!result.ok) {
+      await logFail(userId, 'organisations.upgradeLicence', new Error(result.error.detail ?? result.error.title), {
+        code: result.error.code
+      })
+      return fail(400, { error: result.error.title, actionable: result.error })
+    }
+
+    return {
+      success: true,
+      message: 'Licence changed — old ended, new active.',
+      result: {
+        old_licence_id: result.old_licence_id,
+        new_licence_id: result.new_licence_id,
+        new_subscription_line_id: result.new_subscription_line_id,
+        effective_at: result.effective_at,
+        base_rate: result.base_rate,
+        currency: result.currency
+      }
+    }
   },
 
   updateLicence: async ({ request, cookies, locals }) => {
