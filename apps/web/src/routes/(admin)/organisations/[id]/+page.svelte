@@ -1131,6 +1131,30 @@
         <div class="lic-edit-history">
           <RecordHistory table="licenses" id={l.id} label="licence history" />
         </div>
+
+        <details class="lic-edit-debug">
+          <summary>Debug · IDs</summary>
+          <div class="debug-grid">
+            <div class="debug-row"><span>Licence</span><Copyable value={l.id ?? ''} mono><code>{l.id}</code></Copyable></div>
+            <div class="debug-row"><span>Subscription line</span>
+              {#if l.paired_subscription_line_id}
+                <Copyable value={l.paired_subscription_line_id} mono><code>{l.paired_subscription_line_id}</code></Copyable>
+              {:else}
+                <code class="muted">— (no paired sub)</code>
+              {/if}
+            </div>
+            <div class="debug-row"><span>Member</span>
+              {#if l.user_id}
+                <Copyable value={l.user_id} mono><code>{l.user_id}</code></Copyable>
+              {:else}
+                <code class="muted">—</code>
+              {/if}
+            </div>
+            <div class="debug-row"><span>Item</span><Copyable value={l.item_id ?? ''} mono><code>{l.item_id}</code></Copyable></div>
+            <div class="debug-row"><span>Location</span><Copyable value={l.location_id ?? ''} mono><code>{l.location_id}</code></Copyable></div>
+            <div class="debug-row"><span>Organisation</span><Copyable value={l.organisation_id ?? ''} mono><code>{l.organisation_id}</code></Copyable></div>
+          </div>
+        </details>
       {/snippet}
     </DataTable>
 
@@ -2103,6 +2127,39 @@
     margin-top: var(--space-3);
     padding-top: var(--space-3);
     border-top: 1px solid var(--surface-sunk, #e8e3d8);
+  }
+  .lic-edit-debug {
+    margin-top: var(--space-3);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--surface-sunk, #e8e3d8);
+    font-size: 0.8rem;
+  }
+  .lic-edit-debug summary {
+    cursor: pointer;
+    color: var(--text-muted, #5a7060);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .debug-grid {
+    margin-top: var(--space-2);
+    display: grid;
+    gap: 4px;
+  }
+  .debug-row {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .debug-row > span {
+    color: var(--text-muted, #5a7060);
+    font-size: 0.78rem;
+  }
+  .debug-row code {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 0.75rem;
+    color: var(--fg, #0a1f0f);
   }
   .change-hint {
     margin-top: var(--space-2);

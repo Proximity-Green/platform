@@ -171,10 +171,10 @@ export const load = async ({ params, cookies, locals }) => {
   // cascade to existing licences/subs. Filter out terminal-status subs so a
   // superseded sub's rate doesn't shadow the active one.
   const TERMINAL_SUB_STATUSES = new Set(['superseded', 'cancelled', 'expired', 'ended'])
-  const pairedSubByLicenceId = new Map<string, { base_rate: number; currency: string }>()
+  const pairedSubByLicenceId = new Map<string, { id: string; base_rate: number; currency: string }>()
   for (const s of (subsRes.data ?? []) as any[]) {
     if (s.license_id && !TERMINAL_SUB_STATUSES.has(s.status)) {
-      pairedSubByLicenceId.set(s.license_id, { base_rate: s.base_rate, currency: s.currency })
+      pairedSubByLicenceId.set(s.license_id, { id: s.id, base_rate: s.base_rate, currency: s.currency })
     }
   }
 
@@ -189,6 +189,7 @@ export const load = async ({ params, cookies, locals }) => {
       ...row,
       item_name: row.items?.name ?? null,
       base_rate: paired?.base_rate ?? null,
+      paired_subscription_line_id: paired?.id ?? null,
       location_name: row.locations?.short_name ?? row.locations?.name ?? null,
       location_full_name: row.locations?.name ?? null,
       currency: paired?.currency ?? row.locations?.currency ?? null,
