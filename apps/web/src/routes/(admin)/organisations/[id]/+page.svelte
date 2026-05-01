@@ -896,6 +896,20 @@
           {#if can('subscriptions', 'create')}
             <button type="button" onclick={() => startLicenceChange(l.id, l.location_id)}>Change membership…</button>
           {/if}
+          {#if can('subscriptions', 'update')}
+            <SubmitButton
+              action="?/touchLicence"
+              label="Touch (refresh rate)"
+              pendingLabel="Refreshing…"
+              size="sm"
+              variant="ghost"
+              fields={{ id: l.id }}
+              confirm={{
+                title: 'Refresh rate from catalog?',
+                message: `Pull this licence's paired subscription rate to the current catalog price for ${l.item_name ?? 'this item'}. The change is immediate and breaks the snapshot-pricing rule for this row.`
+              }}
+            />
+          {/if}
           {#if can('subscriptions', 'delete')}
             <SubmitButton
               action="?/removeLicence"
@@ -948,6 +962,20 @@
                 <Button type="button" size="sm" variant="secondary" onclick={() => startLicenceChange(l.id, l.location_id)}>
                   Change membership…
                 </Button>
+              {/if}
+              {#if can('subscriptions', 'update')}
+                <SubmitButton
+                  action="?/touchLicence"
+                  label="Touch (refresh rate)"
+                  pendingLabel="Refreshing…"
+                  size="sm"
+                  variant="ghost"
+                  fields={{ id: l.id }}
+                  confirm={{
+                    title: 'Refresh rate from catalog?',
+                    message: `Pull this licence's paired subscription rate to the current catalog price for ${l.item_name ?? 'this item'}. Immediate and breaks the snapshot-pricing rule for this row.`
+                  }}
+                />
               {/if}
               {#if can('subscriptions', 'delete')}
                 <SubmitButton

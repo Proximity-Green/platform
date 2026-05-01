@@ -9,7 +9,8 @@ import {
   applyLicenceChange,
   proposeLicenceChange,
   approveLicenceProposal,
-  rejectLicenceProposal
+  rejectLicenceProposal,
+  touchLicence
 } from '$lib/services/licence-creation.service'
 import { tasks } from '@trigger.dev/sdk/v3'
 import type { notifyLicenceChange } from '$lib/../trigger/notify-licence-change'
@@ -747,6 +748,28 @@ export const actions = {
     const { error: delErr } = await sbForUser(userId).from('licenses').delete().eq('id', id)
     if (delErr) return await logFail(userId, 'organisations.removeLicence', delErr, { id })
     return { success: true, message: 'Licence removed' }
+  },
+
+  touchLicence: async ({ request, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
+    if (userId) await requirePermission(userId, 'subscriptions', 'update')
+
+    const data = await request.formData()
+    const id = (data.get('id') as string) ?? ''
+    const result = await touchLicence(id, userId)
+
+    if (!result.ok) {
+      await logFail(userId, 'organisations.touchLicence', new Error(result.error.detail ?? result.error.title), {
+        code: result.error.code,
+        licence_id: id
+      })
+      return fail(400, { error: result.error.title, actionable: result.error })
+    }
+
+    return {
+      success: true,
+      message: `Rate refreshed: ${result.currency} ${result.old_rate.toLocaleString('en-ZA')} → ${result.currency} ${result.new_rate.toLocaleString('en-ZA')}.`
+    }
   },
 
   proposeLicenceChange: async ({ request, cookies, locals }) => {

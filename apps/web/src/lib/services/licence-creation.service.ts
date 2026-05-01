@@ -429,6 +429,80 @@ export async function approveLicenceProposal(
   }
 }
 
+// ─── Touch (refresh sub rate from current item.base_rate) ────────────
+
+export type TouchLicenceResult =
+  | { ok: true; licence_id: string; old_rate: number; new_rate: number; currency: string }
+  | { ok: false; error: ActionableError }
+
+/**
+ * Refresh a licence's paired subscription rate to the current
+ * items.base_rate (per-line lift-to-current). This is the deliberate
+ * operator action that breaks the snapshot-pricing rule for one row —
+ * "the catalog price moved; pull this licence onto the new rate".
+ *
+ * One-off bump. Doesn't touch dates, doesn't end the licence, doesn't
+ * create a new sub. Just rewrites subscription_lines.base_rate +
+ * currency on the active paired sub. Future: feed
+ * subscription_line_rate_history when V2 lands.
+ */
+export async function touchLicence(
+  licenceId: string,
+  actorId: string | null
+): Promise<TouchLicenceResult> {
+  if (!licenceId) {
+    return { ok: false, error: { code: 'touch_missing_id', title: 'Missing licence id', detail: '' } }
+  }
+
+  const sb = sbForUser(actorId)
+
+  // Pull the licence with its item + location for the new rate/currency.
+  const { data: lic, error: licErr } = await sb
+    .from('licenses')
+    .select(`
+      id,
+      items(base_rate),
+      locations(currency)
+    `)
+    .eq('id', licenceId)
+    .is('deleted_at', null)
+    .maybeSingle()
+  if (licErr || !lic) {
+    return { ok: false, error: { code: 'licence_not_found', title: 'Licence not found', detail: 'It may have been deleted.' } }
+  }
+
+  const newRate = Number((lic as any).items?.base_rate ?? 0)
+  const newCurrency = (lic as any).locations?.currency ?? 'ZAR'
+
+  // Find the active paired sub.
+  const { data: sub, error: subErr } = await sb
+    .from('subscription_lines')
+    .select('id, base_rate, currency, status')
+    .eq('license_id', licenceId)
+    .not('status', 'in', '(superseded,cancelled,expired,ended)')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (subErr || !sub) {
+    return { ok: false, error: { code: 'paired_sub_not_found', title: 'No active subscription', detail: 'The paired subscription line is missing or terminal — touch only makes sense on an active row.' } }
+  }
+
+  const oldRate = Number(sub.base_rate ?? 0)
+  if (oldRate === newRate && sub.currency === newCurrency) {
+    return { ok: false, error: { code: 'touch_no_change', title: 'Already at catalog rate', detail: `The paired subscription is already at ${newCurrency} ${newRate.toLocaleString('en-ZA')}. No change needed.` } }
+  }
+
+  const { error: updErr } = await sb
+    .from('subscription_lines')
+    .update({ base_rate: newRate, currency: newCurrency, updated_at: new Date().toISOString() })
+    .eq('id', sub.id)
+  if (updErr) {
+    return { ok: false, error: { code: 'touch_update_failed', title: 'Could not update rate', detail: updErr.message } }
+  }
+
+  return { ok: true, licence_id: licenceId, old_rate: oldRate, new_rate: newRate, currency: newCurrency }
+}
+
 /**
  * Reject a pending proposal — records the decision, makes no changes
  * to the underlying licence/sub.
