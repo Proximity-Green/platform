@@ -649,5 +649,44 @@ export const actions = {
     const { error: delErr } = await sbForUser(userId).from('licenses').delete().eq('id', id)
     if (delErr) return await logFail(userId, 'organisations.removeLicence', delErr, { id })
     return { success: true, message: 'Licence removed' }
+  },
+
+  updateLicence: async ({ request, cookies, locals }) => {
+    const userId = await getUserIdFromRequest(locals, cookies)
+    if (userId) await requirePermission(userId, 'subscriptions', 'update')
+
+    const data = await request.formData()
+    const id = data.get('id') as string
+    if (!id) return fail(400, { error: 'Missing licence id' })
+
+    // Build a partial patch — only set fields the form actually carried.
+    const patch: Record<string, any> = {
+      updated_at: new Date().toISOString()
+    }
+    if (data.has('user_id'))    patch.user_id    = blank(data, 'user_id')
+    if (data.has('started_at')) patch.started_at = blank(data, 'started_at')
+    if (data.has('ended_at'))   patch.ended_at   = blank(data, 'ended_at')
+    if (data.has('notes'))      patch.notes      = blank(data, 'notes')
+
+    const sb = sbForUser(userId)
+    const { error: licErr } = await sb.from('licenses').update(patch).eq('id', id)
+    if (licErr) return await logFail(userId, 'organisations.updateLicence', licErr, { id })
+
+    // Keep the paired sub aligned per the 1:1 invariant — same dates +
+    // user. Rate is left alone (would be the snapshot pricing concern of
+    // a separate edit). Status untouched.
+    const subPatch: Record<string, any> = { updated_at: new Date().toISOString() }
+    if (data.has('user_id'))    subPatch.user_id    = blank(data, 'user_id')
+    if (data.has('started_at')) subPatch.started_at = blank(data, 'started_at')
+    if (data.has('ended_at'))   subPatch.ended_at   = blank(data, 'ended_at')
+    if (data.has('notes'))      subPatch.notes      = blank(data, 'notes')
+    const { error: subErr } = await sb
+      .from('subscription_lines')
+      .update(subPatch)
+      .eq('license_id', id)
+      .not('status', 'in', '(superseded,cancelled,expired,ended)')
+    if (subErr) return await logFail(userId, 'organisations.updateLicence.pairedSub', subErr, { id })
+
+    return { success: true, message: 'Licence updated' }
   }
 }

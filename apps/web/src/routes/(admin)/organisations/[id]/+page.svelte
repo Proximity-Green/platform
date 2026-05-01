@@ -40,6 +40,10 @@
   // submitted row stays internally consistent regardless of how the user
   // narrowed the search. Restricted to items whose item_type has
   // requires_license = true (memberships in current usage).
+  // Inline expand-to-edit on the licences table. Clicking a row toggles
+  // this id; the DataTable's `expanded` snippet renders the edit form
+  // beneath the row. Resets to null on save success or Cancel.
+  let expandedLicId = $state<string | null>(null)
   let showAddLicence = $state(false)
   let licTypeId = $state<string>('')
   let licLocationId = $state<string>('')
@@ -713,7 +717,8 @@
       searchPlaceholder="Search item, member, location…"
       csvFilename={`org-${org.slug ?? org.id}-licences`}
       empty="No licences yet — click + Add Licence above."
-      onRowClick={(l) => goto(`/licenses?id=${l.id}`)}
+      onRowClick={(l) => (expandedLicId = expandedLicId === l.id ? null : l.id)}
+      isExpandedRow={(l) => l.id === expandedLicId}
     >
       {#snippet row(l: any)}
         <td>{l.location_name ?? '—'}</td>
@@ -726,25 +731,57 @@
         <td class="date">{fmtDate(l.started_at)}</td>
         <td class="date hide-sm">{fmtDate(l.ended_at)}</td>
       {/snippet}
-      {#snippet actions(l: any)}
-        {#if can('subscriptions', 'delete')}
-          <RowMenu ariaLabel="Licence actions">
-            <a href={`/licenses?id=${l.id}`}>Open</a>
-            <SubmitButton
-              action="?/removeLicence"
-              label="End licence"
-              pendingLabel="Ending…"
-              variant="danger"
-              size="sm"
-              fields={{ id: l.id }}
-              confirm={{
-                title: 'End licence?',
-                message: `Remove this licence for ${l.item_name ?? 'this item'}? It will disappear from the list.`,
-                variant: 'danger'
-              }}
-            />
-          </RowMenu>
-        {/if}
+      {#snippet expanded(l: any)}
+        <form
+          method="POST"
+          action="?/updateLicence"
+          use:enhance={() => {
+            saving = true
+            return async ({ update, result }) => {
+              await update({ reset: false })
+              saving = false
+              if (result.type === 'success') expandedLicId = null
+            }
+          }}
+        >
+          <input type="hidden" name="id" value={l.id} />
+          <FieldGrid cols={3}>
+            <Field label="Member">
+              <Select
+                name="user_id"
+                value={l.user_id ?? ''}
+                options={(data.members as any[]).map(m => ({
+                  value: m.id,
+                  label: `${m.first_name ?? ''} ${m.last_name ?? ''}`.trim() || m.email || m.id
+                }))}
+              />
+            </Field>
+            <Field name="started_at" label="Start" type="date" value={l.started_at?.slice(0, 10) ?? ''} />
+            <Field name="ended_at" label="End (optional)" type="date" value={l.ended_at?.slice(0, 10) ?? ''} />
+          </FieldGrid>
+          <FieldGrid cols={1}>
+            <Field name="notes" label="Notes" value={l.notes ?? ''} />
+          </FieldGrid>
+          <div class="lic-edit-actions">
+            <Button type="button" size="sm" variant="ghost" onclick={() => (expandedLicId = null)}>Cancel</Button>
+            {#if can('subscriptions', 'delete')}
+              <SubmitButton
+                action="?/removeLicence"
+                label="End licence"
+                pendingLabel="Ending…"
+                variant="danger"
+                size="sm"
+                fields={{ id: l.id }}
+                confirm={{
+                  title: 'End licence?',
+                  message: `Remove this licence for ${l.item_name ?? 'this item'}? It will disappear from the list.`,
+                  variant: 'danger'
+                }}
+              />
+            {/if}
+            <Button type="submit" size="sm" loading={saving}>{saving ? 'Saving…' : 'Save'}</Button>
+          </div>
+        </form>
       {/snippet}
     </DataTable>
 
@@ -1700,6 +1737,13 @@
     gap: var(--space-2);
     justify-content: flex-end;
     margin-top: var(--space-3);
+  }
+  .lic-edit-actions {
+    display: flex;
+    gap: var(--space-2);
+    justify-content: flex-end;
+    margin-top: var(--space-3);
+    align-items: center;
   }
   .without-lic-head {
     display: flex;
