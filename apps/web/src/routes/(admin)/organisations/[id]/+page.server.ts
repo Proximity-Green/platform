@@ -289,6 +289,7 @@ export const load = async ({ params, cookies, locals }) => {
   const proposals = (proposalsRes.data ?? []).map((p: any) => ({
     id: p.id,
     source_licence_id: p.source_licence_id,
+    source_item_id: p.source_licence?.item_id ?? null,
     new_item_id: p.new_item_id,
     effective_at: p.effective_at,
     status: p.status,

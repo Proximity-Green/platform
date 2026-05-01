@@ -817,7 +817,17 @@
               <div class="proposal-meta">
                 <strong>{p.source_member_name ?? '—'}</strong>
                 <span class="muted small">
-                  {p.source_item_name ?? '—'} → <strong>{p.new_item_name ?? '—'}</strong>
+                  {#if p.source_item_id && p.source_item_name}
+                    <a href={`/items/${p.source_item_id}`}>{p.source_item_name}</a>
+                  {:else}
+                    {p.source_item_name ?? '—'}
+                  {/if}
+                  →
+                  {#if p.new_item_id && p.new_item_name}
+                    <strong><a href={`/items/${p.new_item_id}`}>{p.new_item_name}</a></strong>
+                  {:else}
+                    <strong>{p.new_item_name ?? '—'}</strong>
+                  {/if}
                   · effective {fmtDate(p.effective_at)}
                   · proposed {fmtDate(p.created_at)}
                 </span>
@@ -930,7 +940,13 @@
       {#snippet expanded(l: any)}
         <div class="lic-edit-meta">
           <span class="muted small">
-            <strong>{l.user_name ?? '—'}</strong> · {l.item_name ?? '—'} · {l.location_name ?? '—'}
+            <strong>{l.user_name ?? '—'}</strong> ·
+            {#if l.item_id && l.item_name}
+              <a href={`/items/${l.item_id}`}>{l.item_name}</a>
+            {:else}
+              {l.item_name ?? '—'}
+            {/if}
+            · {l.location_name ?? '—'}
           </span>
         </div>
 
