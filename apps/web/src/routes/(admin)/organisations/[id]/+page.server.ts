@@ -425,11 +425,10 @@ export const actions = {
     if (!item_id) return fail(400, { error: 'Item is required' })
     if (!location_id) return fail(400, { error: 'Location is required' })
 
-    const { data: loc } = await supabase.from('locations').select('currency').eq('id', location_id).is('deleted_at', null).single()
-
-    // If the item's item_type requires a licence, we must create the licence first and
-    // reference it from the sub via license_id (the DB trigger blocks item_id-backed
-    // subs for licence-requiring types).
+    // Branch on item type: licence-requiring items go through the V1
+    // licence-creation service so the rules + atomic licence+sub insert
+    // are enforced. Item-backed (no licence) products keep the existing
+    // path — they don't carry licence semantics.
     const { data: it } = await supabase
       .from('items')
       .select('id, base_rate, item_types(requires_license)')
@@ -438,33 +437,41 @@ export const actions = {
       .is('item_types.deleted_at', null)
       .single()
     const requiresLicense = (it as any)?.item_types?.requires_license === true
+
+    if (requiresLicense) {
+      // Route through createLicence — handles overlap check, member-in-org
+      // check, item validation, atomic licence+sub insert with snapshotted
+      // rate from item.base_rate. Form's custom base_rate / quantity are
+      // intentionally ignored per Rule 8 (no overrides at creation time);
+      // operators edit the paired sub afterwards if needed.
+      const result = await createLicence({
+        organisation_id: params.id,
+        item_id,
+        location_id,
+        user_id: (data.get('user_id') as string) ?? '',
+        started_at: blank(data, 'started_at') ?? new Date().toISOString().slice(0, 10),
+        ended_at: blank(data, 'ended_at'),
+        notes: blank(data, 'notes')
+      }, userId)
+      if (!result.ok) {
+        await logFail(userId, 'organisations.createSub', new Error(result.error.detail ?? result.error.title), {
+          org_id: params.id,
+          code: result.error.code
+        })
+        return fail(400, { error: result.error.title, actionable: result.error })
+      }
+      return { success: true, message: 'Licence + subscription added' }
+    }
+
+    // Item-backed (non-licence) sub: existing path stays as-is.
+    const { data: loc } = await supabase.from('locations').select('currency').eq('id', location_id).is('deleted_at', null).single()
     const itemRate = Number((it as any)?.base_rate ?? 0)
     const formRate = num(data, 'base_rate')
     const subBaseRate = formRate != null && formRate > 0 ? formRate : itemRate
 
-    let subItemId: string | null = item_id
-    let subLicenseId: string | null = null
-    if (requiresLicense) {
-      const startedAt = blank(data, 'started_at') ?? new Date().toISOString().slice(0, 10)
-      const { data: licence, error: licErr } = await sbForUser(userId)
-        .from('licenses')
-        .insert({
-          item_id,
-          organisation_id: params.id,
-          location_id,
-          user_id: blank(data, 'user_id'),
-          started_at: startedAt
-        })
-        .select('id')
-        .single()
-      if (licErr || !licence) return fail(400, { error: licErr?.message ?? 'Could not auto-create licence' })
-      subItemId = null
-      subLicenseId = licence.id
-    }
-
     const result = await subsService.create({
-      item_id: subItemId,
-      license_id: subLicenseId,
+      item_id,
+      license_id: null,
       organisation_id: params.id,
       location_id,
       user_id: blank(data, 'user_id'),

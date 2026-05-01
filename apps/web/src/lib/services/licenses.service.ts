@@ -1,4 +1,5 @@
 import { supabase, sbForUser } from '$lib/services/permissions.service'
+import { createLicence } from '$lib/services/licence-creation.service'
 
 export type License = {
   id: string
@@ -61,9 +62,32 @@ export async function listAll(): Promise<LicenseEnriched[]> {
   })) as LicenseEnriched[]
 }
 
+/**
+ * Create a licence. Routes through the V1 licence-creation service so
+ * rules 1–7 (member required + in-org, item must require licence + be
+ * active, location consistency, date sanity, no overlap) are enforced
+ * regardless of which call site invokes us. The atomic licence+sub
+ * insert is delegated to add_licence_with_sub via the service.
+ *
+ * Returns the simpler ServiceResult shape for backwards compatibility
+ * with existing call sites; the ActionableError detail is flattened to
+ * its title. Call createLicence directly if you want the structured
+ * error.
+ */
 export async function create(input: LicenseInput, actorId: string | null = null): Promise<ServiceResult> {
-  const { error } = await sbForUser(actorId).from('licenses').insert(input)
-  if (error) return { ok: false, error: error.message }
+  if (!input.user_id) {
+    return { ok: false, error: 'Member required: a licence must be assigned to a member.' }
+  }
+  const result = await createLicence({
+    organisation_id: input.organisation_id,
+    item_id: input.item_id,
+    location_id: input.location_id,
+    user_id: input.user_id,
+    started_at: input.started_at,
+    ended_at: input.ended_at ?? null,
+    notes: input.notes ?? null
+  }, actorId)
+  if (!result.ok) return { ok: false, error: result.error.title + (result.error.detail ? ` — ${result.error.detail}` : '') }
   return { ok: true }
 }
 

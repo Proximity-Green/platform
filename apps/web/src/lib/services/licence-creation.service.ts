@@ -135,7 +135,7 @@ export async function createLicence(
   if (overlap) {
     return fail(
       'Overlapping licence',
-      `${person.first_name ?? 'This member'} already has a licence for this item between ${fmt(overlap.started_at)} and ${overlap.ended_at ? fmt(overlap.ended_at) : 'now (open-ended)'}. End the existing one first, or pick a future start date once it ends.`,
+      `${person.first_name ?? 'This member'} already has a licence for this item ${overlap.ended_at ? `between ${fmt(overlap.started_at)} and ${fmt(overlap.ended_at)}` : `from ${fmt(overlap.started_at)} with no end date set`}. End the existing one first, or pick a future start date once it ends.`,
       'overlap'
     )
   }
