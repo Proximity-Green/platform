@@ -10,6 +10,58 @@ Covers how the platform answers questions like:
 - *Which locations are over-/under-utilised?*
 - *Did the new hot-desk membership tier shift people into the morning?*
 
+## Two lenses, one model
+
+"Occupancy" answers two distinct questions, and the platform must
+report both:
+
+1. **Inventory occupancy (the financial / sales lens).** What fraction
+   of bookable stock has revenue against it? Offices: each office is
+   one unit of stock; sold = has an active licence-backed sub.
+   Memberships: floor-pressure load against a per-location capacity
+   target, weighted by visit pattern (rooted = full pressure;
+   occasional = fractional). Reporting this was a nightmare in WSM —
+   memberships especially. **V0 lives at `/occupancy`.**
+2. **Presence occupancy (the operational / experience lens).** Who is
+   physically here right now? RADIUS auth + door access + manual
+   check-ins fused into one presence stream. *This* is what the rest
+   of this doc is about.
+
+The two share inputs (locations, item types, members) but answer
+different questions. A space at 100% inventory occupancy can be empty
+on a Tuesday afternoon (presence low); a space at 60% inventory
+occupancy can be over-stuffed on Wednesday morning (presence high).
+Operators need both to manage product mix vs schedule pressure.
+
+### Inventory occupancy — V0 schema gaps
+
+The V0 report at `/occupancy` exposes the data-layer holes that proper
+inventory reporting needs. Filling these is a precondition for V1:
+
+- `locations.membership_capacity_target int` — per-location target
+  headcount for floor-pressure (the "stock" memberships are sold
+  against). Currently no field; the report shows `—`.
+- `membership_details.space_pressure_factor numeric(5,2) default 1.0` —
+  weights occasional memberships below rooted. Without it, a 4-day-
+  per-month membership counts the same as a daily one and the
+  weighted demand number is meaningless.
+
+Both numbers are observable today by inspection (operators "know" what
+fits at each location, "know" which memberships are casual). The point
+of the schema is to make them computable + auditable instead of held
+in someone's head.
+
+### Inventory occupancy — AI-prompting requirement
+
+The report must be queryable not just via the table view but via the
+AI assistant ("how many open offices in CPT this month?", "which
+location has the worst membership-to-capacity ratio?"). That means
+the data layer needs:
+- A typed service (`occupancy.service.ts`) that returns the same
+  shape the page uses, so the AI surface and the UI share one source.
+- Rolled-up snapshots cached short-term so AI questions don't re-run
+  the full aggregation per prompt.
+
 ## How to use this doc
 
 Same convention as the other parcel docs:

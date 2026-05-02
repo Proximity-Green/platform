@@ -83,6 +83,7 @@
     { href: '/invoices',      label: 'Invoices',      guard: 'invoices' },
     { href: '/contracts',     label: 'Contracts',     guard: 'contracts' },
     { href: '/wallets',       label: 'Wallets',       guard: 'wallets' },
+    { href: '/occupancy',     label: 'Occupancy',     guard: 'subscriptions' },
     { href: '/item-types',    label: 'Item Types',    guard: 'items' },
     { href: '/users',         label: 'Users',         guard: 'users' },
     { href: '/roles',         label: 'Roles',         guard: 'roles' },
