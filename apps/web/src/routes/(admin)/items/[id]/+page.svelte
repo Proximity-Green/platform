@@ -757,7 +757,17 @@
   </form>
 </div>
 
-<RecordHistory table="items" id={item?.id} />
+<!-- Composite history: an "item" the operator edits is its row in items
+     plus a per-family detail row (e.g. meeting_room_details, keyed by
+     item_id). Pair both so detail-pane edits show up in this timeline. -->
+<RecordHistory
+  pairs={data.detailsTable && item?.id
+    ? [{ table: 'items', id: item.id }, { table: data.detailsTable, id: item.id }]
+    : item?.id
+      ? [{ table: 'items', id: item.id }]
+      : []}
+  label="item history"
+/>
 
 <style>
   .tabs {

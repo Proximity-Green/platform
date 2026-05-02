@@ -239,6 +239,11 @@ export const load = async ({ params, cookies, locals }) => {
   return {
     item,
     slug,
+    // Detail table for the item's family (e.g. meeting_room_details).
+    // Surfaced so the client can pair its history with the item's own
+    // history — *_details rows use item_id as their PK, so record_id
+    // in change_log lines up with the item's id.
+    detailsTable,
     // Streamed — awaited on the client inside {#await}
     itemTypes: lookups.listItemTypes(),
     locations: lookups.listLocationsLite(),
