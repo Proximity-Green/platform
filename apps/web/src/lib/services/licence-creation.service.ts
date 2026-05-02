@@ -193,6 +193,13 @@ export type ApplyLicenceChangeInput = {
   old_licence_id: string
   new_item_id: string
   effective_at: string                    // ISO date or timestamptz
+  /**
+   * Optional member swap. When set + different from the old licence's
+   * user_id, the new licence/sub use this member instead. Same RPC,
+   * same atomic mechanics — member is just another piece of identity
+   * that, when changed, produces a fresh licence row.
+   */
+  new_user_id?: string | null
 }
 
 export type ApplyLicenceChangeResult =
@@ -203,7 +210,10 @@ export type ApplyLicenceChangeResult =
       new_subscription_line_id: string
       effective_at: string
       base_rate: number
-      currency: string }
+      currency: string
+      member_changed: boolean
+      old_user_id: string
+      new_user_id: string }
   | { ok: false; error: ActionableError }
 
 const CHANGE_FAIL = 'licence_change_failed'
@@ -229,20 +239,27 @@ export async function applyLicenceChange(
     p_old_licence_id: input.old_licence_id,
     p_new_item_id: input.new_item_id,
     p_effective_at: input.effective_at,
-    p_performed_by: actorId
+    p_performed_by: actorId,
+    p_new_user_id: input.new_user_id ?? null
   })
 
   if (error) {
     // Translate the RPC's raise messages into friendly ActionableErrors.
     const msg = error.message ?? ''
-    if (msg.includes('different from')) {
-      return changeFail('Same item', 'The new item is the same as the current one — pick a different one to change to.', 'change_same_item')
+    if (msg.includes('no change requested')) {
+      return changeFail('Nothing changed', 'Pick a different item or a different member — the request matches the current licence.', 'change_no_op')
     }
     if (msg.includes('after the old licence start')) {
       return changeFail('Bad effective date', 'The effective date must be after the current licence started.', 'change_bad_date')
     }
     if (msg.includes('not licence-requiring')) {
       return changeFail('Not a membership', 'The selected item does not require a licence — pick a membership-style item.', 'change_wrong_item_type')
+    }
+    if (msg.includes('new member missing')) {
+      return changeFail('Member not found', 'The selected member does not exist or has been deleted.', 'change_member_not_found')
+    }
+    if (msg.includes('different organisation')) {
+      return changeFail('Member is in a different organisation', 'Pick a member who already belongs to this organisation, or move them first.', 'change_member_wrong_org')
     }
     return changeFail('Could not apply change', msg, 'rpc_failed')
   }
@@ -255,7 +272,7 @@ export async function applyLicenceChange(
   if (!r.new_licence_id || !r.new_subscription_line_id) {
     return changeFail(
       'apply_licence_change returned no result',
-      'The function ran without error but returned no new ids. Re-apply the latest migration (057 or 059) and reload PostgREST schema cache.',
+      'The function ran without error but returned no new ids. Re-apply the latest migration (063) and reload PostgREST schema cache.',
       'rpc_empty_result'
     )
   }
@@ -267,7 +284,10 @@ export async function applyLicenceChange(
     new_subscription_line_id: r.new_subscription_line_id,
     effective_at: r.effective_at,
     base_rate: r.base_rate,
-    currency: r.currency
+    currency: r.currency,
+    member_changed: r.member_changed === true,
+    old_user_id: r.old_user_id,
+    new_user_id: r.new_user_id
   }
 }
 

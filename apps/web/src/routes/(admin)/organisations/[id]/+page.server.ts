@@ -847,10 +847,14 @@ export const actions = {
     if (userId) await requirePermission(userId, 'subscriptions', 'create')
 
     const data = await request.formData()
+    // Optional new_user_id widens this from "upgrade" into "any
+    // identity change including member swap" — see migration 063 +
+    // SUBSCRIPTION_LIFECYCLE.md "Edit vs end-and-new".
     const result = await applyLicenceChange({
       old_licence_id: (data.get('old_licence_id') as string) ?? '',
       new_item_id: (data.get('new_item_id') as string) ?? '',
-      effective_at: (data.get('effective_at') as string) ?? ''
+      effective_at: (data.get('effective_at') as string) ?? '',
+      new_user_id: blank(data, 'new_user_id')
     }, userId)
 
     if (!result.ok) {
@@ -868,14 +872,17 @@ export const actions = {
 
     return {
       success: true,
-      message: 'Licence changed — old ended, new active.',
+      message: result.member_changed
+        ? 'Licence reassigned — old member ended, new member active.'
+        : 'Licence changed — old ended, new active.',
       result: {
         old_licence_id: result.old_licence_id,
         new_licence_id: result.new_licence_id,
         new_subscription_line_id: result.new_subscription_line_id,
         effective_at: result.effective_at,
         base_rate: result.base_rate,
-        currency: result.currency
+        currency: result.currency,
+        member_changed: result.member_changed
       }
     }
   },

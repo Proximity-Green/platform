@@ -43,9 +43,10 @@ Recommended for: all new users, before accessing any other part of the platform.
 | 1.4 | What is an item type family, and why does it matter? |
 | 1.5 | What is a licence, and how does it relate to a membership? |
 | 1.6 | Why does a licence have two rows under the hood (licence + paired subscription line)? |
-| 1.7 | What is a wallet and how do wallet transactions work? |
-| 1.8 | What is a tracking code, and why is it scoped to a location? |
-| 1.9 | How does the platform handle recurring billing? |
+| 1.7 | When do we edit a licence vs end the old one and create a new one? |
+| 1.8 | What is a wallet and how do wallet transactions work? |
+| 1.9 | What is a tracking code, and why is it scoped to a location? |
+| 1.10 | How does the platform handle recurring billing? |
 
 **Test:** 10 questions. Pass mark: 80%. Retakes: unlimited.
 

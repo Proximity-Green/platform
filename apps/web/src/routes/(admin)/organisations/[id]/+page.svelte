@@ -83,6 +83,12 @@
   let licChangeTypeId = $state<string>('')        // item-type filter (optional)
   let licChangeLocationId = $state<string>('')    // location filter — defaults to current item's
   let licChangeNewItemId = $state<string>('')
+  // Optional member swap. Leaving this blank keeps the licence's current
+  // member; setting it triggers the same end-old + open-new flow but
+  // with a different user_id on the new licence/sub. Per the lifecycle
+  // doc, member is identity — changing it is a new licence, never an
+  // edit, so it routes through apply_licence_change like an upgrade.
+  let licChangeNewUserId = $state<string>('')
   let licChangeEffectiveAt = $state<string>('')
 
   function tomorrowISO(): string {
@@ -104,6 +110,7 @@
       licChangeTypeId = ''
       licChangeLocationId = ''
       licChangeNewItemId = ''
+      licChangeNewUserId = ''
       licChangeEffectiveAt = ''
     }
   })
@@ -126,6 +133,7 @@
     licChangeTypeId = ''
     licChangeLocationId = currentLocationId ?? ''
     licChangeNewItemId = ''
+    licChangeNewUserId = ''
     licChangeEffectiveAt = tomorrowISO()
   }
   let showAddLicence = $state(false)
@@ -1097,19 +1105,45 @@ org: ${l.organisation_id ?? '—'}`}
                   options={[{ value: '', label: 'All locations' }, ...(data.locations as any[]).map(loc => ({ value: loc.id, label: loc.short_name ?? loc.name }))]}
                 />
               </Field>
-              <Field label="New membership *">
+              <Field label="New membership">
                 <Select
                   name="new_item_id"
                   value={licChangeNewItemId}
                   onchange={(v) => (licChangeNewItemId = v)}
-                  placeholder="Pick a new membership"
-                  options={(licenceableItems as any[])
-                    .filter(i =>
-                      i.id !== l.item_id
-                      && (!licChangeTypeId || i.item_type_id === licChangeTypeId)
-                      && (!licChangeLocationId || i.location_id === licChangeLocationId)
-                    )
-                    .map(i => ({ value: i.id, label: i.name }))}
+                  placeholder="Same membership"
+                  options={[
+                    { value: l.item_id ?? '', label: `Same membership (${l.item_name ?? '—'})` },
+                    ...(licenceableItems as any[])
+                      .filter(i =>
+                        i.id !== l.item_id
+                        && (!licChangeTypeId || i.item_type_id === licChangeTypeId)
+                        && (!licChangeLocationId || i.location_id === licChangeLocationId)
+                      )
+                      .map(i => ({ value: i.id, label: i.name }))
+                  ]}
+                />
+              </Field>
+            </FieldGrid>
+            <FieldGrid cols={1}>
+              <!-- Member swap (optional). Same row produces a new licence
+                   with the new user; leaving this blank keeps the current
+                   member. The RPC requires that *something* changes (item
+                   or member) — both blanks would no-op. -->
+              <Field label="New member (optional — leave blank to keep current)">
+                <Select
+                  name="new_user_id"
+                  value={licChangeNewUserId}
+                  onchange={(v) => (licChangeNewUserId = v)}
+                  placeholder="Same member"
+                  options={[
+                    { value: '', label: `Same member (${l.user_name ?? '—'})` },
+                    ...(((data.members as any[]) ?? [])
+                      .filter(m => m.id !== l.user_id)
+                      .map(m => ({
+                        value: m.id,
+                        label: `${m.first_name ?? ''} ${m.last_name ?? ''}`.trim() || m.email || m.id
+                      })))
+                  ]}
                 />
               </Field>
             </FieldGrid>
@@ -1145,10 +1179,16 @@ org: ${l.organisation_id ?? '—'}`}
             <FieldGrid cols={1}>
               <Field name="notes" label="Notes (visible to approver)" value="" />
             </FieldGrid>
+            {@const itemUnchanged = !licChangeNewItemId || licChangeNewItemId === l.item_id}
+            {@const memberUnchanged = !licChangeNewUserId || licChangeNewUserId === l.user_id}
+            {@const noChange = itemUnchanged && memberUnchanged}
             <p class="muted small change-hint">
-              <strong>Apply now</strong> ends the current licence the day before the effective date and opens a new licence + paired subscription immediately at the new item's catalog rate.
+              <strong>Apply now</strong> ends the current licence the day before the effective date and opens a new one immediately. Use this when the membership, location, or member changes — everything that's part of the licence's identity. (Just adjusting dates? Use the regular Edit form.)
               <br>
-              <strong>Save as proposal</strong> stages the same change for an admin to approve first; nothing changes on the licence until approval.
+              <strong>Save as proposal</strong> stages the change for an admin to approve first.
+              {#if !itemUnchanged === false && !memberUnchanged}
+                — proposals only support item swaps for now; apply member swaps directly.
+              {/if}
             </p>
             <div class="lic-edit-actions">
               <Button type="button" size="sm" variant="ghost" onclick={() => (licChangeMode = false)}>
@@ -1158,14 +1198,15 @@ org: ${l.organisation_id ?? '—'}`}
                 type="submit"
                 formaction="?/proposeLicenceChange"
                 class="btn-secondary"
-                disabled={saving || !licChangeNewItemId || !licChangeEffectiveAt}
+                disabled={saving || itemUnchanged || !licChangeEffectiveAt}
+                title={itemUnchanged ? 'Proposals require an item change. Apply member-only swaps directly.' : ''}
               >
                 {saving ? '…' : 'Save as proposal'}
               </button>
               <button
                 type="submit"
                 class="btn-primary"
-                disabled={saving || !licChangeNewItemId || !licChangeEffectiveAt}
+                disabled={saving || noChange || !licChangeEffectiveAt}
               >
                 {saving ? 'Applying…' : 'Apply now'}
               </button>

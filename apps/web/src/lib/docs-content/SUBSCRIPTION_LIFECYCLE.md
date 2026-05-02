@@ -98,6 +98,58 @@ reading?* Examples:
   no active paired sub. Health check: count active subs per licence
   should be exactly 1.
 
+## Edit vs end-and-new
+
+> **Identity changes → new licence. Period changes → edit in place.**
+
+A licence's identity is `(organisation, member, item, location)`. Any
+of those changing means it is a different licence — close the old row,
+open a new one. Anything that's just *when* the same licence applies
+(extending the end date, setting an end for the first time, adjusting
+notes) stays on the existing row.
+
+This collapses the lifecycle into two operator-facing primitives:
+
+| Action | When | What happens |
+|---|---|---|
+| **Edit** | Period or notes change. Same tenant, same product, same location. | Update `licenses.{started_at, ended_at, notes}` in place; the paired sub mirrors dates + notes. |
+| **Touch** | Catalog rate moved and you want this licence on the new rate. | Update `subscription_lines.base_rate` on the active paired sub. Snapshot break, deliberate. |
+| **Change membership** (calls `apply_licence_change`) | Item, location, OR member changes. | End old licence + sub at `effective_at - 1 day`, open new licence + sub at `effective_at` with new item's catalog rate snapshotted. |
+| **End licence** | Tenant leaving, no replacement. | Set `licenses.ended_at`; sub mirrors. |
+
+There is no separate "reassign member" flow — member swap is just
+identity change, so it routes through `apply_licence_change` like
+upgrades and location moves. One primitive, three triggers (item,
+member, location). Migration 063 widened the RPC to accept
+`p_new_user_id`; the same `?/upgradeLicence` form on the org page
+exposes both fields.
+
+**Why this matters beyond UX:**
+- *Invoicing* — a sub paid R5,000/mo for "Hot Desk". Editing that
+  licence's `item_id` to "Dedicated Desk" mid-period leaves the
+  already-issued invoice line referring to two products over its
+  life. New licence = clean cut between products.
+- *Occupancy reporting* — `/occupancy` joins each (item × month) cell
+  to the licence's `item_id`. If `item_id` could change mid-licence,
+  "Office 1.05 had Acme from Apr–Sep" becomes a lie.
+- *Snapshot pricing* — the rate is frozen on the sub at creation. New
+  product → new sub → fresh snapshot. Editing identity violates the
+  whole reason the rate sits where it does.
+- *Audit trail* — `change_log` reads naturally as "Alice's licence
+  ended, Bob's licence created" rather than "row X had its user_id
+  silently swapped."
+
+**Edge cases:**
+- *Same-item member swap* (Alice → Bob, same office) — supported. The
+  RPC's "no change requested" guard fires only when *both* item and
+  member match the existing licence.
+- *Cross-location swap* — supported (since migration 059). The new
+  licence + sub live at the new item's location; currency comes from
+  the destination.
+- *Proposals (`licence_change_proposals`)* — currently only carry
+  `new_item_id`. Member swaps via proposal are a follow-up; today they
+  must be applied directly.
+
 ## The timeline model
 
 A sub has a timeline:
