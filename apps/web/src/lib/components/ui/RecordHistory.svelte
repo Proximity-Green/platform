@@ -11,7 +11,7 @@
   /**
    * Opt-in audit timeline.
    *
-   * Two modes:
+   * Three modes:
    *   1. Single record: <RecordHistory table="items" id={item.id} />
    *      Hits /api/admin/record-history. Shows changes only to that row.
    *
@@ -22,7 +22,15 @@
    *      invoices, persons, …) into one chronological feed. Each entry
    *      shows a small chip with its source table.
    *
-   * Both modes are collapsed by default, lazy-fetch on open, refresh live
+   *   3. Composite (paired rows): <RecordHistory pairs={[{table, id}, …]} />
+   *      Hits the same /api/admin/record-history endpoint with
+   *      ?pairs=table:id,table:id. For logical records that span multiple
+   *      rows — e.g. a licence's identity row + its paired subscription
+   *      line where the price lives. Each entry shows a source-table
+   *      chip so it's obvious whether a change came from the licence
+   *      side (dates, member) or the subscription side (rate).
+   *
+   * All modes are collapsed by default, lazy-fetch on open, refresh live
    * via Supabase Realtime, and gate the "Open in change log" link on
    * audit_log.manage so only restorers see it.
    */
@@ -42,27 +50,42 @@
   let {
     table,
     aggregateRoot,
+    pairs,
     id,
     label = 'history',
     limit
   }: {
     table?: string
     aggregateRoot?: string
-    id: string | null | undefined
+    /** Composite mode — pulls + merges history for several rows. */
+    pairs?: { table: string; id: string }[]
+    id?: string | null | undefined
     label?: string
     limit?: number
   } = $props()
 
   const isAggregate = $derived(!!aggregateRoot)
+  const isComposite = $derived(Array.isArray(pairs) && pairs.length > 0)
+  // Composite renders the source-table chip (same as aggregate) so
+  // operators can tell which paired row a given change came from.
+  const showSourceChip = $derived(isAggregate || isComposite)
   const effectiveLimit = $derived(limit ?? (isAggregate ? 500 : 200))
   const endpointBase = $derived(
     isAggregate ? '/api/admin/aggregate-history' : '/api/admin/record-history'
   )
+  const pairsParam = $derived(
+    isComposite ? (pairs ?? []).map(p => `${p.table}:${p.id}`).join(',') : ''
+  )
   const queryParams = $derived(
     isAggregate
       ? `root=${encodeURIComponent(aggregateRoot!)}&id=${encodeURIComponent(id ?? '')}`
-      : `table=${encodeURIComponent(table ?? '')}&id=${encodeURIComponent(id ?? '')}`
+      : isComposite
+        ? `pairs=${encodeURIComponent(pairsParam)}`
+        : `table=${encodeURIComponent(table ?? '')}&id=${encodeURIComponent(id ?? '')}`
   )
+  // Composite mode keys off pairsParam so a stale `id` from a prior
+  // mode doesn't short-circuit the load() de-dupe.
+  const idKey = $derived(isComposite ? pairsParam : (id ?? ''))
 
   // Friendly source-table label for aggregate mode chips. Same convention
   // as migration 049 (singular noun). Anything missing falls back to the
@@ -95,7 +118,7 @@
   }
 
   async function load(force = false) {
-    if (!id) return
+    if (!idKey) return
     const key = `${endpointBase}:${queryParams}`
     if (!force && loadedFor === key) return
     loading = true
@@ -118,7 +141,7 @@
   }
 
   async function loadCount() {
-    if (!id) return
+    if (!idKey) return
     try {
       const res = await fetch(`${endpointBase}?${queryParams}&count_only=1`)
       if (!res.ok) return
@@ -158,18 +181,21 @@
 
   $effect(() => {
     teardownChannel()
-    if (!id) return
+    if (!idKey) return
     // Initial badge count without paying for the full body fetch.
     loadCount()
 
-    // In aggregate mode the relevant record_id set is too big for the
-    // realtime filter (supabase only allows a single eq filter), so we
-    // subscribe to ALL change_log inserts and refresh the count via the
-    // server (which knows the fan-out). Cheap because it's a HEAD COUNT.
+    // In aggregate / composite modes the relevant (table, record_id)
+    // tuple set is bigger than postgres_changes' single-eq filter can
+    // express. Subscribe unfiltered to change_log INSERTs and decide
+    // in the handler whether the event matters. Cheap — change_log
+    // is append-only and the handler is a small string compare.
     const channelName = isAggregate
       ? `record-history-agg-${aggregateRoot}-${id}`
-      : `record-history-${table}-${id}`
-    const filterCfg = isAggregate
+      : isComposite
+        ? `record-history-pairs-${pairsParam}`
+        : `record-history-${table}-${id}`
+    const filterCfg = (isAggregate || isComposite)
       ? { event: 'INSERT', schema: 'public', table: 'change_log' }
       : { event: 'INSERT', schema: 'public', table: 'change_log', filter: `record_id=eq.${id}` }
 
@@ -179,6 +205,14 @@
         if (isAggregate) {
           // Don't trust the count locally — re-ask the server.
           loadCount()
+          if (open) scheduleRefetch()
+        } else if (isComposite) {
+          const row = payload.new as any
+          const matches = (pairs ?? []).some(
+            p => p.table === row?.table_name && p.id === row?.record_id
+          )
+          if (!matches) return
+          count = (count ?? 0) + 1
           if (open) scheduleRefetch()
         } else {
           if ((payload.new as any)?.table_name !== table) return
@@ -256,7 +290,7 @@
         <p class="muted">Loading…</p>
       {:else if error}
         <p class="error">{error}</p>
-      {:else if !id}
+      {:else if !idKey}
         <p class="muted">Save the record first to see its history.</p>
       {:else if entries.length === 0}
         <p class="muted">No history recorded yet.</p>
@@ -266,7 +300,7 @@
             <li class="card">
               <header class="head">
                 <Badge tone={actionTone[entry.action] ?? 'default'}>{entry.action}</Badge>
-                {#if isAggregate}
+                {#if showSourceChip}
                   <span class="source-chip" title={entry.table_name}>{SOURCE_LABELS[entry.table_name] ?? entry.table_name}</span>
                 {/if}
                 <span class="when" title={absoluteTime(entry.created_at)}>{relativeTime(entry.created_at)}</span>

@@ -36,6 +36,68 @@ Same convention as the other parcel docs.
 > always produces a licence-backed sub; it never makes the platform
 > licence-centric.
 
+## Why the split (vs WSM)
+
+> **Licences hold zero financial data.** No `base_rate`, no `currency`,
+> no billing `status`. The licence row is identity (member, item,
+> location, dates). The paired `subscription_lines` row is money
+> (rate, currency, quantity, frequency, status). They join 1:1 on
+> `license_id`.
+
+This is the single biggest departure from the WSM legacy model, where
+the licence-equivalent row carried financial fields directly. The split
+looks like ceremony for the simple case (one licence, one rate) but
+earns its keep on every harder case:
+
+1. **Snapshot pricing without trickery.** Sub.base_rate is captured at
+   creation; the catalog can move freely without silently re-billing
+   anyone. Single-row would force you to either denormalise the
+   catalog rate onto the licence (same idea, less obvious) or read
+   the live catalog (the WSM trap).
+2. **Multiple rates over time per licence.** A licence may have one
+   active sub plus N superseded subs — every rate it has ever been on,
+   each with its own start/end. Reconstructable with one `select`.
+   Single-row forces this into change_log diffing.
+3. **Lifecycle separation.** Sub.status is `draft → active →
+   superseded → ...` — billing-period semantics, not
+   licence-identity semantics. Conflating them on one row mixes
+   "is this membership valid?" with "is this billing line being
+   invoiced?" — different questions, different lifecycles.
+4. **One billing engine, two shapes.** Item-backed and licence-backed
+   subs share the table → share the invoicing pipeline. Money on the
+   licence row would split that into parallel pipelines.
+5. **Forward-looking schedules** (V2: price escalations, scheduled
+   rate changes). Naturally future-dated `subscription_lines` rows.
+   With money on the licence, you'd reinvent this split as a side
+   table.
+
+### Operator-facing rule
+
+> **Edit financial data only via the licence UI.** Touch, rate change,
+> upgrade — all attached to the licence's expand panel on the org
+> page. There is no operator surface that exposes the paired sub
+> directly. The split is a schema concern; the licence is the
+> operator-facing unit of edit.
+
+This keeps the operator's mental model simple ("I edit the licence")
+while preserving every benefit of the split underneath.
+
+### Where this gotcha bites
+
+When something "didn't show up" the question is almost always *which
+of the two rows did the write land on, and which row is the UI
+reading?* Examples:
+
+- A raw SQL update of `subscription_lines.base_rate` does NOT show in
+  a `RecordHistory` panel bound to `licenses` — it's on the other
+  row. Use composite mode (`pairs={[{licenses,id},{subscription_lines,id}]}`).
+- A licence rate that "didn't update from the catalog" is the
+  snapshot rule working as intended; Touch is the deliberate
+  operator break.
+- A licence with rate `—` is an orphan: the licence row exists but
+  no active paired sub. Health check: count active subs per licence
+  should be exactly 1.
+
 ## The timeline model
 
 A sub has a timeline:

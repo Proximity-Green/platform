@@ -1174,7 +1174,17 @@ org: ${l.organisation_id ?? '—'}`}
         {/if}
 
         <div class="lic-edit-history">
-          <RecordHistory table="licenses" id={l.id} label="licence history" />
+          <!-- Composite history: a "licence" the operator sees is actually
+               a licence row + its paired subscription_line row (1:1).
+               Identity (member, item, dates) lives on licenses; money
+               (rate, currency) lives on subscription_lines. Pull both
+               so a Touch / rate edit shows up here. -->
+          <RecordHistory
+            pairs={l.paired_subscription_line_id
+              ? [{ table: 'licenses', id: l.id }, { table: 'subscription_lines', id: l.paired_subscription_line_id }]
+              : [{ table: 'licenses', id: l.id }]}
+            label="licence history"
+          />
         </div>
 
         <details class="lic-edit-debug">
