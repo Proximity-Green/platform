@@ -46,6 +46,39 @@ inventory reporting needs. Filling these is a precondition for V1:
   per-month membership counts the same as a daily one and the
   weighted demand number is meaningless.
 
+### Inventory occupancy — KPI definitions (legend A1–D7)
+
+Mirrors the WSM "Location Detail" report KPIs and adds platform-native
+calculations. Lives in `occupancy.service.ts`; rendered on `/occupancy`.
+
+| ID | Label | Formula | Schema source |
+|----|-------|---------|---------------|
+| A1 | % offices sold | B1 / B3 | items × subs |
+| A2 | % business case achieved | C1 / C2 | sub.base_rate / (start_price_per_m2 × area_sqm) |
+| B1 | Active offices | count of office items with active sub | items × subs |
+| B2 | Vacant offices | B3 − B1 | derived |
+| B3 | Total offices | count of office items | items |
+| C1 | Projected revenue | Σ active sub.base_rate | subscription_lines |
+| C2 | Total business case | Σ (start_price_per_m2 × area_sqm) | office_details |
+| C3 | Achievable revenue | Σ items.base_rate (list price) | items |
+| D1 | Total size m² | Σ area_sqm | office_details |
+| D2 | Occupied m² | Σ area_sqm of active offices | office_details + subs |
+| D3 | Vacant m² | D1 − D2 | derived |
+| D4 | % size occupied | D2 / D1 | derived |
+| D5 | Avg rate per m² sold | Σ active rate / Σ active area_sqm | derived |
+| D6 | Price per seat sold | Σ active rate / Σ active capacity | derived |
+| D7 | Total desk capacity | Σ capacity | office_details |
+
+**Cell states (by-item × month grid):**
+- *Sold* (green) — sub overlaps month + organisation.status = 'active'
+- *Prospect* (yellow, "P") — sub overlaps month + organisation.status ≠ 'active' (typically `prospect` / draft)
+- *Vacant* (pink) — no sub overlaps month
+
+A sub overlaps a month when `started_at ≤ last_day_of_month AND
+(ended_at IS NULL OR ended_at ≥ first_day_of_month)`. Open-ended subs
+(no ended_at) cover every month from started_at onward — unlike WSM,
+which capped them at `current_month + 1`.
+
 Both numbers are observable today by inspection (operators "know" what
 fits at each location, "know" which memberships are casual). The point
 of the schema is to make them computable + auditable instead of held
